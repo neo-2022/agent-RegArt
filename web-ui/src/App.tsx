@@ -579,8 +579,15 @@ function App() {
     try {
       const payload: {agent: string; model: string; provider?: string} = { agent: agentName, model };
       if (provider) payload.provider = provider;
-      await axios.post(UPDATE_MODEL_API, payload);
-      fetchAgents();
+      const res = await axios.post(UPDATE_MODEL_API, payload);
+      if (res.data?.status === 'ok') {
+        // Обновляем локально без запроса к серверу для мгновенного отклика
+        setAgents(prev => prev.map(a => 
+          a.name === agentName 
+            ? { ...a, model: model, provider: provider || a.provider }
+            : a
+        ));
+      }
     } catch (err) {
       console.error('Failed to update model', err);
     }

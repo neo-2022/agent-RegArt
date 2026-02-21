@@ -1197,7 +1197,7 @@ function App() {
                   <span className="agent-name">{agent.name}</span>
                   <select
                     className="agent-model-select"
-                    value={selectedProvider === 'ollama' ? agent.model : (agent.provider === selectedProvider ? agent.model : '')}
+                    value={agent.model || ''}
                     onChange={(e) => {
                       const val = e.target.value;
                       if (val) updateAgentModel(agent.name, val, selectedProvider);
@@ -1437,12 +1437,68 @@ function App() {
               <button
                 className="provider-save-btn"
                 disabled={ragUploadStatus === 'uploading'}
-                onClick={() => {
+                onClick={async () => {
+                  // Пробуем использовать File System Access API для выбора папки
+                  // @ts-ignore - showDirectoryPicker is not in TypeScript types
+                  if (window.showDirectoryPicker) {
+                    try {
+                      // @ts-ignore
+                      const dirHandle = await window.showDirectoryPicker();
+                      setRagUploadStatus('uploading');
+                      setRagUploadMessage('Загрузка папки...');
+                      let filesAdded = 0;
+                      let skippedCount = 0;
+                      const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
+                      
+                      // Рекурсивно сканируем папку
+                      async function scanDir(handle: any, path: string = '') {
+                        for await (const entry of handle.values()) {
+                          if (entry.kind === 'directory') {
+                            await scanDir(entry, path + entry.name + '/');
+                          } else if (entry.kind === 'file') {
+                            const ext = '.' + entry.name.split('.').pop()?.toLowerCase();
+                            if (!supportedExtensions.includes(ext)) {
+                              skippedCount++;
+                              continue;
+                            }
+                            try {
+                              const file = await entry.getFile();
+                              const content = await file.text();
+                              const fileName = path + entry.name;
+                              await addRagFileChunks(fileName, content);
+                              filesAdded++;
+                            } catch (err) {
+                              console.error('Failed to read file', entry.name, err);
+                            }
+                          }
+                        }
+                      }
+                      
+                      await scanDir(dirHandle);
+                      await fetchRagFiles();
+                      await fetchRagStats();
+                      if (filesAdded > 0) {
+                        setRagUploadStatus('success');
+                        let msg = `Загружено: ${filesAdded} файл(ов)`;
+                        if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
+                        setRagUploadMessage(msg);
+                      } else {
+                        setRagUploadStatus('error');
+                        setRagUploadMessage('Нет поддерживаемых файлов');
+                      }
+                      setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
+                      return;
+                    } catch (err: any) {
+                      if (err.name !== 'AbortError') {
+                        console.error('Directory picker error:', err);
+                      }
+                    }
+                  }
+                  
+                  // Fallback: обычный выбор файлов
                   const input = document.createElement('input');
                   input.type = 'file';
                   input.multiple = true;
-                  // @ts-ignore - webkitdirectory is not in TypeScript types
-                  input.webkitdirectory = true;
                   input.onchange = async (e) => {
                     const files = (e.target as HTMLInputElement).files;
                     if (!files || files.length === 0) return;
@@ -1464,7 +1520,6 @@ function App() {
                           reader.onerror = () => reject(reader.error);
                           reader.readAsText(file);
                         });
-                        // Use full path from webkitRelativePath if available
                         const fileName = file.webkitRelativePath || file.name;
                         await addRagFileChunks(fileName, content);
                         successCount++;

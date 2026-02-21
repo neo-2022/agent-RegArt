@@ -1444,78 +1444,27 @@ function App() {
               <button
                 className="provider-save-btn"
                 disabled={ragUploadStatus === 'uploading'}
-                onClick={async () => {
-                  // Пробуем использовать File System Access API для выбора папки
-                  // @ts-ignore - showDirectoryPicker is not in TypeScript types
-                  if (window.showDirectoryPicker) {
-                    try {
-                      // @ts-ignore
-                      const dirHandle = await window.showDirectoryPicker();
-                      setRagUploadStatus('uploading');
-                      setRagUploadMessage('Загрузка папки...');
-                      let filesAdded = 0;
-                      let skippedCount = 0;
-                      const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
-                      
-                      // Рекурсивно сканируем папку
-                      async function scanDir(handle: any, path: string = '') {
-                        for await (const entry of handle.values()) {
-                          if (entry.kind === 'directory') {
-                            await scanDir(entry, path + entry.name + '/');
-                          } else if (entry.kind === 'file') {
-                            const ext = '.' + entry.name.split('.').pop()?.toLowerCase();
-                            if (!supportedExtensions.includes(ext)) {
-                              skippedCount++;
-                              continue;
-                            }
-                            try {
-                              const file = await entry.getFile();
-                              const content = await file.text();
-                              const fileName = path + entry.name;
-                              await addRagFileChunks(fileName, content);
-                              filesAdded++;
-                            } catch (err) {
-                              console.error('Failed to read file', entry.name, err);
-                            }
-                          }
-                        }
-                      }
-                      
-                      await scanDir(dirHandle);
-                      await fetchRagFiles();
-                      await fetchRagStats();
-                      if (filesAdded > 0) {
-                        setRagUploadStatus('success');
-                        let msg = `Загружено: ${filesAdded} файл(ов)`;
-                        if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
-                        setRagUploadMessage(msg);
-                      } else {
-                        setRagUploadStatus('error');
-                        setRagUploadMessage('Нет поддерживаемых файлов');
-                      }
-                      setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
-                      return;
-                    } catch (err: any) {
-                      if (err.name !== 'AbortError') {
-                        console.error('Directory picker error:', err);
-                      }
-                    }
-                  }
-                  
-                  // Fallback: обычный выбор файлов
+                onClick={() => {
                   const input = document.createElement('input');
                   input.type = 'file';
                   input.multiple = true;
+                  input.style.display = 'none';
+                  // Поддержка выбора папок (webkitdirectory) и множественного выбора
+                  // @ts-ignore
+                  input.webkitdirectory = true;
                   input.onchange = async (e) => {
                     const files = (e.target as HTMLInputElement).files;
-                    if (!files || files.length === 0) return;
+                    if (!files || files.length === 0) {
+                      input.remove();
+                      return;
+                    }
                     setRagUploadStatus('uploading');
                     setRagUploadMessage(`Загрузка ${files.length} файл(ов)...`);
                     let successCount = 0;
                     let skippedCount = 0;
                     const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
                     for (const file of Array.from(files)) {
-                      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+                      const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
                       if (!supportedExtensions.includes(ext)) {
                         skippedCount++;
                         continue;
@@ -1527,7 +1476,7 @@ function App() {
                           reader.onerror = () => reject(reader.error);
                           reader.readAsText(file);
                         });
-                        const fileName = file.webkitRelativePath || file.name;
+                        const fileName = (file as any).webkitRelativePath || file.name;
                         await addRagFileChunks(fileName, content);
                         successCount++;
                       } catch (err) {
@@ -1546,7 +1495,9 @@ function App() {
                       setRagUploadMessage('Нет поддерживаемых файлов');
                     }
                     setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
+                    input.remove();
                   };
+                  document.body.appendChild(input);
                   input.click();
                 }}
               >

@@ -418,11 +418,13 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	// Выполняем семантический поиск по базе знаний перед запросом к LLM
 	var ragSources []Source
 	var ragContext string
+	log.Printf("[RAG] Выполняю поиск для: %s", truncate(lastMsg, 30))
 	if ragRetriever != nil {
 		results, err := ragRetriever.Search(lastMsg, 5)
 		if err != nil {
 			log.Printf("[RAG] Ошибка поиска: %v", err)
 		} else if len(results) > 0 {
+			log.Printf("[RAG] Найдено %d документов", len(results))
 			ragContext = "\n\n=== Релевантные документы из базы знаний ===\n"
 			for i, r := range results {
 				ragContext += fmt.Sprintf("[%d] %s\n%s\n", i+1, r.Doc.Title, truncate(r.Doc.Content, 300))
@@ -433,7 +435,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 			ragContext += "=== Используй эту информацию для формирования ответа ===\n"
-			log.Printf("[RAG] Найдено %d документов для запроса: %s", len(results), truncate(lastMsg, 50))
+		} else {
+			log.Printf("[RAG] Документы не найдены")
 		}
 	}
 

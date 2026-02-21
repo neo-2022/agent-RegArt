@@ -520,9 +520,11 @@ function App() {
         setPromptSaveStatus('idle');
       }, 800);
     } catch (err) {
-      const error = err as { response?: { data?: { error?: string } }, message?: string };
+      const error = err as { response?: { data?: { error?: string } | string }, message?: string };
+      const errorMsg = error.response?.data;
+      const errorStr = typeof errorMsg === 'string' ? errorMsg : errorMsg?.error || error.message || 'Не удалось сохранить промпт';
       setPromptSaveStatus('error');
-      setPromptSaveError(error.response?.data?.error || error.response?.data || error.message || 'He удалось сохранить промпт');
+      setPromptSaveError(errorStr);
       console.error('Failed to save prompt', err);
     }
   };
@@ -697,7 +699,7 @@ function App() {
   // Использует SpeechRecognition с языком ru-RU, непрерывное распознавание.
   // При распознавании текст добавляется в поле ввода.
   const toggleVoiceInput = () => {
-    const SpeechRecognitionAPI = (window.SpeechRecognition || window.webkitSpeechRecognition) as typeof SpeechRecognition | undefined;
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       alert('Ваш браузер не поддерживает голосовой ввод');
       return;
@@ -1488,7 +1490,7 @@ function App() {
                   folderInput.webkitdirectory = true;
                   folderInput.style.display = 'none';
                   
-                  folderInput.onchange = async (e) => {
+                  folderInput.onchange = async () => {
                     const files = (folderInput as HTMLInputElement).files;
                     if (!files || files.length === 0) {
                       folderInput.remove();

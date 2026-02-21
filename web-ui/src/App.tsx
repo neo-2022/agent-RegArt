@@ -1482,6 +1482,31 @@ function App() {
                   {ragUploadMessage}
                 </span>
               )}
+              <button
+                className="provider-save-btn"
+                style={{marginLeft: '6px', background: 'var(--primary-btn-bg)', color: 'var(--primary-btn-color)'}}
+                onClick={async () => {
+                  const folderPath = prompt('Введите путь к папке для загрузки в RAG:');
+                  if (!folderPath) return;
+                  setRagUploadStatus('uploading');
+                  setRagUploadMessage('Загрузка папки...');
+                  try {
+                    const res = await axios.post(`${RAG_API}/add-folder`, {
+                      folder_path: folderPath
+                    });
+                    await fetchRagFiles();
+                    await fetchRagStats();
+                    setRagUploadStatus('success');
+                    setRagUploadMessage(`Загружено: ${res.data.files_added} файлов (пропущено: ${res.data.files_skipped})`);
+                  } catch (err: any) {
+                    setRagUploadStatus('error');
+                    setRagUploadMessage(err.response?.data?.error || 'Ошибка загрузки папки');
+                  }
+                  setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 5000);
+                }}
+              >
+                Загрузить папку
+              </button>
             </div>
             <div style={{marginTop: '4px'}}>
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>

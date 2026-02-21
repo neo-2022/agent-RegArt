@@ -197,17 +197,35 @@ const nameMap: { [key: string]: string } = {
 function App() {
   // === Основное состояние чата ===
   // Загружаем историю чата из localStorage
-  const savedMessages = localStorage.getItem('chat_messages');
-  const initialMessages: Message[] = savedMessages ? JSON.parse(savedMessages) : [];
-  const [messages, setMessages] = useState<Message[]>(initialMessages);           // Сообщения текущего чата
+  let initialMessages: Message[] = [];
+  try {
+    const savedMessages = localStorage.getItem('chat_messages');
+    initialMessages = savedMessages ? JSON.parse(savedMessages) : [];
+  } catch (e) {
+    console.error('Failed to load messages from localStorage', e);
+  }
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  
+  // Загружаем выбранного агента
+  let savedAgent = 'admin';
+  try {
+    savedAgent = localStorage.getItem('current_agent') || 'admin';
+  } catch (e) {
+    console.error('Failed to load agent from localStorage', e);
+  }
+  const [currentAgent, setCurrentAgent] = useState(savedAgent);
   
   // Сохраняем сообщения в localStorage при изменении
   useEffect(() => {
     localStorage.setItem('chat_messages', JSON.stringify(messages));
   }, [messages]);
+  
+  // Сохраняем агента
+  useEffect(() => {
+    localStorage.setItem('current_agent', currentAgent);
+  }, [currentAgent]);
   const [input, setInput] = useState('');                             // Текст в поле ввода
   const [agents, setAgents] = useState<Agent[]>([]);                  // Список агентов из бэкенда
-  const [currentAgent, setCurrentAgent] = useState('admin');          // Выбранный агент по умолчанию
   const [loading, setLoading] = useState(false);                      // Индикатор загрузки ответа
   const [chats, setChats] = useState<Chat[]>([
     { id: '1', name: 'Основной чат', messages: [], pinned: false },

@@ -495,15 +495,18 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	messages = append(messages, llm.Message{Role: "system", Content: systemPrompt})
 	messages = append(messages, req.Messages...)
 
+	// LM Studio имеет маленький контекст (4096 токенов) - отключаем инструменты
+	supportsTools := agent.SupportsTools && providerName != "lmstudio"
+
 	// Стриминг отключаем когда есть инструменты — Ollama не поддерживает tool calling в режиме stream
-	useStream := providerName == "ollama" && !agent.SupportsTools
+	useStream := providerName == "ollama" && !supportsTools
 	chatReq := &llm.ChatRequest{
 		Model:    agent.LLMModel,
 		Messages: messages,
 		Stream:   useStream,
 	}
 
-	if agent.SupportsTools {
+	if supportsTools {
 		chatReq.Tools = tools.GetToolsForAgent(req.Agent, agent.LLMModel)
 		toolNames := make([]string, len(chatReq.Tools))
 		for i, t := range chatReq.Tools {

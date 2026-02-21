@@ -2310,24 +2310,35 @@ func ragAddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if ragRetriever == nil {
-		http.Error(w, "RAG not initialized", http.StatusInternalServerError)
+	docID := fmt.Sprintf("doc-%d", time.Now().UnixNano())
+
+	if ragRetriever != nil && ragRetriever.Config().ChromaURL != "" {
+		ragDoc := rag.RagDoc{
+			ID:      docID,
+			Title:   req.Title,
+			Content: req.Content,
+			Source:  req.Source,
+		}
+		if err := ragRetriever.AddDocument(ragDoc); err != nil {
+			log.Printf("[RAG] Ошибка добавления в ChromA: %v", err)
+		}
+	}
+
+	ragDoc := models.RagDocument{
+		Title:       req.Title,
+		Content:     req.Content,
+		Source:      req.Source,
+		ChunkIndex:  0,
+		TotalChunks: 1,
+	}
+	if err := db.DB.Create(&ragDoc).Error; err != nil {
+		log.Printf("[RAG] Ошибка сохранения в БД: %v", err)
+		http.Error(w, "Failed to save document", http.StatusInternalServerError)
 		return
 	}
 
-	doc := rag.RagDoc{
-		ID:      fmt.Sprintf("doc-%d", time.Now().UnixNano()),
-		Title:   req.Title,
-		Content: req.Content,
-		Source:  req.Source,
-	}
-
-	if err := ragRetriever.AddDocument(doc); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	writeJSON(w, map[string]string{"status": "ok", "id": doc.ID})
+	log.Printf("[RAG] Добавлен документ: %s (ID: %d)", req.Title, ragDoc.ID)
+	writeJSON(w, map[string]interface{}{"status": "ok", "id": docID, "db_id": ragDoc.ID})
 }
 
 // ragSearchHandler — обработчик для поиска по RAG базе знаний
@@ -2369,8 +2380,22 @@ func ragSearchHandler(w http.ResponseWriter, r *http.Request) {
 // ragFilesHandler — обработчик для получения списка файлов в RAG
 func ragFilesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		// Возвращаем пустой список (для демо используем встроенные документы)
-		writeJSON(w, []map[string]interface{}{})
+		var docs []models.RagDocument
+		db.DB.Find(&docs)
+
+		fileMap := make(map[string]int)
+		for _, doc := range docs {
+			fileMap[doc.Title]++
+		}
+
+		files := make([]map[string]interface{}, 0, len(fileMap))
+		for title, count := range fileMap {
+			files = append(files, map[string]interface{}{
+				"file_name":    title,
+				"chunks_count": count,
+			})
+		}
+		writeJSON(w, files)
 		return
 	}
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -2383,10 +2408,47 @@ func ragStatsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var docCount int64
+	var uniqueFiles int64
+	db.DB.Model(&models.RagDocument{}).Count(&docCount)
+	db.DB.Model(&models.RagDocument{}).Distinct("title").Count(&uniqueFiles)
+
 	writeJSON(w, map[string]interface{}{
-		"facts_count": 0,
-		"files_count": 0,
+		"facts_count": docCount,
+		"files_count": uniqueFiles,
 	})
+}
+
+// ragDeleteHandler — обработчик для удаления документа из RAG
+func ragDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	fileName := r.URL.Query().Get("name")
+	if fileName == "" {
+		var req struct {
+			Name string `json:"name"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			fileName = req.Name
+		}
+	}
+
+	if fileName == "" {
+		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+
+	if err := db.DB.Where("title = ?", fileName).Delete(&models.RagDocument{}).Error; err != nil {
+		log.Printf("[RAG] Ошибка удаления: %v", err)
+		http.Error(w, "Failed to delete", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[RAG] Удалён документ: %s", fileName)
+	writeJSON(w, map[string]string{"status": "ok"})
 }
 
 // handleViewLogs — обработчик инструмента view_logs для Админа.
@@ -3236,8 +3298,11 @@ func main() {
 		log.Fatalf("Failed to create default agents: %v", err)
 	}
 
-	// Регистрация метрик endpoint
-	http.Handle("/metrics", metrics.InitPrometheusHandler())
+	// Регистрация метрик endpoint (должна быть перед catch-all роутером)
+	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		h := metrics.InitPrometheusHandler()
+		h.ServeHTTP(w, r)
+	})
 
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/chat", chatHandler)
@@ -3254,6 +3319,13 @@ func main() {
 	http.HandleFunc("/workspaces", workspacesHandler)
 	http.HandleFunc("/learning-stats", learningStatsHandler)
 	http.HandleFunc("/logs", logsHandler)
+
+	// RAG эндпоинты
+	http.HandleFunc("/rag/add", ragAddHandler)
+	http.HandleFunc("/rag/search", ragSearchHandler)
+	http.HandleFunc("/rag/files", ragFilesHandler)
+	http.HandleFunc("/rag/stats", ragStatsHandler)
+	http.HandleFunc("/rag/delete", ragDeleteHandler)
 
 	for _, dir := range []string{
 		filepath.Join(".", "uploads"),

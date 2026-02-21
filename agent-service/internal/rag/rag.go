@@ -61,6 +61,11 @@ func NewDBRetriever(config *Config) *DBRetriever {
 	}
 }
 
+// Config возвращает конфигурацию RAG
+func (d *DBRetriever) Config() *Config {
+	return d.config
+}
+
 // EnsureTable создаёт таблицу rag_docs если её нет
 func (d *DBRetriever) EnsureTable() error {
 	// TODO: реализовать миграцию таблицы в PostgreSQL

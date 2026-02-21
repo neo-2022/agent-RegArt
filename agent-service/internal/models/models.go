@@ -186,3 +186,22 @@ type Workspace struct {
 	Chats  []Chat  // Чаты пространства
 	Agents []Agent // Агенты пространства
 }
+
+// RagDocument — документ в базе знаний RAG.
+// Хранит загруженные пользователем документы для семантического поиска.
+//
+// Поля:
+//   - Title: название документа
+//   - Content: текстовое содержимое документа
+//   - Source: источник документа (user-upload, file, web и т.д.)
+//   - ChunkIndex: индекс чанка (если документ разбит на части)
+//   - TotalChunks: общее количество чанков документа
+type RagDocument struct {
+	gorm.Model
+	Title       string `gorm:"not null"`  // Название документа
+	Content     string `gorm:"type:text"` // Содержимое
+	Source      string // Источник (user-upload, file, web)
+	ChunkIndex  int    // Индекс чанка
+	TotalChunks int    // Всего чанков
+	WorkspaceID *uint  // Привязка к рабочему пространству
+}

@@ -103,6 +103,10 @@ func InitDB() {
 	if err := DB.AutoMigrate(&models.SystemLog{}); err != nil {
 		log.Fatal("Ошибка миграции SystemLog:", err)
 	}
+	// 9. RagDocument — документы базы знаний RAG
+	if err := DB.AutoMigrate(&models.RagDocument{}); err != nil {
+		log.Fatal("Ошибка миграции RagDocument:", err)
+	}
 
 	log.Println("База данных подключена, миграции выполнены")
 }

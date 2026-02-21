@@ -104,13 +104,50 @@ var (
 	)
 )
 
+var registered = false
+
 func Init() {
+	if !registered {
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(
+			httpRequestsTotal,
+			httpRequestDuration,
+			chatRequestsTotal,
+			chatRequestsErrors,
+			ragSearchesTotal,
+			ragSearchDuration,
+			llmRequestsTotal,
+			llmTokensTotal,
+			llmRequestDuration,
+			toolCallsTotal,
+			toolCallDuration,
+		)
+		registered = true
+	}
 	log.Printf("[METRICS] Prometheus метрики инициализированы")
 }
 
+var metricsRegistry *prometheus.Registry
+
 func InitPrometheusHandler() http.Handler {
-	log.Printf("[METRICS] Prometheus endpoint доступен на /metrics")
-	return promhttp.Handler()
+	if metricsRegistry == nil {
+		metricsRegistry = prometheus.NewRegistry()
+		metricsRegistry.MustRegister(
+			httpRequestsTotal,
+			httpRequestDuration,
+			chatRequestsTotal,
+			chatRequestsErrors,
+			ragSearchesTotal,
+			ragSearchDuration,
+			llmRequestsTotal,
+			llmTokensTotal,
+			llmRequestDuration,
+			toolCallsTotal,
+			toolCallDuration,
+		)
+		log.Printf("[METRICS] Prometheus endpoint инициализирован")
+	}
+	return promhttp.HandlerFor(metricsRegistry, promhttp.HandlerOpts{})
 }
 
 func RecordHTTPRequest(method, endpoint string, status int, duration time.Duration) {

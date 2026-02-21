@@ -536,7 +536,7 @@ function App() {
 
   const deleteRagFile = async (fileName: string) => {
     try {
-      await axios.delete(`${MEMORY_API}/files?name=${encodeURIComponent(fileName)}`);
+      await axios.delete(`${RAG_API}/delete?name=${encodeURIComponent(fileName)}`);
       fetchRagFiles();
       fetchRagStats();
     } catch (err) {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"agent-service/internal/embeddings"
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/embeddings"
 )
 
 // RagDoc представляет документ в RAG системе

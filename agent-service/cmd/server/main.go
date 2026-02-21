@@ -40,6 +40,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/rag"
+
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/db"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/handlers"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/intent"
@@ -66,9 +68,18 @@ type ChatRequest struct {
 // Поля:
 //   - Response: текст ответа от LLM (через выбранного провайдера)
 //   - Error: сообщение об ошибке (опционально, omitempty — не включается если пусто)
+//   - Sources: источники RAG (опционально, для отображения в UI)
 type ChatResponse struct {
-	Response string `json:"response"`
-	Error    string `json:"error,omitempty"`
+	Response string   `json:"response"`
+	Error    string   `json:"error,omitempty"`
+	Sources  []Source `json:"sources,omitempty"`
+}
+
+// Source представляет источник RAG для отображения в UI
+type Source struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Score   int    `json:"score"`
 }
 
 // UpdateModelRequest — структура запроса на смену модели агента (POST /update-model).
@@ -108,6 +119,36 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// Глобальный RAG-ретривер для поиска документов
+var ragRetriever *rag.DBRetriever
+
+// initRAG — инициализация RAG-системы при старте.
+// Загружает конфигурацию из переменных окружения и создаёт экземпляр DBRetriever.
+func initRAG() {
+	chromaURL := getEnv("CHROMA_URL", "")
+	embModel := getEnv("EMBEDDING_MODEL", "nomic-embed-text")
+	topK := 5
+	if k := getEnv("RAG_TOP_K", ""); k != "" {
+		if parsed, err := strconv.Atoi(k); err == nil {
+			topK = parsed
+		}
+	}
+
+	config := &rag.Config{
+		ChromaURL:      chromaURL,
+		EmbeddingModel: embModel,
+		TopK:           topK,
+		DBHost:         getEnv("DB_HOST", "localhost"),
+		DBPort:         getEnv("DB_PORT", "5432"),
+		DBUser:         getEnv("DB_USER", "postgres"),
+		DBPassword:     getEnv("DB_PASSWORD", "postgres"),
+		DBName:         getEnv("DB_NAME", "agentcore"),
+	}
+
+	ragRetriever = rag.NewDBRetriever(config)
+	log.Printf("[RAG] Инициализирован: ChromA=%s, модель=%s, topK=%d", chromaURL, embModel, topK)
 }
 
 // resolveToolRoute — определяет базовый URL сервиса и путь эндпоинта для инструмента.
@@ -373,6 +414,29 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// === RAG: поиск релевантных документов ===
+	// Выполняем семантический поиск по базе знаний перед запросом к LLM
+	var ragSources []Source
+	var ragContext string
+	if ragRetriever != nil {
+		results, err := ragRetriever.Search(lastMsg, 5)
+		if err != nil {
+			log.Printf("[RAG] Ошибка поиска: %v", err)
+		} else if len(results) > 0 {
+			ragContext = "\n\n=== Релевантные документы из базы знаний ===\n"
+			for i, r := range results {
+				ragContext += fmt.Sprintf("[%d] %s\n%s\n", i+1, r.Doc.Title, truncate(r.Doc.Content, 300))
+				ragSources = append(ragSources, Source{
+					Title:   r.Doc.Title,
+					Content: truncate(r.Doc.Content, 200),
+					Score:   i + 1,
+				})
+			}
+			ragContext += "=== Используй эту информацию для формирования ответа ===\n"
+			log.Printf("[RAG] Найдено %d документов для запроса: %s", len(results), truncate(lastMsg, 50))
+		}
+	}
+
 	// === Система обучения: получение релевантных знаний модели ===
 	// Перед каждым запросом к LLM ищем в базе знаний модели
 	// релевантные факты и добавляем их в системный промпт.
@@ -387,6 +451,11 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		learningContext += "=== Используй эти знания для более точных ответов ===\n"
 		systemPrompt += learningContext
 		log.Printf("Добавлено %d знаний в контекст модели %s", len(learnings), agent.LLMModel)
+	}
+
+	// Добавляем RAG контекст к системному промпту
+	if ragContext != "" {
+		systemPrompt += ragContext
 	}
 
 	messages := make([]llm.Message, 0, len(req.Messages)+1)
@@ -541,7 +610,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	saveChatMessages(req.Agent, lastUserMsg, finalContent)
 	go extractAndStoreLearnings(agent.LLMModel, req.Agent, lastUserMsg.Content, finalContent)
 	WriteSystemLog("info", "agent-service", fmt.Sprintf("Чат: агент=%s, модель=%s/%s", req.Agent, providerName, agent.LLMModel), fmt.Sprintf("Вопрос: %s", truncate(lastUserMsg.Content, 200)))
-	writeJSON(w, ChatResponse{Response: finalContent})
+	writeJSON(w, ChatResponse{Response: finalContent, Sources: ragSources})
 }
 
 // dispatchTool — единый диспетчер выполнения инструментов.
@@ -3025,6 +3094,7 @@ func main() {
 
 	llm.InitProviders()
 	initProvidersFromDB()
+	initRAG()
 
 	if err := repository.CreateDefaultAgents(); err != nil {
 		log.Fatalf("Failed to create default agents: %v", err)

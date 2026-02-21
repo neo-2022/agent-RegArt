@@ -34,6 +34,13 @@ interface Message {
   agent?: string;
   files?: AttachedFile[];
   model?: string;
+  sources?: Source[];
+}
+
+interface Source {
+  title: string;
+  content: string;
+  score: number;
 }
 
 // Agent — интерфейс агента, полученный от бэкенда (/agents).
@@ -855,7 +862,7 @@ function App() {
         });
         const curModel = agents.find(a => a.name === currentAgent)?.model || '';
         const content = res.data.error ? 'Ошибка: ' + res.data.error : (res.data.response || '(пустой ответ)');
-        const assistantMsg: Message = { role: 'assistant', content, agent: currentAgent, model: curModel };
+        const assistantMsg: Message = { role: 'assistant', content, agent: currentAgent, model: curModel, sources: res.data.sources };
         finalMessages = [...finalMessages, assistantMsg];
         setMessages(finalMessages);
       } catch (err) {
@@ -1593,6 +1600,17 @@ function App() {
                 </ReactMarkdown>
                 {msg.role === 'assistant' && msg.model && (
                   <div className="message-model-label">{msg.agent}: {msg.model}</div>
+                )}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="message-sources">
+                    <div className="sources-title">Источники:</div>
+                    {msg.sources.map((src, i) => (
+                      <div key={i} className="source-item">
+                        <span className="source-rank">#{src.score}</span>
+                        <span className="source-title">{src.title}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

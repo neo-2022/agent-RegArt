@@ -492,6 +492,37 @@ body {
     text-align: right;
 }
 
+.message-sources {
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+.sources-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-secondary);
+}
+
+.source-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+}
+
+.source-rank {
+    color: var(--accent-color);
+    font-weight: 600;
+    min-width: 20px;
+}
+
+.source-title {
+    color: var(--text-primary);
+}
+
 /* ==========================================================================
    Разворачиваемая панель карточек агентов (кнопка «Модели»).
    Содержит: переключатель Локальная/Облачная,

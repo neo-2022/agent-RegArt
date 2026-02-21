@@ -492,6 +492,14 @@ body {
     text-align: right;
 }
 
+.message-timestamp {
+    font-size: 0.65rem;
+    color: var(--icon-color);
+    margin-top: 4px;
+    opacity: 0.5;
+    text-align: right;
+}
+
 .message-sources {
     margin-top: 8px;
     padding: 8px;

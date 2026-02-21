@@ -35,6 +35,7 @@ interface Message {
   files?: AttachedFile[];
   model?: string;
   sources?: Source[];
+  timestamp?: string;
 }
 
 interface Source {
@@ -799,7 +800,8 @@ function App() {
     const userMsg: Message = {
       role: 'user',
       content: displayContent || currentFiles.map(f => f.name).join(', '),
-      files: currentFiles.length > 0 ? currentFiles : undefined
+      files: currentFiles.length > 0 ? currentFiles : undefined,
+      timestamp: new Date().toLocaleString('ru-RU')
     };
 
     // Для отправки в API: текст + содержимое файлов (с chunking для больших файлов)
@@ -864,12 +866,12 @@ function App() {
         });
         const curModel = agents.find(a => a.name === currentAgent)?.model || '';
         const content = res.data.error ? 'Ошибка: ' + res.data.error : (res.data.response || '(пустой ответ)');
-        const assistantMsg: Message = { role: 'assistant', content, agent: currentAgent, model: curModel, sources: res.data.sources };
+        const assistantMsg: Message = { role: 'assistant', content, agent: currentAgent, model: curModel, sources: res.data.sources, timestamp: new Date().toLocaleString('ru-RU') };
         finalMessages = [...finalMessages, assistantMsg];
         setMessages(finalMessages);
       } catch (err) {
         const error = err as { response?: { data?: { error?: string } }, message?: string };
-        const errorMsg: Message = { role: 'assistant', content: 'Ошибка: ' + (error.response?.data?.error || error.message), agent: currentAgent, model: agents.find(a => a.name === currentAgent)?.model };
+        const errorMsg: Message = { role: 'assistant', content: 'Ошибка: ' + (error.response?.data?.error || error.message), agent: currentAgent, model: agents.find(a => a.name === currentAgent)?.model, timestamp: new Date().toLocaleString('ru-RU') };
         finalMessages = [...finalMessages, errorMsg];
         setMessages(finalMessages);
       } finally {
@@ -1630,6 +1632,9 @@ function App() {
                 >
                   {msg.content}
                 </ReactMarkdown>
+                {(msg.timestamp) && (
+                  <div className="message-timestamp">{msg.timestamp}</div>
+                )}
                 {msg.role === 'assistant' && msg.model && (
                   <div className="message-model-label">{msg.agent}: {msg.model}</div>
                 )}

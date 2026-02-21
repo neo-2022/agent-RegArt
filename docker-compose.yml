@@ -1,6 +1,17 @@
 version: '3.8'
 
 services:
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: agent-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/chroma:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+    restart: unless-stopped
+
   memory-service:
     build: ./memory-service
     container_name: agent-memory

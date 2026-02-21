@@ -166,7 +166,8 @@ const AVATAR_UPLOAD_API = `${GATEWAY_URL}/avatar`;  // Загрузка ават
 const AVATAR_BASE = `${GATEWAY_URL}/uploads/avatars/`; // Базовый URL для аватаров
 const PROMPTS_API = `${GATEWAY_URL}/prompts`;       // Файлы промптов
 const LOAD_PROMPT_API = `${GATEWAY_URL}/prompts/load`; // Загрузка промпта из файла
-const MEMORY_API = `${GATEWAY_URL}/memory`;         // RAG-поиск по базе знаний
+const MEMORY_API = `${GATEWAY_URL}/memory`;         // RAG-поиск по базе знаний (memory-service)
+const RAG_API = `${GATEWAY_URL}/rag`;              // RAG-эндпоинты agent-service
 const PROVIDERS_API = `${GATEWAY_URL}/providers`;   // Облачные LLM-провайдеры
 
 const WORKSPACES_API = `${GATEWAY_URL}/workspaces`; // Рабочие пространства
@@ -502,27 +503,21 @@ function App() {
   void _ragFactText; void _setRagFactText;
 
   const addRagFileChunks = async (fileName: string, content: string) => {
-    const chunkSize = 1000;
-    const chunks = [];
-    for (let i = 0; i < content.length; i += chunkSize) {
-      chunks.push(content.substring(i, i + chunkSize));
-    }
-    for (let i = 0; i < chunks.length; i++) {
-      try {
-        await axios.post(`${MEMORY_API}/files/chunks`, {
-          text: chunks[i],
-          metadata: { file_name: fileName, chunk_index: i, total_chunks: chunks.length }
-        });
-      } catch (err) {
-        console.error('Failed to add file chunk', err);
-      }
+    try {
+      await axios.post(`${RAG_API}/add`, {
+        title: fileName,
+        content: content,
+        source: 'user-upload'
+      });
+    } catch (err) {
+      console.error('Failed to add RAG file', err);
     }
     fetchRagStats();
   };
 
   const fetchRagStats = async () => {
     try {
-      const res = await axios.get(`${MEMORY_API}/stats`);
+      const res = await axios.get(`${RAG_API}/stats`);
       setRagStats(res.data);
     } catch (err) {
       console.error('Failed to fetch RAG stats', err);
@@ -531,7 +526,7 @@ function App() {
 
   const fetchRagFiles = async () => {
     try {
-      const res = await axios.get(`${MEMORY_API}/files`);
+      const res = await axios.get(`${RAG_API}/files`);
       setRagFiles(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to fetch RAG files', err);

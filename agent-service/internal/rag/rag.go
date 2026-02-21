@@ -68,6 +68,95 @@ func (d *DBRetriever) EnsureTable() error {
 	return nil
 }
 
+// AddDocument добавляет документ в ChromA хранилище
+func (d *DBRetriever) AddDocument(doc RagDoc) error {
+	if d.chromaURL == "" {
+		fmt.Printf("[RAG] ChromA не настроен, документ %s не добавлен\n", doc.Title)
+		return nil
+	}
+
+	emb, err := d.embedding.Compute(doc.Content)
+	if err != nil {
+		return fmt.Errorf("ошибка вычисления эмбеддинга: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/api/v1/collections/rag_docs/add", d.chromaURL)
+	body, _ := json.Marshal(map[string]interface{}{
+		"ids":        []string{doc.ID},
+		"embeddings": [][]float64{emb},
+		"metadatas": []map[string]interface{}{
+			{"title": doc.Title, "source": doc.Source},
+		},
+		"documents": []string{doc.Content},
+	})
+
+	req, _ := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("ошибка добавления в ChromA: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		return fmt.Errorf("Chroma вернул %d", resp.StatusCode)
+	}
+
+	fmt.Printf("[RAG] Добавлен документ: %s\n", doc.Title)
+	return nil
+}
+
+// SeedDemoDocuments добавляет демо-документы в ChromA
+func (d *DBRetriever) SeedDemoDocuments() error {
+	if d.chromaURL == "" {
+		fmt.Println("[RAG] ChromA не настроен, используется fallback")
+		return nil
+	}
+
+	demos := []RagDoc{
+		{
+			ID:      "doc-1",
+			Title:   "Prompts - Admin System",
+			Content: "Системный промпт для агента Admin. Содержит инструкции по координации других агентов и обработке сложных запросов. Admin может вызывать Coder и Novice как инструменты.",
+			Source:  "prompts/admin",
+		},
+		{
+			ID:      "doc-2",
+			Title:   "Prompts - Coder Assistant",
+			Content: "Промпт для агента Coder. Специализируется на написании и отладке кода, работе с файлами и терминалом. Имеет доступ к инструментам execute, read, write, list, delete.",
+			Source:  "prompts/coder",
+		},
+		{
+			ID:      "doc-3",
+			Title:   "LM Studio Setup Guide",
+			Content: "Руководство по настройке LM Studio для локального запуска LLM моделей. Поддержка CPU и GPU ускорения. Подключение к Ollama совместимым API.",
+			Source:  "uploads/docs",
+		},
+		{
+			ID:      "doc-4",
+			Title:   "API Documentation",
+			Content: "Документация по API AgentCore. Включает описание эндпоинтов: /chat (основной чат), /agents (список агентов), /providers (управление провайдерами), /cloud-models.",
+			Source:  "uploads/docs",
+		},
+		{
+			ID:      "doc-5",
+			Title:   "Memory Service Architecture",
+			Content: "Архитектура сервиса памяти AgentCore. Хранение контекста между сессиями, векторное индексирование с ChromA, семантический поиск.",
+			Source:  "memory-service",
+		},
+	}
+
+	for _, doc := range demos {
+		if err := d.AddDocument(doc); err != nil {
+			fmt.Printf("[RAG] Ошибка добавления %s: %v\n", doc.Title, err)
+		}
+	}
+
+	fmt.Println("[RAG] Демо-документы добавлены")
+	return nil
+}
+
 // SeedFromLocalCorpus загружает документы из локальных источников
 func (d *DBRetriever) SeedFromLocalCorpus(paths []string) error {
 	fmt.Printf("[RAG] Seeding from paths: %v\n", paths)

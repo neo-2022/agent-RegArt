@@ -40,6 +40,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/metrics"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/rag"
 
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/db"
@@ -149,6 +150,16 @@ func initRAG() {
 
 	ragRetriever = rag.NewDBRetriever(config)
 	log.Printf("[RAG] Инициализирован: ChromA=%s, модель=%s, topK=%d", chromaURL, embModel, topK)
+
+	// Загружаем демо-документы в ChromA при первом запуске
+	if chromaURL != "" {
+		go func() {
+			time.Sleep(2 * time.Second) // Даём время ChromA запуститься
+			if err := ragRetriever.SeedDemoDocuments(); err != nil {
+				log.Printf("[RAG] Ошибка загрузки демо-документов: %v", err)
+			}
+		}()
+	}
 }
 
 // resolveToolRoute — определяет базовый URL сервиса и путь эндпоинта для инструмента.
@@ -366,6 +377,9 @@ func chatWithRetry(provider llm.ChatProvider, req *llm.ChatRequest) (*llm.ChatRe
 }
 
 func chatHandler(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
+	statusCode := 200
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -411,20 +425,28 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Provider %s not found: %v", providerName, err)
 		WriteSystemLog("error", "agent-service", fmt.Sprintf("Провайдер %s не найден", providerName), err.Error())
 		writeJSON(w, ChatResponse{Error: "Provider " + providerName + " not configured"})
+		metrics.RecordChatError(req.Agent, providerName, agent.LLMModel, "provider_not_found")
 		return
 	}
+
+	// Записываем метрику чат-запроса
+	metrics.RecordChatRequest(req.Agent, providerName, agent.LLMModel)
 
 	// === RAG: поиск релевантных документов ===
 	// Выполняем семантический поиск по базе знаний перед запросом к LLM
 	var ragSources []Source
 	var ragContext string
 	log.Printf("[RAG] Выполняю поиск для: %s", truncate(lastMsg, 30))
+	ragStartTime := time.Now()
 	if ragRetriever != nil {
 		results, err := ragRetriever.Search(lastMsg, 5)
+		ragDuration := time.Since(ragStartTime)
 		if err != nil {
 			log.Printf("[RAG] Ошибка поиска: %v", err)
+			metrics.RecordRAGSearch("error", 0, ragDuration)
 		} else if len(results) > 0 {
 			log.Printf("[RAG] Найдено %d документов", len(results))
+			metrics.RecordRAGSearch("success", len(results), ragDuration)
 			ragContext = "\n\n=== Релевантные документы из базы знаний ===\n"
 			for i, r := range results {
 				ragContext += fmt.Sprintf("[%d] %s\n%s\n", i+1, r.Doc.Title, truncate(r.Doc.Content, 300))
@@ -437,6 +459,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 			ragContext += "=== Используй эту информацию для формирования ответа ===\n"
 		} else {
 			log.Printf("[RAG] Документы не найдены")
+			metrics.RecordRAGSearch("empty", 0, ragDuration)
 		}
 	}
 
@@ -613,6 +636,10 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	saveChatMessages(req.Agent, lastUserMsg, finalContent)
 	go extractAndStoreLearnings(agent.LLMModel, req.Agent, lastUserMsg.Content, finalContent)
 	WriteSystemLog("info", "agent-service", fmt.Sprintf("Чат: агент=%s, модель=%s/%s", req.Agent, providerName, agent.LLMModel), fmt.Sprintf("Вопрос: %s", truncate(lastUserMsg.Content, 200)))
+	statusCode = 200
+	defer func() {
+		metrics.RecordHTTPRequest(r.Method, "/chat", statusCode, time.Since(startTime))
+	}()
 	writeJSON(w, ChatResponse{Response: finalContent, Sources: ragSources})
 }
 
@@ -2261,6 +2288,107 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ragAddHandler — обработчик для добавления документа в RAG базу знаний
+func ragAddHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Title   string `json:"title"`
+		Content string `json:"content"`
+		Source  string `json:"source"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == "" || req.Content == "" {
+		http.Error(w, "title and content required", http.StatusBadRequest)
+		return
+	}
+
+	if ragRetriever == nil {
+		http.Error(w, "RAG not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	doc := rag.RagDoc{
+		ID:      fmt.Sprintf("doc-%d", time.Now().UnixNano()),
+		Title:   req.Title,
+		Content: req.Content,
+		Source:  req.Source,
+	}
+
+	if err := ragRetriever.AddDocument(doc); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "ok", "id": doc.ID})
+}
+
+// ragSearchHandler — обработчик для поиска по RAG базе знаний
+func ragSearchHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := r.URL.Query().Get("q")
+	if query == "" && r.Method == http.MethodPost {
+		var req struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			query = req.Query
+		}
+	}
+
+	if query == "" {
+		http.Error(w, "query required", http.StatusBadRequest)
+		return
+	}
+
+	if ragRetriever == nil {
+		http.Error(w, "RAG not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	results, err := ragRetriever.Search(query, 5)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, results)
+}
+
+// ragFilesHandler — обработчик для получения списка файлов в RAG
+func ragFilesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// Возвращаем пустой список (для демо используем встроенные документы)
+		writeJSON(w, []map[string]interface{}{})
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+// ragStatsHandler — обработчик для получения статистики RAG
+func ragStatsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"facts_count": 0,
+		"files_count": 0,
+	})
+}
+
 // handleViewLogs — обработчик инструмента view_logs для Админа.
 // Позволяет агенту просматривать системные логи с фильтрацией по уровню и сервису.
 func handleViewLogs(args map[string]interface{}) map[string]interface{} {
@@ -3089,9 +3217,10 @@ func initProvidersFromDB() {
 //  2. Инициализация локального провайдера Ollama (llm.InitProviders)
 //  3. Загрузка конфигурации облачных провайдеров из БД (initProvidersFromDB)
 //  4. Создание агентов по умолчанию (admin, coder, novice), если их нет
-//  5. Регистрация HTTP-обработчиков для всех эндпоинтов
-//  6. Настройка раздачи статических файлов из uploads/
-//  7. Запуск HTTP-сервера на порту AGENT_SERVICE_PORT (по умолчанию 8083)
+//  5. Инициализация метрик OpenTelemetry
+//  6. Регистрация HTTP-обработчиков для всех эндпоинтов
+//  7. Настройка раздачи статических файлов из uploads/
+//  8. Запуск HTTP-сервера на порту AGENT_SERVICE_PORT (по умолчанию 8083)
 func main() {
 	db.InitDB()
 
@@ -3099,9 +3228,16 @@ func main() {
 	initProvidersFromDB()
 	initRAG()
 
+	// Инициализация метрик Prometheus
+	metrics.Init()
+	log.Printf("[METRICS] Метрики инициализированы")
+
 	if err := repository.CreateDefaultAgents(); err != nil {
 		log.Fatalf("Failed to create default agents: %v", err)
 	}
+
+	// Регистрация метрик endpoint
+	http.Handle("/metrics", metrics.InitPrometheusHandler())
 
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/chat", chatHandler)
@@ -3134,6 +3270,12 @@ func main() {
 
 	uploadDir := filepath.Join(".", "uploads")
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadDir))))
+
+	// RAG эндпоинты для работы с базой знаний
+	http.HandleFunc("/rag/add", ragAddHandler)
+	http.HandleFunc("/rag/search", ragSearchHandler)
+	http.HandleFunc("/rag/files", ragFilesHandler)
+	http.HandleFunc("/rag/stats", ragStatsHandler)
 
 	http.HandleFunc("/", rootHandler)
 

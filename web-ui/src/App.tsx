@@ -1441,13 +1441,22 @@ function App() {
                   const input = document.createElement('input');
                   input.type = 'file';
                   input.multiple = true;
+                  // @ts-ignore - webkitdirectory is not in TypeScript types
+                  input.webkitdirectory = true;
                   input.onchange = async (e) => {
                     const files = (e.target as HTMLInputElement).files;
-                    if (!files) return;
+                    if (!files || files.length === 0) return;
                     setRagUploadStatus('uploading');
                     setRagUploadMessage(`Загрузка ${files.length} файл(ов)...`);
                     let successCount = 0;
+                    let skippedCount = 0;
+                    const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
                     for (const file of Array.from(files)) {
+                      const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+                      if (!supportedExtensions.includes(ext)) {
+                        skippedCount++;
+                        continue;
+                      }
                       try {
                         const content = await new Promise<string>((resolve, reject) => {
                           const reader = new FileReader();
@@ -1455,7 +1464,9 @@ function App() {
                           reader.onerror = () => reject(reader.error);
                           reader.readAsText(file);
                         });
-                        await addRagFileChunks(file.name, content);
+                        // Use full path from webkitRelativePath if available
+                        const fileName = file.webkitRelativePath || file.name;
+                        await addRagFileChunks(fileName, content);
                         successCount++;
                       } catch (err) {
                         console.error('Failed to upload RAG file', file.name, err);
@@ -1463,50 +1474,27 @@ function App() {
                     }
                     await fetchRagFiles();
                     await fetchRagStats();
-                    if (successCount === files.length) {
+                    if (successCount > 0) {
                       setRagUploadStatus('success');
-                      setRagUploadMessage(`Загружено: ${successCount} файл(ов)`);
+                      let msg = `Загружено: ${successCount} файл(ов)`;
+                      if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
+                      setRagUploadMessage(msg);
                     } else {
                       setRagUploadStatus('error');
-                      setRagUploadMessage(`Загружено ${successCount} из ${files.length}`);
+                      setRagUploadMessage('Нет поддерживаемых файлов');
                     }
                     setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
                   };
                   input.click();
                 }}
               >
-                {ragUploadStatus === 'uploading' ? 'Загрузка...' : 'Загрузить файл'}
+                {ragUploadStatus === 'uploading' ? 'Загрузка...' : 'Добавить файлы'}
               </button>
               {ragUploadMessage && (
                 <span style={{fontSize: '0.78rem', color: ragUploadStatus === 'success' ? '#4caf50' : ragUploadStatus === 'error' ? '#ff6b6b' : 'var(--icon-color)'}}>
                   {ragUploadMessage}
                 </span>
               )}
-              <button
-                className="provider-save-btn"
-                style={{marginLeft: '6px', background: 'var(--primary-btn-bg)', color: 'var(--primary-btn-color)'}}
-                onClick={async () => {
-                  const folderPath = prompt('Введите путь к папке для загрузки в RAG:');
-                  if (!folderPath) return;
-                  setRagUploadStatus('uploading');
-                  setRagUploadMessage('Загрузка папки...');
-                  try {
-                    const res = await axios.post(`${RAG_API}/add-folder`, {
-                      folder_path: folderPath
-                    });
-                    await fetchRagFiles();
-                    await fetchRagStats();
-                    setRagUploadStatus('success');
-                    setRagUploadMessage(`Загружено: ${res.data.files_added} файлов (пропущено: ${res.data.files_skipped})`);
-                  } catch (err: any) {
-                    setRagUploadStatus('error');
-                    setRagUploadMessage(err.response?.data?.error || 'Ошибка загрузки папки');
-                  }
-                  setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 5000);
-                }}
-              >
-                Загрузить папку
-              </button>
             </div>
             <div style={{marginTop: '4px'}}>
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>

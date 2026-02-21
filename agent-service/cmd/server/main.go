@@ -380,18 +380,24 @@ func chatWithRetry(provider llm.ChatProvider, req *llm.ChatRequest) (*llm.ChatRe
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	statusCode := 200
+	defer func() {
+		metrics.RecordHTTPRequest(r.Method, "/chat", statusCode, time.Since(startTime))
+	}()
 
 	if r.Method != http.MethodPost {
+		statusCode = http.StatusMethodNotAllowed
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	var req ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		statusCode = http.StatusBadRequest
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
 	if len(req.Messages) == 0 {
+		statusCode = http.StatusBadRequest
 		http.Error(w, "Empty messages", http.StatusBadRequest)
 		return
 	}
@@ -647,9 +653,6 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	go extractAndStoreLearnings(agent.LLMModel, req.Agent, lastUserMsg.Content, finalContent)
 	WriteSystemLog("info", "agent-service", fmt.Sprintf("Чат: агент=%s, модель=%s/%s", req.Agent, providerName, agent.LLMModel), fmt.Sprintf("Вопрос: %s", truncate(lastUserMsg.Content, 200)))
 	statusCode = 200
-	defer func() {
-		metrics.RecordHTTPRequest(r.Method, "/chat", statusCode, time.Since(startTime))
-	}()
 	writeJSON(w, ChatResponse{Response: finalContent, Sources: ragSources})
 }
 

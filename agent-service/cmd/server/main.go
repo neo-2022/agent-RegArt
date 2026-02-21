@@ -3343,12 +3343,6 @@ func main() {
 	uploadDir := filepath.Join(".", "uploads")
 	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadDir))))
 
-	// RAG эндпоинты для работы с базой знаний
-	http.HandleFunc("/rag/add", ragAddHandler)
-	http.HandleFunc("/rag/search", ragSearchHandler)
-	http.HandleFunc("/rag/files", ragFilesHandler)
-	http.HandleFunc("/rag/stats", ragStatsHandler)
-
 	http.HandleFunc("/", rootHandler)
 
 	port := getEnv("AGENT_SERVICE_PORT", "8083")

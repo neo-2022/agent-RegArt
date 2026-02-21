@@ -196,7 +196,15 @@ const nameMap: { [key: string]: string } = {
 // прикреплённые файлы, голосовой ввод, RAG-режим.
 function App() {
   // === Основное состояние чата ===
-  const [messages, setMessages] = useState<Message[]>([]);           // Сообщения текущего чата
+  // Загружаем историю чата из localStorage
+  const savedMessages = localStorage.getItem('chat_messages');
+  const initialMessages: Message[] = savedMessages ? JSON.parse(savedMessages) : [];
+  const [messages, setMessages] = useState<Message[]>(initialMessages);           // Сообщения текущего чата
+  
+  // Сохраняем сообщения в localStorage при изменении
+  useEffect(() => {
+    localStorage.setItem('chat_messages', JSON.stringify(messages));
+  }, [messages]);
   const [input, setInput] = useState('');                             // Текст в поле ввода
   const [agents, setAgents] = useState<Agent[]>([]);                  // Список агентов из бэкенда
   const [currentAgent, setCurrentAgent] = useState('admin');          // Выбранный агент по умолчанию
@@ -563,7 +571,12 @@ function App() {
   };
 
   useEffect(() => {
-    if (showLogsPanel) fetchLogs();
+    if (showLogsPanel) {
+      fetchLogs();
+      // Автообновление логов каждые 5 секунд
+      const interval = setInterval(fetchLogs, 5000);
+      return () => clearInterval(interval);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLogsPanel, logLevelFilter, logServiceFilter]);
 

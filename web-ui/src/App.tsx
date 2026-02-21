@@ -1445,17 +1445,18 @@ function App() {
                 className="provider-save-btn"
                 disabled={ragUploadStatus === 'uploading'}
                 onClick={async () => {
-                  // Пробуем File System Access API (Chrome/Edge) - позволяет выбрать папку
+                  const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
+                  
+                  // Пробуем File System Access API (позволяет выбрать папку)
                   // @ts-ignore
                   if (window.showDirectoryPicker) {
                     try {
                       // @ts-ignore
                       const dirHandle = await window.showDirectoryPicker();
                       setRagUploadStatus('uploading');
-                      setRagUploadMessage('Загрузка папки...');
+                      setRagUploadMessage('Загрузка...');
                       let filesAdded = 0;
                       let skippedCount = 0;
-                      const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
                       
                       async function scanDir(handle: any, path: string = '') {
                         for await (const entry of handle.values()) {
@@ -1463,19 +1464,13 @@ function App() {
                             await scanDir(entry, path + entry.name + '/');
                           } else if (entry.kind === 'file') {
                             const ext = '.' + (entry.name.split('.').pop()?.toLowerCase() || '');
-                            if (!supportedExtensions.includes(ext)) {
-                              skippedCount++;
-                              continue;
-                            }
+                            if (!supportedExtensions.includes(ext)) { skippedCount++; continue; }
                             try {
                               const file = await entry.getFile();
                               const content = await file.text();
-                              const fileName = path + entry.name;
-                              await addRagFileChunks(fileName, content);
+                              await addRagFileChunks(path + entry.name, content);
                               filesAdded++;
-                            } catch (err) {
-                              console.error('Failed to read file', entry.name, err);
-                            }
+                            } catch (err) { console.error('Error:', entry.name, err); }
                           }
                         }
                       }
@@ -1483,122 +1478,46 @@ function App() {
                       await scanDir(dirHandle);
                       await fetchRagFiles();
                       await fetchRagStats();
-                      if (filesAdded > 0) {
-                        setRagUploadStatus('success');
-                        let msg = `Загружено: ${filesAdded} файл(ов)`;
-                        if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
-                        setRagUploadMessage(msg);
-                      } else {
-                        setRagUploadStatus('error');
-                        setRagUploadMessage('Нет поддерживаемых файлов');
-                      }
+                      setRagUploadStatus('success');
+                      let msg = `Загружено: ${filesAdded}`;
+                      if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
+                      setRagUploadMessage(msg);
                       setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
                       return;
                     } catch (err: any) {
-                      if (err.name !== 'AbortError') {
-                        console.error('Directory picker error:', err);
-                      }
+                      if (err.name !== 'AbortError') console.error('Error:', err);
                     }
                   }
                   
-                  // Fallback: два селектора - для файлов и для папки
-                  const container = document.createElement('div');
-                  container.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#2a2a2a;padding:20px;border-radius:8px;z-index:9999;color:#fff;';
-                  
-                  const title = document.createElement('div');
-                  title.textContent = 'Выберите файлы или папку для загрузки в RAG';
-                  title.style.cssText = 'margin-bottom:15px;font-weight:bold;';
-                  container.appendChild(title);
-                  
-                  const btnFile = document.createElement('button');
-                  btnFile.textContent = 'Выбрать файлы';
-                  btnFile.className = 'provider-save-btn';
-                  btnFile.style.cssText = 'margin-right:10px;';
-                  btnFile.onclick = () => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.multiple = true;
-                    input.onchange = async (e) => {
-                      const files = (e.target as HTMLInputElement).files;
-                      if (!files || files.length === 0) return;
-                      container.remove();
-                      setRagUploadStatus('uploading');
-                      setRagUploadMessage(`Загрузка ${files.length} файл(ов)...`);
-                      let successCount = 0;
-                      let skippedCount = 0;
-                      const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
-                      for (const file of Array.from(files)) {
-                        const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
-                        if (!supportedExtensions.includes(ext)) { skippedCount++; continue; }
-                        try {
-                          const content = await file.text();
-                          await addRagFileChunks(file.name, content);
-                          successCount++;
-                        } catch (err) { console.error('Failed', file.name, err); }
-                      }
-                      await fetchRagFiles();
-                      await fetchRagStats();
-                      setRagUploadStatus('success');
-                      let msg = `Загружено: ${successCount}`;
-                      if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
-                      setRagUploadMessage(msg);
-                      setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
-                    };
-                    input.click();
+                  // Fallback: обычный выбор файлов (с Ctrl/Shift можно много файлов)
+                  const input = document.createElement('input');
+                  input.type = 'file';
+                  input.multiple = true;
+                  input.onchange = async (e) => {
+                    const files = (e.target as HTMLInputElement).files;
+                    if (!files || files.length === 0) return;
+                    setRagUploadStatus('uploading');
+                    setRagUploadMessage(`Загрузка ${files.length}...`);
+                    let successCount = 0;
+                    let skippedCount = 0;
+                    for (const file of Array.from(files)) {
+                      const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
+                      if (!supportedExtensions.includes(ext)) { skippedCount++; continue; }
+                      try {
+                        const content = await file.text();
+                        await addRagFileChunks(file.name, content);
+                        successCount++;
+                      } catch (err) { console.error('Error:', file.name, err); }
+                    }
+                    await fetchRagFiles();
+                    await fetchRagStats();
+                    setRagUploadStatus('success');
+                    let msg = `Загружено: ${successCount}`;
+                    if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
+                    setRagUploadMessage(msg);
+                    setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
                   };
-                  container.appendChild(btnFile);
-                  
-                  const btnFolder = document.createElement('button');
-                  btnFolder.textContent = 'Выбрать папку';
-                  btnFolder.className = 'provider-save-btn';
-                  // @ts-ignore
-                  if (!window.showDirectoryPicker) btnFolder.disabled = true;
-                  btnFolder.onclick = async () => {
-                    // Используем webkitdirectory для выбора папки
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.multiple = true;
-                    // @ts-ignore
-                    input.webkitdirectory = true;
-                    input.onchange = async (e) => {
-                      const files = (e.target as HTMLInputElement).files;
-                      if (!files || files.length === 0) return;
-                      container.remove();
-                      setRagUploadStatus('uploading');
-                      setRagUploadMessage(`Загрузка ${files.length} файл(ов)...`);
-                      let successCount = 0;
-                      let skippedCount = 0;
-                      const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
-                      for (const file of Array.from(files)) {
-                        const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
-                        if (!supportedExtensions.includes(ext)) { skippedCount++; continue; }
-                        try {
-                          const content = await file.text();
-                          const fileName = (file as any).webkitRelativePath || file.name;
-                          await addRagFileChunks(fileName, content);
-                          successCount++;
-                        } catch (err) { console.error('Failed', file.name, err); }
-                      }
-                      await fetchRagFiles();
-                      await fetchRagStats();
-                      setRagUploadStatus('success');
-                      let msg = `Загружено: ${successCount}`;
-                      if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
-                      setRagUploadMessage(msg);
-                      setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
-                    };
-                    input.click();
-                  };
-                  container.appendChild(btnFolder);
-                  
-                  const btnCancel = document.createElement('button');
-                  btnCancel.textContent = 'Отмена';
-                  btnCancel.className = 'provider-save-btn';
-                  btnCancel.style.cssText = 'margin-left:10px;background:#666;';
-                  btnCancel.onclick = () => container.remove();
-                  container.appendChild(btnCancel);
-                  
-                  document.body.appendChild(container);
+                  input.click();
                 }}
               >
                 {ragUploadStatus === 'uploading' ? 'Загрузка...' : 'Добавить файлы'}

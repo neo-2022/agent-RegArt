@@ -436,38 +436,44 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	// Выполняем семантический поиск по базе знаний перед запросом к LLM
 	var ragSources []Source
 	var ragContext string
-	log.Printf("[RAG] Выполняю поиск для: %s", truncate(lastMsg, 30))
-	ragStartTime := time.Now()
-	if ragRetriever != nil {
-		results, err := ragRetriever.Search(lastMsg, 5)
-		ragDuration := time.Since(ragStartTime)
-		if err != nil {
-			log.Printf("[RAG] Ошибка поиска: %v", err)
-			metrics.RecordRAGSearch("error", 0, ragDuration)
-		} else if len(results) > 0 {
-			log.Printf("[RAG] Найдено %d документов", len(results))
-			metrics.RecordRAGSearch("success", len(results), ragDuration)
-			ragContext = "\n\n=== Релевантные документы из базы знаний ===\n"
-			for i, r := range results {
-				ragContext += fmt.Sprintf("[%d] %s\n%s\n", i+1, r.Doc.Title, truncate(r.Doc.Content, 300))
-				ragSources = append(ragSources, Source{
-					Title:   r.Doc.Title,
-					Content: truncate(r.Doc.Content, 200),
-					Score:   i + 1,
-				})
+	// RAG временно отключен из-за проблем с контекстом
+	/*
+		log.Printf("[RAG] Выполняю поиск для: %s", truncate(lastMsg, 30))
+		ragStartTime := time.Now()
+		if ragRetriever != nil {
+			results, err := ragRetriever.Search(lastMsg, 5)
+			ragDuration := time.Since(ragStartTime)
+			if err != nil {
+				log.Printf("[RAG] Ошибка поиска: %v", err)
+				metrics.RecordRAGSearch("error", 0, ragDuration)
+			} else if len(results) > 0 {
+				log.Printf("[RAG] Найдено %d документов", len(results))
+				metrics.RecordRAGSearch("success", len(results), ragDuration)
+				ragContext = "\n\n=== База знаний ===\n"
+				for i, r := range results {
+					ragContext += fmt.Sprintf("[%d] %s: %s\n", i+1, r.Doc.Title, truncate(r.Doc.Content, 150))
+					ragSources = append(ragSources, Source{
+						Title:   r.Doc.Title,
+						Content: truncate(r.Doc.Content, 100),
+						Score:   i + 1,
+					})
+				}
+				ragContext += "Используй эту информацию.\n"
+			} else {
+				log.Printf("[RAG] Документы не найдены")
+				metrics.RecordRAGSearch("empty", 0, ragDuration)
 			}
-			ragContext += "=== Используй эту информацию для формирования ответа ===\n"
-		} else {
-			log.Printf("[RAG] Документы не найдены")
-			metrics.RecordRAGSearch("empty", 0, ragDuration)
 		}
-	}
+	*/
 
 	// === Система обучения: получение релевантных знаний модели ===
 	// Перед каждым запросом к LLM ищем в базе знаний модели
 	// релевантные факты и добавляем их в системный промпт.
 	systemPrompt := agent.Prompt
-	learnings := fetchModelLearnings(agent.LLMModel, lastMsg)
+
+	// Временно отключаем learnings из-за проблем с контекстом
+	// learnings := fetchModelLearnings(agent.LLMModel, lastMsg)
+	var learnings []string
 	if len(learnings) > 0 {
 		learningContext := "\n\n=== Накопленные знания модели ===\n"
 		for i, l := range learnings {

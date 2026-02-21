@@ -2451,6 +2451,134 @@ func ragDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
+var supportedExtensions = map[string]bool{
+	".txt": true, ".md": true, ".markdown": true,
+	".json": true, ".jsonl": true,
+	".csv":  true,
+	".html": true, ".htm": true,
+	".xml":  true,
+	".yaml": true, ".yml": true,
+	".go": true, ".py": true, ".js": true, ".ts": true,
+	".java": true, ".c": true, ".cpp": true, ".h": true, ".hpp": true,
+	".rs": true, ".rb": true, ".php": true, ".swift": true, ".kt": true,
+	".sh": true, ".bash": true, ".zsh": true,
+	".sql": true, ".graphql": true, ".gql": true,
+	".dockerfile": true, ".toml": true, ".ini": true, ".conf": true,
+	".log": true,
+}
+
+// ragAddFolderHandler — обработчик для рекурсивной загрузки папки в RAG
+func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		FolderPath string `json:"folder_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	folderPath := req.FolderPath
+	if folderPath == "" {
+		http.Error(w, "folder_path required", http.StatusBadRequest)
+		return
+	}
+
+	// Проверяем, что папка существует
+	info, err := os.Stat(folderPath)
+	if err != nil {
+		http.Error(w, "Folder not found: "+err.Error(), http.StatusNotFound)
+		return
+	}
+	if !info.IsDir() {
+		http.Error(w, "Path is not a folder", http.StatusBadRequest)
+		return
+	}
+
+	// Рекурсивно сканируем папку
+	var filesAdded int
+	var filesSkipped int
+	var errors []string
+
+	var walkFunc func(path string, info os.FileInfo, err error) error
+	walkFunc = func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			// Пропускаем скрытые папки
+			if strings.HasPrefix(info.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		if !supportedExtensions[ext] {
+			filesSkipped++
+			return nil
+		}
+
+		// Читаем содержимое файла
+		content, err := os.ReadFile(path)
+		if err != nil {
+			errors = append(errors, path+": "+err.Error())
+			return nil
+		}
+
+		// Относительный путь от папки
+		relPath, _ := filepath.Rel(folderPath, path)
+		title := relPath
+
+		docID := fmt.Sprintf("doc-%d-%s", time.Now().UnixNano(), strings.ReplaceAll(relPath, "/", "-"))
+
+		if ragRetriever != nil && ragRetriever.Config().ChromaURL != "" {
+			ragDoc := rag.RagDoc{
+				ID:      docID,
+				Title:   title,
+				Content: string(content),
+				Source:  "folder:" + folderPath,
+			}
+			if err := ragRetriever.AddDocument(ragDoc); err != nil {
+				log.Printf("[RAG] Ошибка добавления в ChromA: %v", err)
+			}
+		}
+
+		ragDoc := models.RagDocument{
+			Title:       title,
+			Content:     string(content),
+			Source:      "folder:" + folderPath,
+			ChunkIndex:  0,
+			TotalChunks: 1,
+		}
+		if err := db.DB.Create(&ragDoc).Error; err != nil {
+			log.Printf("[RAG] Ошибка сохранения в БД: %v", err)
+			errors = append(errors, title+": "+err.Error())
+			return nil
+		}
+
+		filesAdded++
+		log.Printf("[RAG] Добавлен файл из папки: %s", title)
+		return nil
+	}
+
+	if err := filepath.Walk(folderPath, walkFunc); err != nil {
+		log.Printf("[RAG] Ошибка сканирования папки: %v", err)
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"status":        "ok",
+		"folder_path":   folderPath,
+		"files_added":   filesAdded,
+		"files_skipped": filesSkipped,
+		"errors":        errors,
+	})
+}
+
 // handleViewLogs — обработчик инструмента view_logs для Админа.
 // Позволяет агенту просматривать системные логи с фильтрацией по уровню и сервису.
 func handleViewLogs(args map[string]interface{}) map[string]interface{} {
@@ -3322,6 +3450,7 @@ func main() {
 
 	// RAG эндпоинты
 	http.HandleFunc("/rag/add", ragAddHandler)
+	http.HandleFunc("/rag/add-folder", ragAddFolderHandler)
 	http.HandleFunc("/rag/search", ragSearchHandler)
 	http.HandleFunc("/rag/files", ragFilesHandler)
 	http.HandleFunc("/rag/stats", ragStatsHandler)

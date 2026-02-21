@@ -33,6 +33,7 @@ export default defineConfig({
       '/learning-stats': apiTarget,
       '/logs': apiTarget,
       '/rag': apiTarget,
+      '/rag/add-folder': apiTarget,
     },
   },
 })

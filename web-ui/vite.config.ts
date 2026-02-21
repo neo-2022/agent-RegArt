@@ -32,6 +32,7 @@ export default defineConfig({
       '/agent': apiTarget,
       '/learning-stats': apiTarget,
       '/logs': apiTarget,
+      '/rag': apiTarget,
     },
   },
 })

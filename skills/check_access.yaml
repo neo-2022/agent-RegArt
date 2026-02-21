@@ -1,0 +1,36 @@
+# Навык: Проверка доступности URL
+# Описание: Проверяет доступность веб-ресурса с учётом санкций и блокировок.
+# Выполняет цепочку: DNS → TCP → TLS → HTTP. Обнаруживает CAPTCHA.
+#
+# Пример использования:
+#   Пользователь: "Проверь, доступен ли сайт github.com из России"
+#   Агент вызывает check_url_access и получает подробный отчёт.
+
+name: check_access
+description: "Проверка доступности URL с учётом санкций, блокировок и CAPTCHA. Цепочка: DNS → TCP → TLS → HTTP."
+version: "1.0"
+author: "система"
+
+parameters:
+  - name: url
+    type: string
+    required: true
+    description: "URL для проверки доступности"
+
+endpoint: "http://localhost:8084/access/check"
+method: POST
+
+template: |
+  {
+    "url": "{{url}}"
+  }
+
+tags:
+  - доступность
+  - санкции
+  - блокировки
+  - captcha
+
+agents:
+  - admin
+  - novice

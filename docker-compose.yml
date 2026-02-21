@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  memory-service:
+    build: ./memory-service
+    container_name: agent-memory
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./memory-service/data:/app/data
+    environment:
+      - CHROMA_DIR=/app/data/chroma
+      - TEMP_DIR=/app/data/temp
+      - EMBEDDING_MODEL=all-MiniLM-L6-v2
+      - DEBUG=False
+    restart: unless-stopped

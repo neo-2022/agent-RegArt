@@ -1,0 +1,40 @@
+# Навык: Сохранение веб-страницы в PDF
+# Описание: Конвертирует веб-страницу в PDF через headless Chrome.
+# Полезно для сохранения документов, статей, отчётов.
+#
+# Пример использования:
+#   Пользователь: "Сохрани эту статью в PDF"
+#   Агент вызывает browser_pdf и возвращает путь к файлу.
+
+name: page_to_pdf
+description: "Сохранение веб-страницы как PDF через headless Chrome. Полный рендеринг с JavaScript."
+version: "1.0"
+author: "система"
+
+parameters:
+  - name: url
+    type: string
+    required: true
+    description: "URL страницы для конвертации в PDF"
+  - name: output_path
+    type: string
+    required: false
+    description: "Путь для сохранения PDF"
+
+endpoint: "http://localhost:8084/browser/pdf"
+method: POST
+
+template: |
+  {
+    "url": "{{url}}",
+    "output_path": "{{output_path}}"
+  }
+
+tags:
+  - pdf
+  - сохранение
+  - документ
+  - браузер
+
+agents:
+  - admin

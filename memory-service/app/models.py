@@ -1,0 +1,123 @@
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+
+
+class FactAddRequest(BaseModel):
+    """Запрос на добавление факта."""
+    text: str = Field(..., description="Текст факта", min_length=1)
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Метаданные")
+
+
+class FactAddResponse(BaseModel):
+    """Ответ на добавление факта."""
+    id: str
+    status: str = "ok"
+    message: str = "Fact added"
+
+
+class SearchRequest(BaseModel):
+    """Запрос на поиск."""
+    query: str = Field(..., description="Поисковый запрос", min_length=1)
+    top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=50)
+    agent_name: Optional[str] = Field(None, description="Фильтр по имени агента")
+    include_files: bool = Field(False, description="Включать ли фрагменты файлов")
+
+
+class SearchResponse(BaseModel):
+    """Ответ на поиск."""
+    results: List[str] = Field(default_factory=list)
+    count: int
+
+
+class FileChunkAddRequest(BaseModel):
+    """Запрос на добавление фрагмента файла."""
+    text: str = Field(..., description="Текст фрагмента", min_length=1)
+    metadata: Dict[str, Any] = Field(..., description="Метаданные (agent, filename, file_id, chunk)")
+
+
+class FileChunkAddResponse(BaseModel):
+    """Ответ на добавление фрагмента."""
+    id: str
+    status: str = "ok"
+
+
+class FileDeleteRequest(BaseModel):
+    """Запрос на удаление фрагментов файла."""
+    file_id: str = Field(..., description="Идентификатор файла")
+
+
+class FileDeleteResponse(BaseModel):
+    """Ответ на удаление."""
+    deleted_count: int
+    status: str = "ok"
+
+
+class StatsResponse(BaseModel):
+    """Статистика."""
+    facts_count: int
+    files_count: int
+    learnings_count: int = 0
+
+
+class ErrorResponse(BaseModel):
+    """Ответ с ошибкой."""
+    error: str
+    detail: Optional[str] = None
+
+
+# === Модели для системы обучения агентов ===
+# Система обучения позволяет каждой модели LLM накапливать знания
+# из взаимодействий с пользователем. Знания привязаны к конкретной модели
+# (model_name), а не к агенту, потому что одна и та же модель может
+# использоваться разными агентами, и знания должны переноситься.
+
+class LearningAddRequest(BaseModel):
+    """Запрос на добавление знания (факта, полученного в процессе обучения).
+    
+    Знание извлекается автоматически из диалога после каждого успешного
+    взаимодействия. Привязывается к конкретной модели LLM.
+    """
+    text: str = Field(..., description="Текст знания (факт, правило, предпочтение пользователя)", min_length=1)
+    model_name: str = Field(..., description="Имя модели LLM, которая получила это знание", min_length=1)
+    agent_name: str = Field(..., description="Имя агента, в контексте которого получено знание", min_length=1)
+    category: str = Field("general", description="Категория знания: general, preference, fact, skill, correction")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Дополнительные метаданные")
+
+
+class LearningAddResponse(BaseModel):
+    """Ответ на добавление знания."""
+    id: str
+    status: str = "ok"
+    message: str = "Learning added"
+
+
+class LearningSearchRequest(BaseModel):
+    """Запрос на поиск знаний для конкретной модели.
+    
+    Поиск выполняется по семантической близости к запросу,
+    с фильтрацией по имени модели.
+    """
+    query: str = Field(..., description="Поисковый запрос (контекст текущего диалога)", min_length=1)
+    model_name: str = Field(..., description="Имя модели, для которой ищем знания", min_length=1)
+    top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=20)
+    category: Optional[str] = Field(None, description="Фильтр по категории знания")
+
+
+class LearningSearchResponse(BaseModel):
+    """Ответ на поиск знаний."""
+    results: List[str] = Field(default_factory=list)
+    count: int
+    model_name: str
+
+
+class LearningStatsResponse(BaseModel):
+    """Статистика обучения по моделям."""
+    total_learnings: int
+    by_model: Dict[str, int] = Field(default_factory=dict)
+    by_category: Dict[str, int] = Field(default_factory=dict)
+
+
+class LearningDeleteRequest(BaseModel):
+    """Запрос на удаление знаний модели."""
+    model_name: str = Field(..., description="Имя модели, знания которой удалить")
+    category: Optional[str] = Field(None, description="Удалить только определённую категорию (опционально)")

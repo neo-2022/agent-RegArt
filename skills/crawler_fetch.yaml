@@ -1,0 +1,41 @@
+# Навык: Загрузка контента с маскировкой под робота
+# Описание: Загружает контент веб-страницы, маскируясь под поискового робота
+# (Googlebot, YandexBot, Bingbot) для обхода блокировок.
+#
+# Пример использования:
+#   Пользователь: "Загрузи контент с сайта, который блокирует обычные запросы"
+#   Агент пробует режим auto — сначала Googlebot, потом другие режимы.
+
+name: crawler_fetch
+description: "Загрузка контента с маскировкой под поискового робота. Автоматически пробует Googlebot, YandexBot, Bingbot для обхода блокировок."
+version: "1.0"
+author: "система"
+
+parameters:
+  - name: url
+    type: string
+    required: true
+    description: "URL для загрузки контента"
+  - name: mode
+    type: string
+    required: false
+    default: "auto"
+    description: "Режим маскировки: googlebot, yandexbot, bingbot, mailru, normal, auto"
+
+endpoint: "http://localhost:8084/crawler/fetch"
+method: POST
+
+template: |
+  {
+    "url": "{{url}}",
+    "mode": "{{mode}}"
+  }
+
+tags:
+  - краулер
+  - маскировка
+  - робот
+  - загрузка
+
+agents:
+  - admin

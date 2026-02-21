@@ -1,0 +1,30 @@
+
+# Игнорируем скомпилированные бинарники
+agent-service/agent-agent
+api-gateway/agent-gateway
+tools-service/agent-tools
+
+# Игнорируем базы данных и временные файлы Chroma
+*.sqlite3
+*.sqlite3-*
+memory-service/data/chroma/
+
+# Игнорируем папку node_modules и собранные файлы веб-интерфейса
+web-ui/node_modules/
+web-ui/dist/
+web-ui/.vite/
+
+# Игнорируем загруженные аватары и временные файлы
+agent-service/uploads/
+*.jpg
+*.png
+*.ico
+
+# Исключение: встроенные аватарки агентов (Админ, Кодер, Послушник)
+!web-ui/public/avatars/*.jpg
+!web-ui/public/avatars/*.png
+!favicon.png
+
+# Игнорируем логи и временные файлы
+*.log
+*.tmp

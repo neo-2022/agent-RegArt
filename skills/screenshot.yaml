@@ -1,0 +1,46 @@
+# Навык: Скриншот веб-страницы
+# Описание: Делает скриншот любой веб-страницы через headless Chrome.
+# Полезно для мониторинга, визуальной проверки, создания превью.
+#
+# Пример использования:
+#   Пользователь: "Сделай скриншот главной страницы ya.ru"
+#   Агент вызывает browser_screenshot с URL и сохраняет PNG.
+
+name: screenshot
+description: "Скриншот веб-страницы через headless Chrome. Сохраняет PNG-файл с указанным размером окна."
+version: "1.0"
+author: "система"
+
+parameters:
+  - name: url
+    type: string
+    required: true
+    description: "URL страницы для скриншота"
+  - name: output_path
+    type: string
+    required: false
+    description: "Путь для сохранения PNG (если не указан — временный файл)"
+  - name: window_size
+    type: string
+    required: false
+    default: "1920,1080"
+    description: "Размер окна «ширина,высота»"
+
+endpoint: "http://localhost:8084/browser/screenshot"
+method: POST
+
+template: |
+  {
+    "url": "{{url}}",
+    "output_path": "{{output_path}}",
+    "window_size": "{{window_size}}"
+  }
+
+tags:
+  - скриншот
+  - браузер
+  - визуализация
+  - мониторинг
+
+agents:
+  - admin

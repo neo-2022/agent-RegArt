@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  agent-service:
+    name: agent-service (build, fmt, vet)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agent-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: agent-service/go.sum
+      - run: go build ./cmd/server/
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+
+  tools-service:
+    name: tools-service (build, fmt, vet)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: false
+      - run: go build ./cmd/server/
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+
+  api-gateway:
+    name: api-gateway (build, fmt, vet)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-gateway
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: false
+      - run: go build -o api-gateway ./cmd/main.go
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+
+  web-ui:
+    name: web-ui (typecheck, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web-ui/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build

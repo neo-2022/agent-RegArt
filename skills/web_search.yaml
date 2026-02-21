@@ -1,0 +1,53 @@
+# Навык: Поиск в интернете
+# Описание: Позволяет агенту искать информацию в интернете через бесплатные поисковики.
+# Используется Админом для поиска документации, решений проблем, новостей.
+#
+# Пример использования:
+#   Агент вызывает internet_search с запросом пользователя.
+#   Результаты возвращаются в виде списка ссылок с описаниями.
+
+name: web_search
+description: "Поиск информации в интернете через DuckDuckGo и SearXNG. Бесплатно, без API-ключей, работает в РФ."
+version: "1.0"
+author: "система"
+
+# Параметры навыка
+parameters:
+  - name: query
+    type: string
+    required: true
+    description: "Поисковый запрос на любом языке"
+  - name: max_results
+    type: number
+    required: false
+    default: 10
+    description: "Максимальное количество результатов"
+  - name: engine
+    type: string
+    required: false
+    default: "auto"
+    description: "Поисковик: duckduckgo, searxng, auto"
+
+# Эндпоинт browser-service для выполнения
+endpoint: "http://localhost:8084/search"
+method: POST
+
+# Шаблон запроса к эндпоинту
+template: |
+  {
+    "query": "{{query}}",
+    "max_results": {{max_results}},
+    "engine": "{{engine}}"
+  }
+
+# Теги для поиска навыков
+tags:
+  - поиск
+  - интернет
+  - информация
+  - duckduckgo
+
+# Какие агенты могут использовать этот навык
+agents:
+  - admin
+  - novice

@@ -1502,12 +1502,34 @@ function App() {
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>
               {ragFiles.length > 0 ? (
                 <div className="rag-file-list">
-                  {ragFiles.map((rf, idx) => (
-                    <div key={idx} className="rag-file-item">
-                      <span className="rag-file-icon">📄</span>
-                      <span className="rag-file-name">{rf.file_name}</span>
-                      <span className="rag-file-chunks">{rf.chunks_count} фр.</span>
-                      <button className="rag-file-delete" onClick={() => deleteRagFile(rf.file_name)} title="Удалить файл из базы знаний">✕</button>
+                  {ragFiles.map((folder: any, idx: number) => (
+                    <div key={idx} className="rag-folder-group">
+                      <div className="rag-folder-header">
+                        <span className="rag-folder-icon">📁</span>
+                        <span className="rag-folder-name">{folder.folder}</span>
+                        <span className="rag-folder-count">({folder.total_files} файлов)</span>
+                        <button className="rag-folder-delete" onClick={() => {
+                          // Удаляем все файлы из папки
+                          if (folder.files && folder.files.length > 0) {
+                            folder.files.forEach((f: any) => deleteRagFile(folder.folder + '/' + f.file_name));
+                            fetchRagFiles();
+                            fetchRagStats();
+                          }
+                        }} title="Удалить папку">✕</button>
+                      </div>
+                      <div className="rag-folder-files">
+                        {(folder.files || []).slice(0, 10).map((rf: any, fileIdx: number) => (
+                          <div key={fileIdx} className="rag-file-item">
+                            <span className="rag-file-icon">📄</span>
+                            <span className="rag-file-name">{rf.file_name}</span>
+                            <span className="rag-file-chunks">{rf.chunks_count} фр.</span>
+                            <button className="rag-file-delete" onClick={() => deleteRagFile(folder.folder + '/' + rf.file_name)} title="Удалить">✕</button>
+                          </div>
+                        ))}
+                        {(folder.files || []).length > 10 && (
+                          <div className="rag-more-files">... и ещё {(folder.files || []).length - 10} файлов</div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

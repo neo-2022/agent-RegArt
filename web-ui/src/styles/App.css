@@ -1074,12 +1074,68 @@ body {
 .rag-file-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    max-height: 200px;
+    gap: 4px;
+    max-height: 300px;
     overflow-y: auto;
     border: 1px solid var(--input-border);
     border-radius: 8px;
     padding: 4px;
+}
+
+.rag-folder-group {
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.rag-folder-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--panel-header-bg, #333);
+    font-weight: 500;
+}
+
+.rag-folder-icon {
+    font-size: 1rem;
+}
+
+.rag-folder-name {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-color);
+}
+
+.rag-folder-count {
+    font-size: 0.75rem;
+    color: var(--icon-color);
+}
+
+.rag-folder-delete {
+    background: none;
+    border: none;
+    color: #ff6b6b;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 2px 6px;
+    opacity: 0.7;
+}
+
+.rag-folder-delete:hover {
+    opacity: 1;
+}
+
+.rag-folder-files {
+    padding: 4px 8px;
+    background: var(--settings-bg);
+}
+
+.rag-more-files {
+    font-size: 0.75rem;
+    color: var(--icon-color);
+    font-style: italic;
+    padding: 2px 0;
 }
 
 .rag-file-item {

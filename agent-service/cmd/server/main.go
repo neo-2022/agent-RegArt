@@ -36,6 +36,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -2383,25 +2384,71 @@ func ragSearchHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, results)
 }
 
-// ragFilesHandler — обработчик для получения списка файлов в RAG
+// ragFilesHandler — обработчик для получения списка файлов в RAG (сгруппировано по папкам)
 func ragFilesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		var docs []models.RagDocument
 		db.DB.Find(&docs)
 
-		fileMap := make(map[string]int)
-		for _, doc := range docs {
-			fileMap[doc.Title]++
+		type fileInfo struct {
+			FileName    string `json:"file_name"`
+			ChunksCount int    `json:"chunks_count"`
+		}
+		type folderData struct {
+			Folder     string     `json:"folder"`
+			Files      []fileInfo `json:"files"`
+			TotalFiles int        `json:"total_files"`
 		}
 
-		files := make([]map[string]interface{}, 0, len(fileMap))
-		for title, count := range fileMap {
-			files = append(files, map[string]interface{}{
-				"file_name":    title,
-				"chunks_count": count,
+		// Группируем по папкам
+		folderMap := make(map[string]*folderData)
+		for _, doc := range docs {
+			// Извлекаем папку из имени файла
+			parts := strings.Split(doc.Title, "/")
+			var folder, fileName string
+			if len(parts) > 1 {
+				folder = parts[0]
+				fileName = strings.Join(parts[1:], "/")
+			} else {
+				folder = "(корневая папка)"
+				fileName = doc.Title
+			}
+
+			if _, ok := folderMap[folder]; !ok {
+				folderMap[folder] = &folderData{
+					Folder:     folder,
+					Files:      []fileInfo{},
+					TotalFiles: 0,
+				}
+			}
+
+			folderMap[folder].Files = append(folderMap[folder].Files, fileInfo{
+				FileName:    fileName,
+				ChunksCount: doc.TotalChunks,
 			})
+			folderMap[folder].TotalFiles++
 		}
-		writeJSON(w, files)
+
+		// Сортируем папки
+		folders := make([]*folderData, 0, len(folderMap))
+		for _, v := range folderMap {
+			folders = append(folders, v)
+		}
+
+		// Сортируем: корневая в конце
+		sort.Slice(folders, func(i, j int) bool {
+			f1 := folders[i].Folder
+			f2 := folders[j].Folder
+			if f1 == "(корневая папка)" {
+				return false
+			}
+			if f2 == "(корневая папка)" {
+				return true
+			}
+			return f1 < f2
+		})
+
+		writeJSON(w, folders)
 		return
 	}
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

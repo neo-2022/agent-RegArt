@@ -28,17 +28,20 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/metrics"
@@ -166,14 +169,14 @@ func initRAG() {
 	}
 
 	ragRetriever = rag.NewDBRetriever(config)
-	log.Printf("[RAG] Инициализирован: ChromA=%s, модель=%s, topK=%d", chromaURL, embModel, topK)
+	slog.Info("RAG инициализирован", slog.String("chroma_url", chromaURL), slog.String("модель", embModel), slog.Int("topK", topK))
 
 	// Загружаем демо-документы в ChromA при первом запуске
 	if chromaURL != "" {
 		go func() {
 			time.Sleep(2 * time.Second) // Даём время ChromA запуститься
 			if err := ragRetriever.SeedDemoDocuments(); err != nil {
-				log.Printf("[RAG] Ошибка загрузки демо-документов: %v", err)
+				slog.Error("Ошибка загрузки демо-документов RAG", slog.String("ошибка", err.Error()))
 			}
 		}()
 	}
@@ -235,7 +238,7 @@ func resolveToolRoute(toolName string) (string, string) {
 func callTool(toolName string, args map[string]interface{}) (map[string]interface{}, error) {
 	baseURL, path := resolveToolRoute(toolName)
 	fullURL := baseURL + path
-	log.Printf("callTool: %s → %s (args: %+v)", toolName, fullURL, args)
+	slog.Info("Вызов инструмента", slog.String("инструмент", toolName), slog.String("url", fullURL))
 
 	data, err := json.Marshal(args)
 	if err != nil {
@@ -320,13 +323,13 @@ func chatWithRetry(provider llm.ChatProvider, req *llm.ChatRequest) (*llm.ChatRe
 		errStr := err.Error()
 		if strings.Contains(errStr, "429") {
 			delay := time.Duration(3*(attempt+1)) * time.Second
-			log.Printf("Rate limit 429 (попытка %d/%d): %v. Повтор через %v...", attempt+1, maxRetries, err, delay)
+			slog.Warn("Rate limit 429", slog.Int("попытка", attempt+1), slog.Int("макс", maxRetries), slog.String("ошибка", err.Error()), slog.Duration("задержка", delay))
 			time.Sleep(delay)
 			continue
 		}
 		if strings.Contains(errStr, "503") || strings.Contains(errStr, "504") || strings.Contains(errStr, "502") {
 			delay := 3 * time.Second
-			log.Printf("Транзиентная ошибка LLM (попытка %d/%d): %v. Повтор через %v...", attempt+1, maxRetries, err, delay)
+			slog.Warn("Транзиентная ошибка LLM", slog.Int("попытка", attempt+1), slog.Int("макс", maxRetries), slog.String("ошибка", err.Error()), slog.Duration("задержка", delay))
 			time.Sleep(delay)
 			continue
 		}
@@ -359,7 +362,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	if intentType != intent.IntentNone {
 		resp, err := handlers.HandleIntent(intentType, params)
 		if err != nil {
-			log.Printf("Intent handler error: %v", err)
+			slog.Error("Ошибка intent handler", slog.String("ошибка", err.Error()))
 			writeJSON(w, ChatResponse{Error: err.Error()})
 			return
 		}
@@ -369,7 +372,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := repository.GetAgentByName(req.Agent)
 	if err != nil {
-		log.Printf("Failed to get agent %s: %v", req.Agent, err)
+		slog.Error("Не удалось получить агента", slog.String("агент", req.Agent), slog.String("ошибка", err.Error()))
 		writeJSON(w, ChatResponse{Error: "Agent not found or no suitable model: " + err.Error()})
 		return
 	}
@@ -381,7 +384,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	provider, err := llm.GlobalRegistry.Get(providerName)
 	if err != nil {
-		log.Printf("Provider %s not found: %v", providerName, err)
+		slog.Error("Провайдер не найден", slog.String("провайдер", providerName), slog.String("ошибка", err.Error()))
 		WriteSystemLog("error", "agent-service", fmt.Sprintf("Провайдер %s не найден", providerName), err.Error())
 		writeJSON(w, ChatResponse{Error: "Provider " + providerName + " not configured"})
 		metrics.RecordChatError(req.Agent, providerName, agent.LLMModel, "provider_not_found")
@@ -397,16 +400,16 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	var ragContext string
 	// RAG временно отключен из-за проблем с контекстом
 	/*
-		log.Printf("[RAG] Выполняю поиск для: %s", truncate(lastMsg, 30))
+		slog.Info("RAG поиск", slog.String("запрос", truncate(lastMsg, 30)))
 		ragStartTime := time.Now()
 		if ragRetriever != nil {
 			results, err := ragRetriever.Search(lastMsg, 5)
 			ragDuration := time.Since(ragStartTime)
 			if err != nil {
-				log.Printf("[RAG] Ошибка поиска: %v", err)
+				slog.Error("Ошибка RAG поиска", slog.String("ошибка", err.Error()))
 				metrics.RecordRAGSearch("error", 0, ragDuration)
 			} else if len(results) > 0 {
-				log.Printf("[RAG] Найдено %d документов", len(results))
+				slog.Info("RAG документы найдены", slog.Int("количество", len(results)))
 				metrics.RecordRAGSearch("success", len(results), ragDuration)
 				ragContext = "\n\n=== База знаний ===\n"
 				for i, r := range results {
@@ -419,7 +422,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				ragContext += "Используй эту информацию.\n"
 			} else {
-				log.Printf("[RAG] Документы не найдены")
+				slog.Info("RAG документы не найдены")
 				metrics.RecordRAGSearch("empty", 0, ragDuration)
 			}
 		}
@@ -441,7 +444,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		learningContext += "=== Используй эти знания для более точных ответов ===\n"
 		systemPrompt += learningContext
-		log.Printf("Добавлено %d знаний в контекст модели %s", len(learnings), agent.LLMModel)
+		slog.Info("Знания добавлены в контекст", slog.Int("количество", len(learnings)), slog.String("модель", agent.LLMModel))
 	}
 
 	// Добавляем RAG контекст к системному промпту
@@ -470,12 +473,12 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		for i, t := range chatReq.Tools {
 			toolNames[i] = t.Function.Name
 		}
-		log.Printf("[TOOLS] Агент=%s модель=%s получил %d инструментов: %v", req.Agent, agent.LLMModel, len(chatReq.Tools), toolNames)
+		slog.Info("Инструменты назначены агенту", slog.String("агент", req.Agent), slog.String("модель", agent.LLMModel), slog.Int("количество", len(chatReq.Tools)))
 	}
 
 	chatResp, err := chatWithRetry(provider, chatReq)
 	if err != nil {
-		log.Printf("LLM error: %v", err)
+		slog.Error("Ошибка LLM", slog.String("ошибка", err.Error()))
 		WriteSystemLog("error", "agent-service", fmt.Sprintf("Ошибка LLM (%s/%s): %s", providerName, agent.LLMModel, llm.TranslateLLMError(err.Error())), err.Error())
 		writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 		return
@@ -488,23 +491,23 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	// Цикл завершается когда LLM возвращает обычный текст без tool calls.
 	const maxToolRounds = 5
 	for round := 0; round < maxToolRounds; round++ {
-		log.Printf("Provider %s response (round %d): content=%d chars, tools=%d", providerName, round, len(chatResp.Content), len(chatResp.ToolCalls))
+		slog.Info("Ответ провайдера", slog.String("провайдер", providerName), slog.Int("раунд", round), slog.Int("символов", len(chatResp.Content)), slog.Int("инструментов", len(chatResp.ToolCalls)))
 
 		// --- Вариант 1: Структурированные tool calls (стандартный OpenAI/OpenRouter формат) ---
 		if len(chatResp.ToolCalls) > 0 {
 			messages = append(messages, llm.Message{Role: "assistant", Content: chatResp.Content, ToolCalls: chatResp.ToolCalls})
 			for _, tc := range chatResp.ToolCalls {
-				log.Printf("Raw tool call: name=%s, args=%s", tc.Function.Name, string(tc.Function.Arguments))
+				slog.Info("Tool call", slog.String("имя", tc.Function.Name))
 				args := parseToolArguments(tc.Function.Arguments)
 				result := dispatchTool(req.Agent, tc.Function.Name, args, req.Messages)
-				log.Printf("Tool %s called with args: %+v, result: %+v", tc.Function.Name, args, result)
+				slog.Info("Инструмент выполнен", slog.String("имя", tc.Function.Name))
 				resultBytes, _ := json.Marshal(result)
 				messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: tc.ID})
 			}
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
 			if err != nil {
-				log.Printf("LLM error (round %d): %v", round, err)
+				slog.Error("Ошибка LLM", slog.Int("раунд", round), slog.String("ошибка", err.Error()))
 				writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 				return
 			}
@@ -528,16 +531,16 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 			if len(toolArgs) == 0 {
 				toolArgs = jsonToolCall.Parameters
 			}
-			log.Printf("JSON tool call detected (round %d): %s, args: %+v", round, jsonToolCall.Name, toolArgs)
+			slog.Info("JSON tool call", slog.Int("раунд", round), slog.String("имя", jsonToolCall.Name))
 			messages = append(messages, llm.Message{Role: "assistant", Content: chatResp.Content})
 			result := dispatchTool(req.Agent, jsonToolCall.Name, toolArgs, req.Messages)
-			log.Printf("JSON tool %s called, result: %+v", jsonToolCall.Name, result)
+			slog.Info("JSON инструмент выполнен", slog.String("имя", jsonToolCall.Name))
 			resultBytes, _ := json.Marshal(result)
 			messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: "json-0"})
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
 			if err != nil {
-				log.Printf("LLM error (round %d): %v", round, err)
+				slog.Error("Ошибка LLM", slog.Int("раунд", round), slog.String("ошибка", err.Error()))
 				writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 				return
 			}
@@ -547,16 +550,16 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		// --- Вариант 3: XML tool call(nemotron и подобные модели) ---
 		// Формат: <tool_call><function=имя><parameter=ключ>значение</parameter></function></tool_call>
 		if xmlName, xmlArgs, ok := parseXMLToolCall(contentForParsing); ok {
-			log.Printf("XML tool call detected (round %d): %s, args: %+v", round, xmlName, xmlArgs)
+			slog.Info("XML tool call", slog.Int("раунд", round), slog.String("имя", xmlName))
 			messages = append(messages, llm.Message{Role: "assistant", Content: chatResp.Content})
 			result := dispatchTool(req.Agent, xmlName, xmlArgs, req.Messages)
-			log.Printf("XML tool %s result: %+v", xmlName, result)
+			slog.Info("XML инструмент выполнен", slog.String("имя", xmlName))
 			resultBytes, _ := json.Marshal(result)
 			messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: "xml-0"})
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
 			if err != nil {
-				log.Printf("LLM error (round %d): %v", round, err)
+				slog.Error("Ошибка LLM", slog.Int("раунд", round), slog.String("ошибка", err.Error()))
 				writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 				return
 			}
@@ -572,16 +575,16 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 			inlineName := matches[1]
 			var inlineArgs map[string]interface{}
 			if json.Unmarshal([]byte(matches[2]), &inlineArgs) == nil {
-				log.Printf("Inline tool call detected (round %d): %s, args: %+v", round, inlineName, inlineArgs)
+				slog.Info("Inline tool call", slog.Int("раунд", round), slog.String("имя", inlineName))
 				messages = append(messages, llm.Message{Role: "assistant", Content: chatResp.Content})
 				result := dispatchTool(req.Agent, inlineName, inlineArgs, req.Messages)
-				log.Printf("Inline tool %s result: %+v", inlineName, result)
+				slog.Info("Inline инструмент выполнен", slog.String("имя", inlineName))
 				resultBytes, _ := json.Marshal(result)
 				messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: "inline-0"})
 				chatReq.Messages = messages
 				chatResp, err = chatWithRetry(provider, chatReq)
 				if err != nil {
-					log.Printf("LLM error (round %d): %v", round, err)
+					slog.Error("Ошибка LLM", slog.Int("раунд", round), slog.String("ошибка", err.Error()))
 					writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 					return
 				}
@@ -596,7 +599,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	// Очищаем финальный ответ от thinking-тегов reasoning-моделей перед отправкой пользователю
 	finalContent := stripThinkingTags(chatResp.Content)
 	if strings.TrimSpace(finalContent) == "" {
-		log.Printf("LLM вернул пустой ответ для агента %s модели %s", req.Agent, agent.LLMModel)
+		slog.Warn("LLM вернул пустой ответ", slog.String("агент", req.Agent), slog.String("модель", agent.LLMModel))
 		writeJSON(w, ChatResponse{Error: "Модель вернула пустой ответ. Возможно, исчерпан лимит запросов или модель недоступна. Попробуйте другую модель."})
 		return
 	}
@@ -706,7 +709,7 @@ func dispatchTool(agentName, toolName string, args map[string]interface{}, histo
 	default:
 		result, err := callTool(toolName, args)
 		if err != nil {
-			log.Printf("Tool call error: %v", err)
+			slog.Error("Ошибка вызова инструмента", slog.String("ошибка", err.Error()))
 			return map[string]interface{}{"error": err.Error()}
 		}
 		return result
@@ -740,7 +743,7 @@ func parseToolArguments(raw json.RawMessage) map[string]interface{} {
 	if err := json.Unmarshal(raw, &anyVal); err == nil {
 		return map[string]interface{}{"value": anyVal}
 	}
-	log.Printf("Не удалось распарсить аргументы tool call: %s", string(raw))
+	slog.Warn("Не удалось распарсить аргументы tool call")
 	return map[string]interface{}{}
 }
 
@@ -1010,7 +1013,7 @@ func modelsHandler(w http.ResponseWriter, r *http.Request) {
 	for _, m := range ollamaModels {
 		fullInfo, err := repository.GetModelFullInfo(m)
 		if err != nil {
-			log.Printf("Ошибка получения информации о модели %s: %v", m, err)
+			slog.Error("Ошибка получения информации о модели", slog.String("модель", m), slog.String("ошибка", err.Error()))
 			result = append(result, ModelInfo{Name: m})
 			continue
 		}
@@ -1226,7 +1229,7 @@ func avatarUploadHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to copy file", http.StatusInternalServerError)
 		return
 	}
-	log.Printf("Avatar saved to %s", dst)
+	slog.Info("Аватар сохранён", slog.String("путь", dst))
 
 	agent, err := repository.GetAgentByName(agentName)
 	if err != nil {
@@ -1311,7 +1314,7 @@ func truncate(s string, maxLen int) string {
 
 func writeJSON(w http.ResponseWriter, v interface{}) {
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		log.Printf("JSON encode error: %v", err)
+		slog.Error("Ошибка JSON кодирования", slog.String("ошибка", err.Error()))
 	}
 }
 
@@ -1327,7 +1330,7 @@ func writeJSON(w http.ResponseWriter, v interface{}) {
 func saveChatMessages(agentName string, userMessage llm.Message, response string) {
 	var agent models.Agent
 	if err := db.DB.Where("name = ?", agentName).First(&agent).Error; err != nil {
-		log.Printf("Failed to find agent for chat save: %v", err)
+		slog.Error("Не удалось найти агента для сохранения чата", slog.String("ошибка", err.Error()))
 		return
 	}
 
@@ -1341,7 +1344,7 @@ func saveChatMessages(agentName string, userMessage llm.Message, response string
 		AgentID: agent.ID,
 	}
 	if err := db.DB.Create(&dbMsg).Error; err != nil {
-		log.Printf("Failed to save user message: %v", err)
+		slog.Error("Не удалось сохранить сообщение пользователя", slog.String("ошибка", err.Error()))
 	}
 
 	assistantMsg := models.Message{
@@ -1350,7 +1353,7 @@ func saveChatMessages(agentName string, userMessage llm.Message, response string
 		AgentID: agent.ID,
 	}
 	if err := db.DB.Create(&assistantMsg).Error; err != nil {
-		log.Printf("Failed to save assistant message: %v", err)
+		slog.Error("Не удалось сохранить сообщение ассистента", slog.String("ошибка", err.Error()))
 	}
 }
 
@@ -1380,19 +1383,19 @@ func fetchModelLearnings(modelName string, query string) []string {
 	}
 	data, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Printf("Ошибка сериализации запроса знаний: %v", err)
+		slog.Error("Ошибка сериализации запроса знаний", slog.String("ошибка", err.Error()))
 		return nil
 	}
 
 	resp, err := http.Post(memoryURL+"/learnings/search", "application/json", bytes.NewReader(data))
 	if err != nil {
-		log.Printf("Ошибка запроса знаний из memory-service: %v", err)
+		slog.Error("Ошибка запроса знаний из memory-service", slog.String("ошибка", err.Error()))
 		return nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("memory-service вернул статус %d при поиске знаний", resp.StatusCode)
+		slog.Warn("memory-service вернул ошибку при поиске знаний", slog.Int("статус", resp.StatusCode))
 		return nil
 	}
 
@@ -1402,12 +1405,12 @@ func fetchModelLearnings(modelName string, query string) []string {
 		ModelName string   `json:"model_name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("Ошибка декодирования ответа знаний: %v", err)
+		slog.Error("Ошибка декодирования ответа знаний", slog.String("ошибка", err.Error()))
 		return nil
 	}
 
 	if len(result.Results) > 0 {
-		log.Printf("Найдено %d знаний для модели %s", len(result.Results), modelName)
+		slog.Info("Знания найдены", slog.Int("количество", len(result.Results)), slog.String("модель", modelName))
 	}
 	return result.Results
 }
@@ -1456,22 +1459,21 @@ func extractAndStoreLearnings(modelName, agentName, userMsg, assistantResp strin
 	}
 	data, err := json.Marshal(reqBody)
 	if err != nil {
-		log.Printf("Ошибка сериализации знания: %v", err)
+		slog.Error("Ошибка сериализации знания", slog.String("ошибка", err.Error()))
 		return
 	}
 
 	resp, err := http.Post(memoryURL+"/learnings", "application/json", bytes.NewReader(data))
 	if err != nil {
-		log.Printf("Ошибка сохранения знания в memory-service: %v", err)
+		slog.Error("Ошибка сохранения знания в memory-service", slog.String("ошибка", err.Error()))
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
-		log.Printf("Знание сохранено для модели %s (категория: %s)", modelName, category)
+		slog.Info("Знание сохранено", slog.String("модель", modelName), slog.String("категория", category))
 	} else {
-		body, _ := io.ReadAll(resp.Body)
-		log.Printf("memory-service вернул статус %d при сохранении знания: %s", resp.StatusCode, string(body))
+		slog.Warn("memory-service вернул ошибку при сохранении знания", slog.Int("статус", resp.StatusCode))
 	}
 }
 
@@ -1714,7 +1716,7 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := llm.RegisterProvider(req.Provider, apiKey, req.BaseURL, extra, saJSON); err != nil {
-			log.Printf("Ошибка регистрации провайдера %s: %v", req.Provider, err)
+			slog.Error("Ошибка регистрации провайдера", slog.String("провайдер", req.Provider), slog.String("ошибка", err.Error()))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadRequest)
 			writeJSON(w, map[string]interface{}{
@@ -1741,7 +1743,7 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 		if req.Provider == "yandexgpt" {
 			if yp, ok := p.(*llm.YandexGPTProvider); ok {
 				if err := yp.Validate(); err != nil {
-					log.Printf("Проверка провайдера %s не пройдена: %v", req.Provider, err)
+					slog.Warn("Проверка провайдера не пройдена (горутина)", slog.String("провайдер", req.Provider), slog.String("ошибка", err.Error()))
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
 					writeJSON(w, map[string]interface{}{
@@ -1759,7 +1761,7 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 
 		verifyModels, verifyErr := p.ListModels()
 		if verifyErr != nil {
-			log.Printf("Проверка провайдера %s не пройдена: %v", req.Provider, verifyErr)
+			slog.Warn("Проверка провайдера не пройдена", slog.String("провайдер", req.Provider), slog.String("ошибка", verifyErr.Error()))
 			WriteSystemLog("error", "agent-service", fmt.Sprintf("Провайдер %s: ключ не прошёл проверку", req.Provider), verifyErr.Error())
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -1770,7 +1772,7 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
-		log.Printf("Провайдер %s проверен, доступно моделей: %d", req.Provider, len(verifyModels))
+		slog.Info("Провайдер проверен", slog.String("провайдер", req.Provider), slog.Int("моделей", len(verifyModels)))
 		WriteSystemLog("info", "agent-service", fmt.Sprintf("Провайдер %s подключён, моделей: %d", req.Provider, len(verifyModels)), "")
 
 		// Шаг 3: Ключ прошёл проверку — сохраняем в БД
@@ -2051,7 +2053,7 @@ func cloudModelsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	providerName := r.URL.Query().Get("provider")
-	log.Printf("[cloudModelsHandler] providerName=%s", providerName)
+	slog.Info("Запрос облачных моделей", slog.String("провайдер", providerName))
 	if providerName == "" {
 		allProviders := llm.GlobalRegistry.ListAll()
 		w.Header().Set("Content-Type", "application/json")
@@ -2061,18 +2063,18 @@ func cloudModelsHandler(w http.ResponseWriter, r *http.Request) {
 
 	p, err := llm.GlobalRegistry.Get(providerName)
 	if err != nil {
-		log.Printf("[cloudModelsHandler] provider not found: %v", err)
+		slog.Error("Облачный провайдер не найден", slog.String("ошибка", err.Error()))
 		http.Error(w, "Provider not found: "+err.Error(), http.StatusNotFound)
 		return
 	}
-	log.Printf("[cloudModelsHandler] found provider: %T", p)
+	slog.Info("Облачный провайдер найден")
 	models, err := p.ListModels()
 	if err != nil {
-		log.Printf("[cloudModelsHandler] ListModels error: %v", err)
+		slog.Error("Ошибка получения списка моделей", slog.String("ошибка", err.Error()))
 		http.Error(w, "Failed to get models: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[cloudModelsHandler] models count: %d", len(models))
+	slog.Info("Облачные модели получены", slog.Int("количество", len(models)))
 	w.Header().Set("Content-Type", "application/json")
 	writeJSON(w, models)
 }
@@ -2149,7 +2151,7 @@ func WriteSystemLog(level, service, message, details string) {
 		Details: details,
 	}
 	if err := db.DB.Create(&entry).Error; err != nil {
-		log.Printf("Ошибка записи в системный лог: %v", err)
+		slog.Error("Ошибка записи в системный лог", slog.String("ошибка", err.Error()))
 	}
 }
 
@@ -2259,7 +2261,7 @@ func ragAddHandler(w http.ResponseWriter, r *http.Request) {
 			Source:  req.Source,
 		}
 		if err := ragRetriever.AddDocument(ragDoc); err != nil {
-			log.Printf("[RAG] Ошибка добавления в ChromA: %v", err)
+			slog.Error("Ошибка добавления в ChromA", slog.String("ошибка", err.Error()))
 		}
 	}
 
@@ -2271,12 +2273,12 @@ func ragAddHandler(w http.ResponseWriter, r *http.Request) {
 		TotalChunks: 1,
 	}
 	if err := db.DB.Create(&ragDoc).Error; err != nil {
-		log.Printf("[RAG] Ошибка сохранения в БД: %v", err)
+		slog.Error("Ошибка сохранения RAG документа в БД", slog.String("ошибка", err.Error()))
 		http.Error(w, "Failed to save document", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[RAG] Добавлен документ: %s (ID: %d)", req.Title, ragDoc.ID)
+	slog.Info("RAG документ добавлен", slog.String("заголовок", req.Title), slog.Uint64("id", uint64(ragDoc.ID)))
 	writeJSON(w, map[string]interface{}{"status": "ok", "id": docID, "db_id": ragDoc.ID})
 }
 
@@ -2427,12 +2429,12 @@ func ragDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DB.Where("title = ?", fileName).Delete(&models.RagDocument{}).Error; err != nil {
-		log.Printf("[RAG] Ошибка удаления: %v", err)
+		slog.Error("Ошибка удаления RAG документа", slog.String("ошибка", err.Error()))
 		http.Error(w, "Failed to delete", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[RAG] Удалён документ: %s", fileName)
+	slog.Info("RAG документ удалён", slog.String("файл", fileName))
 	writeJSON(w, map[string]string{"status": "ok"})
 }
 
@@ -2529,7 +2531,7 @@ func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
 				Source:  "folder:" + folderPath,
 			}
 			if err := ragRetriever.AddDocument(ragDoc); err != nil {
-				log.Printf("[RAG] Ошибка добавления в ChromA: %v", err)
+				slog.Error("Ошибка добавления в ChromA", slog.String("ошибка", err.Error()))
 			}
 		}
 
@@ -2541,18 +2543,18 @@ func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
 			TotalChunks: 1,
 		}
 		if err := db.DB.Create(&ragDoc).Error; err != nil {
-			log.Printf("[RAG] Ошибка сохранения в БД: %v", err)
+			slog.Error("Ошибка сохранения RAG документа в БД", slog.String("ошибка", err.Error()))
 			errors = append(errors, title+": "+err.Error())
 			return nil
 		}
 
 		filesAdded++
-		log.Printf("[RAG] Добавлен файл из папки: %s", title)
+		slog.Info("RAG файл добавлен из папки", slog.String("заголовок", title))
 		return nil
 	}
 
 	if err := filepath.Walk(folderPath, walkFunc); err != nil {
-		log.Printf("[RAG] Ошибка сканирования папки: %v", err)
+		slog.Error("Ошибка сканирования папки RAG", slog.String("ошибка", err.Error()))
 	}
 
 	writeJSON(w, map[string]interface{}{
@@ -3317,7 +3319,7 @@ func initProvidersFromDB() {
 			extra = cfg.Scope
 		}
 		if err := llm.RegisterProvider(cfg.ProviderName, cfg.APIKey, cfg.BaseURL, extra, cfg.ServiceAccountJSON); err != nil {
-			log.Printf("Failed to register provider %s from DB: %v", cfg.ProviderName, err)
+			slog.Error("Не удалось зарегистрировать провайдер из БД", slog.String("провайдер", cfg.ProviderName), slog.String("ошибка", err.Error()))
 		}
 	}
 }
@@ -3334,30 +3336,30 @@ func initProvidersFromDB() {
 //  7. Настройка раздачи статических файлов из uploads/
 //  8. Запуск HTTP-сервера на порту AGENT_SERVICE_PORT (по умолчанию 8083)
 func validateEnv() {
-	log.Println("=== Проверка переменных окружения ===")
+	slog.Info("Проверка переменных окружения")
 
 	dbURL := os.Getenv("DATABASE_URL")
 	dbHost := os.Getenv("DB_HOST")
 	if dbURL == "" && dbHost == "" {
-		log.Println("[ENV] DATABASE_URL и DB_HOST не заданы — будут использованы значения по умолчанию (localhost:5432)")
-		log.Println("[ENV] Для настройки см. .env.example или документацию")
+		slog.Info("DATABASE_URL и DB_HOST не заданы, используются значения по умолчанию")
+		slog.Info("Для настройки см. .env.example или документацию")
 	}
 
 	port := getEnv("AGENT_SERVICE_PORT", "8083")
-	log.Printf("[ENV] Порт agent-service: %s", port)
+	slog.Info("Порт agent-service", slog.String("порт", port))
 
 	toolsURL := getEnv("TOOLS_SERVICE_URL", "http://localhost:8082")
 	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
-	log.Printf("[ENV] tools-service: %s", toolsURL)
-	log.Printf("[ENV] memory-service: %s", memoryURL)
+	slog.Info("tools-service URL", slog.String("url", toolsURL))
+	slog.Info("memory-service URL", slog.String("url", memoryURL))
 
 	ollamaURL := getEnv("OLLAMA_URL", "")
 	if ollamaURL == "" {
 		ollamaURL = getEnv("OLLAMA_HOST", "http://localhost:11434")
 	}
-	log.Printf("[ENV] Ollama: %s", ollamaURL)
+	slog.Info("Ollama URL", slog.String("url", ollamaURL))
 
-	log.Println("=== Проверка окружения завершена ===")
+	slog.Info("Проверка окружения завершена")
 }
 
 func main() {
@@ -3371,10 +3373,11 @@ func main() {
 
 	// Инициализация метрик Prometheus
 	metrics.Init()
-	log.Printf("[METRICS] Метрики инициализированы")
+	slog.Info("Метрики инициализированы")
 
 	if err := repository.CreateDefaultAgents(); err != nil {
-		log.Fatalf("Failed to create default agents: %v", err)
+		slog.Error("Не удалось создать агентов по умолчанию", slog.String("ошибка", err.Error()))
+		os.Exit(1)
 	}
 
 	// Регистрация метрик endpoint (должна быть перед catch-all роутером)
@@ -3414,7 +3417,7 @@ func main() {
 		filepath.Join(".", "prompts", "admin"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Printf("Warning: failed to create directory %s: %v", dir, err)
+			slog.Warn("Не удалось создать директорию", slog.String("путь", dir), slog.String("ошибка", err.Error()))
 		}
 	}
 
@@ -3425,6 +3428,31 @@ func main() {
 
 	port := getEnv("AGENT_SERVICE_PORT", "8083")
 
-	log.Printf("Agent service starting on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      nil,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		slog.Info("Agent-service запускается", slog.String("порт", port))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Ошибка сервера", slog.String("ошибка", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	slog.Info("Получен сигнал завершения", slog.String("сигнал", sig.String()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Ошибка при завершении сервера", slog.String("ошибка", err.Error()))
+	}
+	slog.Info("Сервер корректно остановлен")
 }

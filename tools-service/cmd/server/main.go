@@ -1,14 +1,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/neo-2022/openclaw-memory/tools-service/internal/executor"
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/logger"
 )
 
 type ExecuteRequest struct {
@@ -62,15 +67,17 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req ExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] execute: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "execute"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] execute: команда=%q", req.Command)
+	logger.С(ctx).Info("Выполнение команды", slog.String("команда", req.Command))
 	result := executor.ExecuteCommand(req.Command)
-	log.Printf("[TOOLS] execute: код=%d, stdout=%d байт, stderr=%d байт, error=%q", result.ReturnCode, len(result.Stdout), len(result.Stderr), result.Error)
+	logger.С(ctx).Info("Результат выполнения", slog.Int("код", result.ReturnCode), slog.Int("stdout_байт", len(result.Stdout)), slog.Int("stderr_байт", len(result.Stderr)))
 	resp := ExecuteResponse{
 		Stdout:     result.Stdout,
 		Stderr:     result.Stderr,
@@ -86,20 +93,22 @@ func readFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req ReadFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] read: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "read"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] read: path=%q", req.Path)
+	logger.С(ctx).Info("Чтение файла", slog.String("путь", req.Path))
 	content, err := executor.ReadFile(req.Path)
 	if err != nil {
-		log.Printf("[TOOLS] read: ОШИБКА чтения %q: %v", req.Path, err)
+		logger.С(ctx).Error("Ошибка чтения файла", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] read: OK, %d байт из %q", len(content), req.Path)
+	logger.С(ctx).Info("Файл прочитан", slog.Int("байт", len(content)), slog.String("путь", req.Path))
 	json.NewEncoder(w).Encode(map[string]string{"content": content})
 }
 
@@ -108,20 +117,22 @@ func writeFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req WriteFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] write: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "write"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] write: path=%q, content=%d байт", req.Path, len(req.Content))
+	logger.С(ctx).Info("Запись файла", slog.String("путь", req.Path), slog.Int("байт", len(req.Content)))
 	err := executor.WriteFile(req.Path, req.Content)
 	if err != nil {
-		log.Printf("[TOOLS] write: ОШИБКА записи %q: %v", req.Path, err)
+		logger.С(ctx).Error("Ошибка записи файла", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] write: OK, записано в %q", req.Path)
+	logger.С(ctx).Info("Файл записан", slog.String("путь", req.Path))
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
@@ -130,20 +141,22 @@ func listDirHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req ListDirRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] list: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "list"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] list: path=%q", req.Path)
+	logger.С(ctx).Info("Листинг директории", slog.String("путь", req.Path))
 	files, err := executor.ListDirectory(req.Path)
 	if err != nil {
-		log.Printf("[TOOLS] list: ОШИБКА чтения директории %q: %v", req.Path, err)
+		logger.С(ctx).Error("Ошибка чтения директории", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] list: OK, %d файлов в %q", len(files), req.Path)
+	logger.С(ctx).Info("Директория прочитана", slog.Int("файлов", len(files)), slog.String("путь", req.Path))
 	json.NewEncoder(w).Encode(map[string][]string{"files": files})
 }
 
@@ -152,27 +165,31 @@ func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req DeleteFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] delete: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "delete"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] delete: path=%q", req.Path)
+	logger.С(ctx).Info("Удаление файла", slog.String("путь", req.Path))
 	err := executor.DeleteFile(req.Path)
 	if err != nil {
-		log.Printf("[TOOLS] delete: ОШИБКА удаления %q: %v", req.Path, err)
+		logger.С(ctx).Error("Ошибка удаления файла", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] delete: OK, удалён %q", req.Path)
+	logger.С(ctx).Info("Файл удалён", slog.String("путь", req.Path))
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[TOOLS] sysinfo: запрос информации о системе")
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
+	logger.С(ctx).Info("Запрос информации о системе")
 	info := executor.GetSystemInfo()
-	log.Printf("[TOOLS] sysinfo: OS=%s, Arch=%s, Host=%s, Home=%s, User=%s", info.OS, info.Arch, info.Hostname, info.HomeDir, info.User)
+	logger.С(ctx).Info("Информация о системе", slog.String("os", info.OS), slog.String("arch", info.Arch), slog.String("host", info.Hostname))
 	json.NewEncoder(w).Encode(info)
 }
 
@@ -195,26 +212,30 @@ func memInfoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func cpuTemperatureHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[TOOLS] cputemp: запрос температуры CPU")
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
+	logger.С(ctx).Info("Запрос температуры CPU")
 	data, err := executor.GetCPUTemperature()
 	if err != nil {
-		log.Printf("[TOOLS] cputemp: ОШИБКА: %v", err)
+		logger.С(ctx).Error("Ошибка получения температуры", slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] cputemp: OK, %d байт данных", len(data))
+	logger.С(ctx).Info("Температура получена", slog.Int("байт", len(data)))
 	json.NewEncoder(w).Encode(map[string]string{"temperature": data})
 }
 
 func systemLoadHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[TOOLS] sysload: запрос загрузки системы")
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
+	logger.С(ctx).Info("Запрос загрузки системы")
 	data, err := executor.GetSystemLoad()
 	if err != nil {
-		log.Printf("[TOOLS] sysload: ОШИБКА: %v", err)
+		logger.С(ctx).Error("Ошибка получения загрузки", slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] sysload: OK, данные получены")
+	logger.С(ctx).Info("Загрузка системы получена")
 	json.NewEncoder(w).Encode(data)
 }
 
@@ -223,20 +244,22 @@ func findAppHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req FindAppRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] findapp: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "findapp"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] findapp: поиск приложения %q", req.Name)
+	logger.С(ctx).Info("Поиск приложения", slog.String("имя", req.Name))
 	apps, err := executor.FindApplication(req.Name)
 	if err != nil {
-		log.Printf("[TOOLS] findapp: ОШИБКА поиска %q: %v", req.Name, err)
+		logger.С(ctx).Error("Ошибка поиска приложения", slog.String("имя", req.Name), slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] findapp: найдено %d приложений для %q", len(apps), req.Name)
+	logger.С(ctx).Info("Приложения найдены", slog.Int("количество", len(apps)), slog.String("имя", req.Name))
 	json.NewEncoder(w).Encode(map[string]interface{}{"found": apps})
 }
 
@@ -245,20 +268,22 @@ func launchAppHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req LaunchAppRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("[TOOLS] launchapp: ошибка парсинга JSON: %v", err)
+		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "launchapp"), slog.String("ошибка", err.Error()))
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	log.Printf("[TOOLS] launchapp: запуск %q", req.DesktopFile)
+	logger.С(ctx).Info("Запуск приложения", slog.String("файл", req.DesktopFile))
 	err := executor.LaunchApplication(req.DesktopFile)
 	if err != nil {
-		log.Printf("[TOOLS] launchapp: ОШИБКА запуска %q: %v", req.DesktopFile, err)
+		logger.С(ctx).Error("Ошибка запуска приложения", slog.String("файл", req.DesktopFile), slog.String("ошибка", err.Error()))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("[TOOLS] launchapp: OK, запущено %q", req.DesktopFile)
+	logger.С(ctx).Info("Приложение запущено", slog.String("файл", req.DesktopFile))
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
@@ -617,36 +642,67 @@ func ydiskSearchHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/health", healthHandler)
-	http.HandleFunc("/execute", executeHandler)
-	http.HandleFunc("/read", readFileHandler)
-	http.HandleFunc("/write", writeFileHandler)
-	http.HandleFunc("/list", listDirHandler)
-	http.HandleFunc("/delete", deleteFileHandler)
-	http.HandleFunc("/sysinfo", systemInfoHandler)
-	http.HandleFunc("/cpuinfo", cpuInfoHandler)
-	http.HandleFunc("/meminfo", memInfoHandler)
-	http.HandleFunc("/cputemp", cpuTemperatureHandler)
-	http.HandleFunc("/sysload", systemLoadHandler)
-	http.HandleFunc("/findapp", findAppHandler)
-	http.HandleFunc("/launchapp", launchAppHandler)
-	http.HandleFunc("/addautostart", addAutostartHandler)
+	logger.Init("tools-service")
 
-	// Яндекс.Диск — облачное хранилище (REST API)
-	http.HandleFunc("/ydisk/info", ydiskInfoHandler)
-	http.HandleFunc("/ydisk/list", ydiskListHandler)
-	http.HandleFunc("/ydisk/download", ydiskDownloadHandler)
-	http.HandleFunc("/ydisk/upload", ydiskUploadHandler)
-	http.HandleFunc("/ydisk/mkdir", ydiskCreateDirHandler)
-	http.HandleFunc("/ydisk/delete", ydiskDeleteHandler)
-	http.HandleFunc("/ydisk/move", ydiskMoveHandler)
-	http.HandleFunc("/ydisk/search", ydiskSearchHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/execute", executeHandler)
+	mux.HandleFunc("/read", readFileHandler)
+	mux.HandleFunc("/write", writeFileHandler)
+	mux.HandleFunc("/list", listDirHandler)
+	mux.HandleFunc("/delete", deleteFileHandler)
+	mux.HandleFunc("/sysinfo", systemInfoHandler)
+	mux.HandleFunc("/cpuinfo", cpuInfoHandler)
+	mux.HandleFunc("/meminfo", memInfoHandler)
+	mux.HandleFunc("/cputemp", cpuTemperatureHandler)
+	mux.HandleFunc("/sysload", systemLoadHandler)
+	mux.HandleFunc("/findapp", findAppHandler)
+	mux.HandleFunc("/launchapp", launchAppHandler)
+	mux.HandleFunc("/addautostart", addAutostartHandler)
 
-	// Браузер — взаимодействие с браузером и AI-чатами (для Админа)
-	http.HandleFunc("/browser/open", openURLHandler)
-	http.HandleFunc("/browser/fetch", fetchURLHandler)
-	http.HandleFunc("/browser/ai-chat", sendToAIChatHandler)
+	mux.HandleFunc("/ydisk/info", ydiskInfoHandler)
+	mux.HandleFunc("/ydisk/list", ydiskListHandler)
+	mux.HandleFunc("/ydisk/download", ydiskDownloadHandler)
+	mux.HandleFunc("/ydisk/upload", ydiskUploadHandler)
+	mux.HandleFunc("/ydisk/mkdir", ydiskCreateDirHandler)
+	mux.HandleFunc("/ydisk/delete", ydiskDeleteHandler)
+	mux.HandleFunc("/ydisk/move", ydiskMoveHandler)
+	mux.HandleFunc("/ydisk/search", ydiskSearchHandler)
 
-	log.Println("Tools service starting on :8082")
-	log.Fatal(http.ListenAndServe(":8082", nil))
+	mux.HandleFunc("/browser/open", openURLHandler)
+	mux.HandleFunc("/browser/fetch", fetchURLHandler)
+	mux.HandleFunc("/browser/ai-chat", sendToAIChatHandler)
+
+	port := os.Getenv("TOOLS_PORT")
+	if port == "" {
+		port = "8082"
+	}
+
+	srv := &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		slog.Info("Tools-service запускается", slog.String("порт", port))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Ошибка сервера", slog.String("ошибка", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	slog.Info("Получен сигнал завершения", slog.String("сигнал", sig.String()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Ошибка при завершении сервера", slog.String("ошибка", err.Error()))
+	}
+	slog.Info("Сервер корректно остановлен")
 }

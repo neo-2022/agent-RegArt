@@ -21,16 +21,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/neo-2022/openclaw-memory/api-gateway/gates"
+	"github.com/neo-2022/openclaw-memory/api-gateway/internal/logger"
 	"github.com/neo-2022/openclaw-memory/api-gateway/internal/middleware"
 )
 
@@ -88,7 +92,9 @@ func panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("[GATEWAY] PANIC: %v (path=%s)", err, r.URL.Path)
+				cid := r.Header.Get("X-Request-ID")
+				ctx := logger.WithCorrelationID(r.Context(), cid)
+				logger.С(ctx).Error("ПАНИКА в обработчике", slog.Any("ошибка", err), slog.String("путь", r.URL.Path))
 				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
 			}
 		}()
@@ -102,7 +108,9 @@ func timeoutMiddleware(next http.HandlerFunc, timeout time.Duration) http.Handle
 		next.ServeHTTP(w, r)
 		duration := time.Since(start)
 		if duration > timeout {
-			log.Printf("[GATEWAY] SLOW: %s %s занял %v (лимит %v)", r.Method, r.URL.Path, duration, timeout)
+			cid := r.Header.Get("X-Request-ID")
+			ctx := logger.WithCorrelationID(r.Context(), cid)
+			logger.С(ctx).Warn("Медленный запрос", slog.String("метод", r.Method), slog.String("путь", r.URL.Path), slog.Duration("длительность", duration), slog.Duration("лимит", timeout))
 		}
 	}
 }
@@ -133,18 +141,18 @@ func corsMiddleware(next http.HandlerFunc, allowedMethods []string, allowedOrigi
 // Конфигурирует все маршруты, создаёт reverse proxy для каждого микросервиса,
 // оборачивает обработчики в CORS middleware и запускает HTTP-сервер.
 func main() {
-	// Загружаем URL микросервисов из переменных окружения
+	logger.Init("api-gateway")
+
 	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
 	toolsURL := getEnv("TOOLS_SERVICE_URL", "http://localhost:8082")
 	agentURL := getEnv("AGENT_SERVICE_URL", "http://localhost:8083")
 	port := getEnv("GATEWAY_PORT", "8080")
 
-	// Ограничитель частоты запросов: настраиваемый через переменные окружения
 	rlLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_RPS", "60"))
 	rlWindow, _ := time.ParseDuration(getEnv("RATE_LIMIT_WINDOW", "1m"))
 	rateLimiter := middleware.NewRateLimiter(rlLimit, rlWindow)
 	rateLimitMW := middleware.RateLimitMiddleware(rateLimiter)
-	log.Printf("[GATEWAY] Ограничитель частоты: %d запросов / %v", rlLimit, rlWindow)
+	slog.Info("Ограничитель частоты настроен", slog.Int("лимит", rlLimit), slog.Duration("окно", rlWindow))
 
 	// Предохранители от отказов для каждого бэкенда
 	cbMemory := middleware.NewCircuitBreaker(5, 30*time.Second)
@@ -240,14 +248,16 @@ func main() {
 						timeoutMiddleware(
 							cbMW(
 								corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-									log.Printf("[GATEWAY] %s %s → %s (target: %s, rid: %s)", req.Method, req.URL.Path, r.Path, r.Target.Host, req.Header.Get("X-Request-ID"))
+									cid := req.Header.Get("X-Request-ID")
+									ctx := logger.WithCorrelationID(req.Context(), cid)
+									logger.С(ctx).Info("Проксирование запроса", slog.String("метод", req.Method), slog.String("путь", req.URL.Path), slog.String("маршрут", r.Path), slog.String("цель", r.Target.Host))
 									for _, m := range r.Methods {
 										if m == req.Method {
 											proxy.ServeHTTP(w, req)
 											return
 										}
 									}
-									log.Printf("[GATEWAY] ОТКАЗ: метод %s не разрешён для %s", req.Method, req.URL.Path)
+									logger.С(ctx).Warn("Метод не разрешён", slog.String("метод", req.Method), slog.String("путь", req.URL.Path))
 									http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 								}), r.Methods, allowedOrigins),
 							),
@@ -261,8 +271,32 @@ func main() {
 		http.Handle(r.Path, handler)
 	}
 
-	log.Printf("API Gateway запускается на порту %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	srv := &http.Server{
+		Addr:         ":" + port,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 320 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	go func() {
+		slog.Info("API Gateway запускается", slog.String("порт", port))
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Ошибка сервера", slog.String("ошибка", err.Error()))
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+	slog.Info("Получен сигнал завершения", slog.String("сигнал", sig.String()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Ошибка при завершении сервера", slog.String("ошибка", err.Error()))
+	}
+	slog.Info("Сервер корректно остановлен")
 }
 
 // getEnv — вспомогательная функция для чтения переменной окружения.

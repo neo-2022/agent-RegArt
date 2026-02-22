@@ -1,16 +1,62 @@
+import json
 import logging
+import sys
+import uuid
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from typing import List
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import settings
 from .memory import memory_store
 from .ttl import TTLManager
 from . import models
 
+correlation_id_var: ContextVar[str] = ContextVar("correlation_id", default="")
+
+
+class JSONFormatter(logging.Formatter):
+    """JSON-форматтер для структурированного логирования."""
+    def format(self, record: logging.LogRecord) -> str:
+        log_data = {
+            "time": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "сервис": "memory-service",
+            "msg": record.getMessage(),
+        }
+        cid = correlation_id_var.get("")
+        if cid:
+            log_data["correlation_id"] = cid
+        if record.exc_info and record.exc_info[1]:
+            log_data["ошибка"] = str(record.exc_info[1])
+        return json.dumps(log_data, ensure_ascii=False)
+
+
+def setup_logging() -> None:
+    """Настройка структурированного JSON-логирования."""
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(JSONFormatter())
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
+
+
+setup_logging()
 logger = logging.getLogger(__name__)
+
+
+class CorrelationIDMiddleware(BaseHTTPMiddleware):
+    """Миддлвар для пропагации X-Request-ID через все запросы."""
+    async def dispatch(self, request: Request, call_next):
+        cid = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        correlation_id_var.set(cid)
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = cid
+        return response
 
 
 ttl_manager = TTLManager(memory_store)
@@ -36,6 +82,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+app.add_middleware(CorrelationIDMiddleware)
 
 
 @app.get("/health", tags=["Health"])

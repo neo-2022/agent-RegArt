@@ -9,6 +9,10 @@ tools-service/agent-tools
 *.sqlite3-*
 memory-service/data/chroma/
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Игнорируем папку node_modules и собранные файлы веб-интерфейса
 web-ui/node_modules/
 web-ui/dist/

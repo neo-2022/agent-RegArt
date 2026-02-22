@@ -35,7 +35,7 @@ var AllowedCommands = map[string]bool{
 	"ls": true, "cat": true, "grep": true, "find": true,
 	"ps": true, "top": true, "free": true, "df": true, "du": true,
 	"echo": true, "mkdir": true, "rmdir": true, "touch": true,
-	"cp": true, "mv": true, "rm": true, "chmod": true, "chown": true,
+	"cp": true, "mv": true,
 	"python": true, "python3": true, "pip": true, "pip3": true,
 	"node": true, "npm": true, "yarn": true, "git": true,
 	"curl": true, "wget": true, "tar": true, "gzip": true,
@@ -46,7 +46,7 @@ var AllowedCommands = map[string]bool{
 	"apt": true, "apt-get": true, "dnf": true, "yum": true, "pacman": true,
 	"lspci": true, "lshw": true, "dmidecode": true, "inxi": true,
 	"lscpu": true, "lsusb": true, "hwinfo": true,
-	"sudo": true, "lsblk": true, "blkid": true, "fdisk": true,
+	"lsblk": true, "blkid": true, "fdisk": true,
 	"parted": true, "smartctl": true,
 	"reboot": true, "shutdown": true, "poweroff": true, "halt": true,
 	"dpkg": true, "rpm": true, "which": true,
@@ -60,15 +60,39 @@ var AllowedCommands = map[string]bool{
 	"nano": true, "vim": true,
 	"ip": true, "ifconfig": true, "netstat": true, "ss": true, "ping": true,
 	"mount": true, "umount": true,
-	"crontab": true, "cd": true, "bash": true, "sh": true,
-	"diff": true, "patch": true, "env": true, "export": true, "true": true,
+	"crontab": true,
+	"diff": true, "patch": true, "env": true, "true": true,
 }
 
-// BlockedPatterns — подстроки, которые запрещены в командах (защита от случайных катастроф).
+// DangerousCommands — команды, запрещённые для прямого вызова через API.
+// Эти команды могут нанести необратимый ущерб системе.
+var DangerousCommands = map[string]string{
+	"mkfs":     "форматирование диска запрещено",
+	"dd":       "прямая запись на устройства запрещена",
+	"shred":    "безвозвратное уничтожение данных запрещено",
+	"poweroff": "выключение системы запрещено через API",
+	"halt":     "остановка системы запрещена через API",
+	"init":     "управление init запрещено",
+}
+
+// BlockedPatterns — подстроки, которые запрещены в командах (защита от катастроф).
 var BlockedPatterns = []string{
-	"rm -rf /", "rm -rf /*",
+	"rm -rf /",
+	"rm -rf /*",
+	"rm -rf ~",
 	":(){ :|:& };:",
-	"dd if=/dev/zero of=/dev/sd", "dd if=/dev/random of=/dev/sd",
+	"dd if=/dev/zero of=/dev/sd",
+	"dd if=/dev/random of=/dev/sd",
+	"mkfs.",
+	"curl|bash",
+	"curl | bash",
+	"curl|sh",
+	"curl | sh",
+	"wget|bash",
+	"wget | bash",
+	"> /dev/sd",
+	"chmod -R 777 /",
+	"chown -R",
 }
 
 // Result содержит результат выполнения команды.
@@ -82,16 +106,16 @@ type Result struct {
 // ExecuteCommand выполняет команду безопасно.
 // command должна быть строкой, как в терминале (например, "ls -la").
 func ExecuteCommand(command string) Result {
+	cmdLower := strings.ToLower(strings.TrimSpace(command))
+
 	// Проверка на запрещённые паттерны
-	cmdLower := strings.ToLower(command)
 	for _, pattern := range BlockedPatterns {
 		if strings.Contains(cmdLower, pattern) {
-			return Result{Error: "command contains blocked pattern"}
+			return Result{Error: "command contains blocked pattern: " + pattern}
 		}
 	}
 
 	// Извлечение всех команд из цепочки (разделители: &&, ||, |, ;)
-	// Проверяем каждую подкоманду по белому списку
 	subCommands := extractSubCommands(command)
 	if len(subCommands) == 0 {
 		return Result{Error: "empty command"}
@@ -99,6 +123,9 @@ func ExecuteCommand(command string) Result {
 	for _, sub := range subCommands {
 		if !AllowedCommands[sub] {
 			return Result{Error: "command not allowed: " + sub}
+		}
+		if reason, blocked := DangerousCommands[sub]; blocked {
+			return Result{Error: "dangerous command blocked: " + sub + " — " + reason}
 		}
 	}
 

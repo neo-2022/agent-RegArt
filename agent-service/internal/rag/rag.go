@@ -42,6 +42,45 @@ type Config struct {
 	EmbeddingModel string
 	TopK           int
 	EnableMultiHop bool
+	MaxChunkLen    int
+	MaxContextLen  int
+}
+
+const (
+	DefaultMaxChunkLen   = 2000
+	DefaultMaxContextLen = 8000
+)
+
+func TruncateChunk(text string, maxLen int) string {
+	if maxLen <= 0 {
+		maxLen = DefaultMaxChunkLen
+	}
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen] + "...[обрезано]"
+}
+
+func LimitContext(results []SearchResult, maxTotalLen int) []SearchResult {
+	if maxTotalLen <= 0 {
+		maxTotalLen = DefaultMaxContextLen
+	}
+	var limited []SearchResult
+	totalLen := 0
+	for _, r := range results {
+		contentLen := len(r.Doc.Content)
+		if totalLen+contentLen > maxTotalLen {
+			remaining := maxTotalLen - totalLen
+			if remaining > 100 {
+				r.Doc.Content = TruncateChunk(r.Doc.Content, remaining)
+				limited = append(limited, r)
+			}
+			break
+		}
+		totalLen += contentLen
+		limited = append(limited, r)
+	}
+	return limited
 }
 
 // DBRetriever обеспечивает работу с базой данных документов
@@ -232,23 +271,36 @@ func (d *DBRetriever) Search(query string, topK int) ([]SearchResult, error) {
 		}
 	}
 
-	// Вычисляем эмбеддинг запроса
 	queryEmb, err := d.embedding.Compute(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
 	}
 
-	// Пытаемся использовать ChromA если доступен
+	var results []SearchResult
+
 	if d.chromaURL != "" {
-		results, err := d.searchChroma(query, queryEmb, topK)
-		if err == nil && len(results) > 0 {
-			return results, nil
+		results, err = d.searchChroma(query, queryEmb, topK)
+		if err != nil || len(results) == 0 {
+			fmt.Printf("[RAG] ChromA search failed, using fallback: %v\n", err)
+			results, err = d.searchFallback(query, queryEmb, topK)
 		}
-		fmt.Printf("[RAG] ChromA search failed, using fallback: %v\n", err)
+	} else {
+		results, err = d.searchFallback(query, queryEmb, topK)
 	}
 
-	// Fallback: имитация поиска (для демо)
-	return d.searchFallback(query, queryEmb, topK)
+	if err != nil {
+		return nil, err
+	}
+
+	maxChunk := d.config.MaxChunkLen
+	for i := range results {
+		results[i].Doc.Content = TruncateChunk(results[i].Doc.Content, maxChunk)
+	}
+
+	maxCtx := d.config.MaxContextLen
+	results = LimitContext(results, maxCtx)
+
+	return results, nil
 }
 
 // searchChroma выполняет поиск через ChromA API

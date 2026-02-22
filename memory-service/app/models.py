@@ -2,9 +2,14 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 
 
+# Лимиты размеров входных данных
+MAX_TEXT_LENGTH = 50000
+MAX_QUERY_LENGTH = 5000
+
+
 class FactAddRequest(BaseModel):
     """Запрос на добавление факта."""
-    text: str = Field(..., description="Текст факта", min_length=1)
+    text: str = Field(..., description="Текст факта", min_length=1, max_length=MAX_TEXT_LENGTH)
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Метаданные")
 
 
@@ -17,7 +22,7 @@ class FactAddResponse(BaseModel):
 
 class SearchRequest(BaseModel):
     """Запрос на поиск."""
-    query: str = Field(..., description="Поисковый запрос", min_length=1)
+    query: str = Field(..., description="Поисковый запрос", min_length=1, max_length=MAX_QUERY_LENGTH)
     top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=50)
     agent_name: Optional[str] = Field(None, description="Фильтр по имени агента")
     include_files: bool = Field(False, description="Включать ли фрагменты файлов")
@@ -31,7 +36,7 @@ class SearchResponse(BaseModel):
 
 class FileChunkAddRequest(BaseModel):
     """Запрос на добавление фрагмента файла."""
-    text: str = Field(..., description="Текст фрагмента", min_length=1)
+    text: str = Field(..., description="Текст фрагмента", min_length=1, max_length=MAX_TEXT_LENGTH)
     metadata: Dict[str, Any] = Field(..., description="Метаданные (agent, filename, file_id, chunk)")
 
 
@@ -77,7 +82,7 @@ class LearningAddRequest(BaseModel):
     Знание извлекается автоматически из диалога после каждого успешного
     взаимодействия. Привязывается к конкретной модели LLM.
     """
-    text: str = Field(..., description="Текст знания (факт, правило, предпочтение пользователя)", min_length=1)
+    text: str = Field(..., description="Текст знания (факт, правило, предпочтение пользователя)", min_length=1, max_length=MAX_TEXT_LENGTH)
     model_name: str = Field(..., description="Имя модели LLM, которая получила это знание", min_length=1)
     agent_name: str = Field(..., description="Имя агента, в контексте которого получено знание", min_length=1)
     category: str = Field("general", description="Категория знания: general, preference, fact, skill, correction")
@@ -97,7 +102,7 @@ class LearningSearchRequest(BaseModel):
     Поиск выполняется по семантической близости к запросу,
     с фильтрацией по имени модели.
     """
-    query: str = Field(..., description="Поисковый запрос (контекст текущего диалога)", min_length=1)
+    query: str = Field(..., description="Поисковый запрос (контекст текущего диалога)", min_length=1, max_length=MAX_QUERY_LENGTH)
     model_name: str = Field(..., description="Имя модели, для которой ищем знания", min_length=1)
     top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=20)
     category: Optional[str] = Field(None, description="Фильтр по категории знания")

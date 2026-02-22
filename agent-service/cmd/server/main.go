@@ -138,10 +138,26 @@ func initRAG() {
 		}
 	}
 
+	maxChunkLen := rag.DefaultMaxChunkLen
+	if v := getEnv("RAG_MAX_CHUNK_LEN", ""); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			maxChunkLen = parsed
+		}
+	}
+
+	maxContextLen := rag.DefaultMaxContextLen
+	if v := getEnv("RAG_MAX_CONTEXT_LEN", ""); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			maxContextLen = parsed
+		}
+	}
+
 	config := &rag.Config{
 		ChromaURL:      chromaURL,
 		EmbeddingModel: embModel,
 		TopK:           topK,
+		MaxChunkLen:    maxChunkLen,
+		MaxContextLen:  maxContextLen,
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBPort:         getEnv("DB_PORT", "5432"),
 		DBUser:         getEnv("DB_USER", "postgres"),

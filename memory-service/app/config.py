@@ -15,6 +15,7 @@ class Settings:
     
     # Модель для эмбеддингов
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    EMBEDDING_MODEL_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "1")
     
     # Размер чанков при разбиении текста
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))

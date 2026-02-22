@@ -1,26 +1,35 @@
-FROM python:3.12-slim
+# Этап 1: Установка зависимостей
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-# Установка системных зависимостей, необходимых для некоторых библиотек (pypdf, chromadb)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    make \
+    gcc g++ make \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование requirements и установка зависимостей
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Копирование кода приложения
+# Этап 2: Минимальный production-образ
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r appgroup && useradd -r -g appgroup appuser
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
 COPY app/ ./app/
 
-# Создание директорий для данных
-RUN mkdir -p /app/data/chroma /app/data/temp
+RUN mkdir -p /app/data/chroma /app/data/temp \
+    && chown -R appuser:appgroup /app
 
-# Порт, на котором работает приложение
+USER appuser
+
 EXPOSE 8001
 
-# Запуск сервера
+HEALTHCHECK --interval=10s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

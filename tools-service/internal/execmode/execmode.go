@@ -18,7 +18,7 @@ import (
 type Mode int
 
 const (
-	ModeNormal  Mode = iota
+	ModeNormal Mode = iota
 	ModeTrusted
 	ModeSafe
 )
@@ -43,9 +43,9 @@ func Init() Mode {
 	return current
 }
 
-func Current() Mode       { return current }
-func IsTrusted() bool     { return current == ModeTrusted }
-func IsSafe() bool        { return current == ModeSafe }
+func Current() Mode   { return current }
+func IsTrusted() bool { return current == ModeTrusted }
+func IsSafe() bool    { return current == ModeSafe }
 func String() string {
 	switch current {
 	case ModeTrusted:

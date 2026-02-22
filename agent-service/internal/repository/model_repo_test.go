@@ -1,11 +1,12 @@
-// Package repository — тесты классификации моделей по ролям агентов.
+// Package repository — тесты классификации моделей для единого агента Admin.
 //
-// Проверяют логику определения подходящих ролей (admin, coder, novice)
-// для LLM-моделей на основе размера параметров, поддержки инструментов
+// Проверяют логику определения подходящих ролей для LLM-моделей
+// на основе размера параметров, поддержки инструментов
 // и семейства модели.
 package repository
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -77,7 +78,7 @@ func TestIsCodeModel(t *testing.T) {
 }
 
 // TestClassifyModelRoles_WithTools — проверяет классификацию модели с поддержкой инструментов.
-// Ожидаемое поведение: модель 8B с tools подходит для admin и novice.
+// Ожидаемое поведение: модель 8B с tools подходит для admin.
 func TestClassifyModelRoles_WithTools(t *testing.T) {
 	details := OllamaModelDetails{
 		Family:        "llama",
@@ -88,27 +89,23 @@ func TestClassifyModelRoles_WithTools(t *testing.T) {
 	info := ClassifyModelRoles("llama3.1:8b", true, details)
 
 	hasAdmin := false
-	hasNovice := false
 	for _, r := range info.SuitableRoles {
 		if r == "admin" {
 			hasAdmin = true
-		}
-		if r == "novice" {
-			hasNovice = true
 		}
 	}
 
 	if !hasAdmin {
 		t.Error("модель 8B с tools должна подходить для admin")
 	}
-	if !hasNovice {
-		t.Error("любая модель должна подходить для novice")
+	if len(info.SuitableRoles) != 1 || info.SuitableRoles[0] != "admin" {
+		t.Error("единственная роль должна быть admin")
 	}
 }
 
 // TestClassifyModelRoles_WithoutTools — проверяет классификацию модели без поддержки инструментов.
-// Ожидаемое поведение: модель без tools НЕ подходит для admin
-// и должна содержать примечание с объяснением причины.
+// Ожидаемое поведение: модель без tools всё равно получает роль admin,
+// но с примечанием об ограничениях.
 func TestClassifyModelRoles_WithoutTools(t *testing.T) {
 	details := OllamaModelDetails{
 		Family:        "phi",
@@ -125,17 +122,21 @@ func TestClassifyModelRoles_WithoutTools(t *testing.T) {
 		}
 	}
 
-	if hasAdmin {
-		t.Error("модель без tools НЕ должна подходить для admin")
+	if !hasAdmin {
+		t.Error("модель без tools всё равно должна получить роль admin")
 	}
 
-	if _, ok := info.RoleNotes["admin"]; !ok {
-		t.Error("должно быть примечание с объяснением, почему admin не подходит")
+	note, ok := info.RoleNotes["admin"]
+	if !ok {
+		t.Error("должно быть примечание для роли admin")
+	}
+	if ok && !strings.Contains(note, "Ограниченно") {
+		t.Error("примечание должно содержать информацию об ограничениях")
 	}
 }
 
 // TestClassifyModelRoles_CodeModel — проверяет классификацию модели для кодирования.
-// Ожидаемое поведение: модель с "coder" в имени и tools подходит для роли coder.
+// Ожидаемое поведение: модель с "coder" в имени получает роль admin с пометкой о специализации на коде.
 func TestClassifyModelRoles_CodeModel(t *testing.T) {
 	details := OllamaModelDetails{
 		Family:        "qwen2",
@@ -145,15 +146,20 @@ func TestClassifyModelRoles_CodeModel(t *testing.T) {
 
 	info := ClassifyModelRoles("qwen2.5-coder:7b", true, details)
 
-	hasCoder := false
+	hasAdmin := false
 	for _, r := range info.SuitableRoles {
-		if r == "coder" {
-			hasCoder = true
+		if r == "admin" {
+			hasAdmin = true
 		}
 	}
 
-	if !hasCoder {
-		t.Error("модель с coder в имени и tools должна подходить для coder")
+	if !hasAdmin {
+		t.Error("модель с coder в имени должна получить роль admin")
+	}
+
+	note := info.RoleNotes["admin"]
+	if !strings.Contains(note, "код") {
+		t.Error("примечание должно указывать на специализацию на коде")
 	}
 }
 

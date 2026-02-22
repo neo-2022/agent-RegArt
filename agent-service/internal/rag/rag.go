@@ -189,14 +189,14 @@ func (d *DBRetriever) SeedDemoDocuments() error {
 		{
 			ID:      "doc-1",
 			Title:   "Prompts - Admin System",
-			Content: "Системный промпт для агента Admin. Содержит инструкции по координации других агентов и обработке сложных запросов. Admin может вызывать Coder и Novice как инструменты.",
+			Content: "Системный промпт для агента Admin. Единственный агент системы, управляющий ПК через инструменты: execute, read, write, list, sysinfo, browser и др. Сильные модели (7B+) получают базовые инструменты, слабые (≤3B) — составные навыки.",
 			Source:  "prompts/admin",
 		},
 		{
 			ID:      "doc-2",
-			Title:   "Prompts - Coder Assistant",
-			Content: "Промпт для агента Coder. Специализируется на написании и отладке кода, работе с файлами и терминалом. Имеет доступ к инструментам execute, read, write, list, delete.",
-			Source:  "prompts/coder",
+			Title:   "Skills System",
+			Content: "Система навыков (Skills) — YAML-описания составных операций для Admin-агента. Навыки объединяют несколько инструментов в один шаг (LEGO-блоки). Примеры: check_system, deploy_project, analyze_logs.",
+			Source:  "skills",
 		},
 		{
 			ID:      "doc-3",
@@ -408,14 +408,14 @@ func (d *DBRetriever) searchFallback(query string, queryEmb []float64, topK int)
 		{
 			ID:      "doc-1",
 			Title:   "Prompts - Admin System",
-			Content: "Системный промпт для агента Admin. Содержит инструкции по координации других агентов и обработке сложных запросов.",
+			Content: "Системный промпт для агента Admin. Единственный агент, управляющий ПК через инструменты и составные навыки.",
 			Source:  "prompts/admin",
 		},
 		{
 			ID:      "doc-2",
-			Title:   "Prompts - Coder Assistant",
-			Content: "Промпт для агента Coder. Специализируется на написании и отладке кода, работе с файлами и терминалом.",
-			Source:  "prompts/coder",
+			Title:   "Skills System",
+			Content: "Система навыков (Skills) — YAML-описания составных операций для Admin-агента.",
+			Source:  "skills",
 		},
 		{
 			ID:      "doc-3",

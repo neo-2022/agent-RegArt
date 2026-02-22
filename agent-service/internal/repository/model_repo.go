@@ -1,6 +1,6 @@
 // Пакет repository — слой доступа к данным для agent-service.
 // model_repo.go — управление кэшем моделей, автоматическое определение возможностей
-// и классификация моделей по подходящим ролям агентов (admin, coder, novice).
+// и классификация моделей по подходящим ролям агентов (единственный агент: admin).
 //
 // Вся информация о моделях получается динамически:
 //   - Список моделей — из Ollama API /api/tags (или ollama list)
@@ -95,10 +95,10 @@ func parseParamSize(s string) float64 {
 }
 
 // isCodeModel — определяет, является ли модель специализированной на генерации кода.
-// Проверяет имя модели и семейство на наличие ключевых слов: coder, code, codestral, deepseek-coder.
+// Проверяет имя модели и семейство на наличие ключевых слов: code, codestral, codellama, codegemma.
 func isCodeModel(modelName, family string) bool {
 	lower := strings.ToLower(modelName)
-	codeKeywords := []string{"coder", "code", "codestral", "deepseek-coder", "starcoder", "codellama", "codegemma"}
+	codeKeywords := []string{"code", "codestral", "codellama", "codegemma"}
 	for _, kw := range codeKeywords {
 		if strings.Contains(lower, kw) {
 			return true
@@ -114,16 +114,11 @@ func isCodeModel(modelName, family string) bool {
 }
 
 // ClassifyModelRoles — автоматически определяет подходящие роли агентов для модели.
-// Классификация основана на:
-//   - Поддержке инструментов (tool calling) — обязательно для admin и coder
-//   - Специализации на коде — приоритет для роли coder
-//   - Размере модели — крупные модели (13B+) лучше для admin
-//   - Семействе модели — общие модели подходят для admin, кодовые для coder
-//
-// Правила классификации:
-//   - admin: нужна поддержка инструментов + достаточный размер (7B+) для сложных задач
-//   - coder: нужна поддержка инструментов + специализация на коде (или крупная общая модель)
-//   - novice: любая модель подходит (не требует инструментов)
+// В архитектуре единого агента Admin классификация упрощена:
+//   - Поддержка инструментов (tool calling) — обязательна для полноценной работы Admin
+//   - Размер модели — крупные модели (7B+) предпочтительны для сложных задач
+//   - Слабые модели (≤3B) получают составные навыки (LEGO-блоки)
+//   - Сильные модели (7B+) получают базовые + админ-инструменты
 func ClassifyModelRoles(modelName string, supportsTools bool, details OllamaModelDetails) ModelRoleInfo {
 	info := ModelRoleInfo{
 		SuitableRoles: []string{},
@@ -134,40 +129,20 @@ func ClassifyModelRoles(modelName string, supportsTools bool, details OllamaMode
 	isCode := isCodeModel(modelName, details.Family)
 
 	if supportsTools {
-		if paramSize >= 7 || paramSize == 0 {
-			info.SuitableRoles = append(info.SuitableRoles, "admin")
-			if paramSize >= 13 {
-				info.RoleNotes["admin"] = "Отлично подходит: большая модель с поддержкой инструментов"
-			} else {
-				info.RoleNotes["admin"] = "Подходит: поддерживает инструменты для управления системой"
-			}
-		} else {
-			info.RoleNotes["admin"] = "Не рекомендуется: слишком маленькая модель для сложных задач администрирования"
-		}
-
-		if isCode {
-			info.SuitableRoles = append(info.SuitableRoles, "coder")
-			info.RoleNotes["coder"] = "Отлично подходит: модель специализирована на коде + поддерживает инструменты"
+		info.SuitableRoles = append(info.SuitableRoles, "admin")
+		if paramSize >= 13 {
+			info.RoleNotes["admin"] = "Отлично подходит: большая модель с поддержкой инструментов"
 		} else if paramSize >= 7 || paramSize == 0 {
-			info.SuitableRoles = append(info.SuitableRoles, "coder")
-			info.RoleNotes["coder"] = "Подходит: общая модель с поддержкой инструментов (для кода лучше специализированная)"
+			info.RoleNotes["admin"] = "Подходит: поддерживает инструменты для управления системой"
 		} else {
-			info.RoleNotes["coder"] = "Не рекомендуется: маленькая общая модель без специализации на коде"
+			info.RoleNotes["admin"] = "Компактная модель: будут доступны составные навыки (LEGO-блоки)"
 		}
-	} else {
-		info.RoleNotes["admin"] = "Не подходит: модель не поддерживает вызов инструментов (tool calling)"
 		if isCode {
-			info.RoleNotes["coder"] = "Ограниченно: модель для кода, но без поддержки инструментов"
-		} else {
-			info.RoleNotes["coder"] = "Не подходит: нет поддержки инструментов и специализации на коде"
+			info.RoleNotes["admin"] += " + специализация на коде"
 		}
-	}
-
-	info.SuitableRoles = append(info.SuitableRoles, "novice")
-	if paramSize >= 7 || paramSize == 0 {
-		info.RoleNotes["novice"] = "Подходит: может выполнять второстепенные задачи"
 	} else {
-		info.RoleNotes["novice"] = "Отлично подходит: компактная модель для простых задач"
+		info.SuitableRoles = append(info.SuitableRoles, "admin")
+		info.RoleNotes["admin"] = "Ограниченно: модель не поддерживает вызов инструментов (только составные навыки)"
 	}
 
 	return info

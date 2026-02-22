@@ -18,15 +18,15 @@ import (
 	"gorm.io/gorm"
 )
 
-// Agent — модель агента системы (admin, coder, novice).
+// Agent — модель агента системы (единственный агент: admin).
 // Каждый агент имеет своё имя, модель LLM, провайдера, системный промпт и аватар.
 // Агент может быть привязан к рабочему пространству (WorkspaceID).
 //
 // Поля:
-//   - Name: уникальное имя агента (admin, coder, novice). Индексируется для быстрого поиска.
+//   - Name: уникальное имя агента (admin). Индексируется для быстрого поиска.
 //   - Prompt: текущий системный промпт агента (может быть загружен из файла или введён вручную).
 //   - LLMModel: имя модели LLM, используемой агентом (например, "llama3.1:8b", "gpt-4o").
-//   - Provider: имя провайдера LLM (ollama, openai, anthropic, yandexgpt, gigachat).
+//   - Provider: имя провайдера LLM (ollama, yandexgpt, gigachat).
 //     По умолчанию "ollama" для локальных моделей.
 //   - SupportsTools: поддерживает ли текущая модель вызов инструментов (tool calling).
 //     Определяется автоматически при первом использовании модели.
@@ -114,7 +114,7 @@ type PromptFile struct {
 //   - Family: семейство модели (llama, qwen, mistral и др.) — определяется автоматически.
 //   - ParameterSize: размер модели (например, "8B", "70B") — определяется из метаданных Ollama.
 //   - IsCodeModel: true, если модель специализирована на генерации кода.
-//   - SuitableRoles: JSON-массив подходящих ролей агентов (["admin","coder","novice"]).
+//   - SuitableRoles: JSON-массив подходящих ролей агентов (["admin"]).
 //   - RoleNotes: JSON-объект с пояснениями для каждой роли.
 //   - CheckedAt: время последней проверки.
 type ModelToolSupport struct {
@@ -133,7 +133,7 @@ type ModelToolSupport struct {
 // Настройки сохраняются в БД и загружаются при старте сервиса.
 //
 // Поля:
-//   - ProviderName: уникальное имя провайдера (openai, anthropic, yandexgpt, gigachat).
+//   - ProviderName: уникальное имя провайдера (ollama, yandexgpt, gigachat).
 //   - APIKey: API-ключ для авторизации (зашифрован при хранении).
 //   - BaseURL: базовый URL API (для прокси-серверов или кастомных эндпоинтов).
 //   - FolderID: идентификатор каталога Yandex Cloud (только для yandexgpt).

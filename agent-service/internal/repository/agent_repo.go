@@ -180,7 +180,7 @@ func ensureOllamaModel(agent *models.Agent) error {
 		return fmt.Errorf("cannot get available models from Ollama: %w", err)
 	}
 	if len(available) == 0 {
-		return errors.New("no models installed in Ollama. Please install at least one model, e.g., 'ollama pull qwen2.5-coder'")
+		return errors.New("no models installed in Ollama. Please install at least one model, e.g., 'ollama pull llama3.1:8b'")
 	}
 
 	// Если у агента уже есть модель, проверяем её наличие

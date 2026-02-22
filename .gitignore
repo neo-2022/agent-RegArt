@@ -1,8 +1,12 @@
 
 # Игнорируем скомпилированные бинарники
 agent-service/agent-agent
+agent-service/server
 api-gateway/agent-gateway
+api-gateway/api-gateway
 tools-service/agent-tools
+tools-service/server
+browser-service/server
 
 # Игнорируем базы данных и временные файлы Chroma
 *.sqlite3
@@ -24,7 +28,7 @@ agent-service/uploads/
 *.png
 *.ico
 
-# Исключение: встроенные аватарки агентов (Админ, Кодер, Послушник)
+# Исключение: встроенная аватарка агента (Admin)
 !web-ui/public/avatars/*.jpg
 !web-ui/public/avatars/*.png
 !favicon.png

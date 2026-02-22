@@ -1,8 +1,8 @@
 // Главный компонент веб-интерфейса Agent Core NG.
-// Реализует полнофункциональный чат с AI-агентами (Admin, Coder, Novice),
-// управление моделями (локальные Ollama + облачные OpenAI/Anthropic/YandexGPT/GigaChat),
-// рабочие пространства (Workspaces), прикрепление файлов, голосовой ввод,
-// межагентные обсуждения и RAG-поиск по базе знаний.
+// Реализует полнофункциональный чат с AI-агентом Admin,
+// управление моделями (локальные Ollama + облачные YandexGPT/GigaChat),
+// рабочие пространства (Workspaces), прикрепление файлов, голосовой ввод
+// и RAG-поиск по базе знаний.
 //
 // Архитектура:
 //   - Все API-запросы идут через API Gateway (порт 8080)
@@ -134,21 +134,15 @@ interface WorkspaceInfo {
 }
 
 // BUILT_IN_AVATARS — встроенные аватарки агентов (статические файлы в public/avatars/).
-// Админ — византийский крест (символ власти и управления).
-// Кодер — хакер с ноутбуком (программист).
-// Послушник — силуэт человека (новичок).
+// Admin — единственный агент системы.
 const BUILT_IN_AVATARS: Record<string, string> = {
   admin: '/avatars/admin.jpg',
-  coder: '/avatars/coder.jpg',
-  novice: '/avatars/novice.jpg',
 };
 
-// DEFAULT_AGENTS — агенты по умолчанию, отображаемые когда бэкенд недоступен.
-// Обеспечивает отображение аватарок и возможность переключения даже без подключения к серверу.
+// DEFAULT_AGENTS — агент по умолчанию, отображаемый когда бэкенд недоступен.
+// Обеспечивает отображение аватарки даже без подключения к серверу.
 const DEFAULT_AGENTS: Agent[] = [
   { name: 'admin', model: '', provider: 'ollama', supportsTools: true, avatar: '', prompt: '' },
-  { name: 'coder', model: '', provider: 'ollama', supportsTools: true, avatar: '', prompt: '' },
-  { name: 'novice', model: '', provider: 'ollama', supportsTools: false, avatar: '', prompt: '' },
 ];
 
 // CHUNK_SIZE — максимальный размер содержимого файла для отправки в одном сообщении.
@@ -176,19 +170,12 @@ const UPDATE_PROMPT_API = `${GATEWAY_URL}/agent/prompt`; // Обновление
 const LOGS_API = `${GATEWAY_URL}/logs`;               // Системные логи
 
 // nameMap — словарь синонимов имён агентов для распознавания обращений.
-// Поддерживает русские и английские варианты, включая опечатки ('колер' → coder).
+// Поддерживает русские и английские варианты.
 // Используется в extractAgentNames() для определения, к какому агенту обращается пользователь.
 const nameMap: { [key: string]: string } = {
   'админ': 'admin',
   'admin': 'admin',
   'администратор': 'admin',
-  'кодер': 'coder',
-  'колер': 'coder',
-  'coder': 'coder',
-  'программист': 'coder',
-  'послушник': 'novice',
-  'novice': 'novice',
-  'новичок': 'novice',
 };
 
 // App — главный React-компонент приложения.
@@ -290,11 +277,10 @@ function App() {
   const menuRef = useRef<HTMLDivElement>(null);                       // Контекстное меню
   const modalRef = useRef<HTMLDivElement>(null);                      // Модальное окно
 
-  // sortedAgents — агенты, отсортированные в порядке: Admin → Coder → Novice.
-  // Используется для единообразного отображения в панели моделей и аватарках.
+  // sortedAgents — агенты, отсортированные по имени (Admin первым).
   const sortedAgents = [...agents].sort((a, b) => {
-    const order = { admin: 1, coder: 2, novice: 3 };
-    return (order[a.name as keyof typeof order] || 99) - (order[b.name as keyof typeof order] || 99);
+    const order: Record<string, number> = { admin: 1 };
+    return (order[a.name] || 99) - (order[b.name] || 99);
   });
 
   useEffect(() => {
@@ -657,8 +643,8 @@ function App() {
   };
 
   // extractAgentNames — извлечение имён агентов из текста сообщения.
-  // Ищет синонимы из nameMap в тексте для определения адресата(ов).
-  // Возвращает уникальный массив имён агентов (admin, coder, novice).
+  // Ищет синонимы из nameMap в тексте для определения адресата.
+  // Возвращает уникальный массив имён агентов (admin).
   const extractAgentNames = (text: string): string[] => {
     const lower = text.toLowerCase();
     const found: string[] = [];

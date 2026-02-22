@@ -1,9 +1,9 @@
 // Пакет main — точка входа HTTP-сервера agent-service.
 // Это центральный микросервис системы Agent Core NG, который отвечает за:
 //   - Обработку чат-запросов от пользователя через /chat
-//   - Управление агентами (admin, coder, novice) через /agents
-//   - Работу с локальными (Ollama) и облачными (OpenAI, Anthropic, YandexGPT, GigaChat) LLM
-//   - Оркестрацию: Admin может вызывать Coder и Novice как инструменты (tool calling)
+//   - Управление агентом Admin через /agents
+//   - Работу с локальными (Ollama) и облачными (YandexGPT, GigaChat) LLM
+//   - Выполнение инструментов и составных навыков через tool calling
 //   - Сохранение истории чатов в PostgreSQL
 //   - Управление промптами, аватарами, моделями, провайдерами и рабочими пространствами
 //
@@ -61,7 +61,7 @@ import (
 //
 // Поля:
 //   - Messages: массив сообщений (история диалога), включая роли user, assistant, system
-//   - Agent: имя агента (admin, coder, novice), который должен ответить
+//   - Agent: имя агента (admin)
 type ChatRequest struct {
 	Messages []llm.Message `json:"messages"`
 	Agent    string        `json:"agent"`
@@ -91,9 +91,9 @@ type Source struct {
 // Позволяет изменить LLM-модель и/или провайдера для конкретного агента.
 //
 // Поля:
-//   - Agent: имя агента (admin, coder, novice)
-//   - Model: название модели (например, "gpt-4o", "llama3.1:8b", "yandexgpt")
-//   - Provider: имя провайдера (ollama, openai, anthropic, yandexgpt, gigachat)
+//   - Agent: имя агента (admin)
+//   - Model: название модели (например, "llama3.1:8b", "yandexgpt")
+//   - Provider: имя провайдера (ollama, yandexgpt, gigachat)
 type UpdateModelRequest struct {
 	Agent    string `json:"agent"`
 	Model    string `json:"model"`
@@ -302,8 +302,7 @@ func callTool(toolName string, args map[string]interface{}) (map[string]interfac
 //     a) Стандартные tool calls (формат OpenAI): обработка через chatResp.ToolCalls
 //     b) JSON tool calls (для моделей без native tool calling): парсинг JSON из ответа
 //     Для обоих случаев:
-//     - call_coder/call_novice — делегирование другим агентам (только для Admin)
-//     - остальные инструменты — вызов через tools-service
+//     - инструменты — вызов через tools-service
 //     После выполнения инструментов — повторный запрос к LLM с результатами
 //  7. Сохранение сообщений в PostgreSQL (пользовательское + ответ агента)
 //  8. Возврат ответа клиенту в формате ChatResponse
@@ -616,7 +615,7 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 // dispatchTool — единый диспетчер выполнения инструментов.
 // Централизует логику маршрутизации tool calls для всех форматов (structured, JSON, XML).
-// Обрабатывает специальные инструменты (call_coder, call_novice, configure_agent и др.)
+// Обрабатывает специальные инструменты (configure_agent, get_agent_info и др.)
 // и делегирует остальные в tools-service через callTool().
 //
 // Параметры:
@@ -887,7 +886,7 @@ func handleGetAgentInfo(args map[string]interface{}) map[string]interface{} {
 func handleListModelsForRole(args map[string]interface{}) map[string]interface{} {
 	role, ok := args["role"].(string)
 	if !ok || role == "" {
-		return map[string]interface{}{"error": "role обязателен (admin, coder, novice)"}
+		return map[string]interface{}{"error": "role обязателен (admin)"}
 	}
 
 	ollamaModels, err := repository.GetOllamaModels()
@@ -1433,7 +1432,7 @@ func fetchModelLearnings(modelName string, query string) []string {
 //
 // Параметры:
 //   - modelName: имя модели LLM
-//   - agentName: имя агента (admin, coder, novice)
+//   - agentName: имя агента (admin)
 //   - userMsg: последнее сообщение пользователя
 //   - assistantResp: ответ агента
 func extractAndStoreLearnings(modelName, agentName, userMsg, assistantResp string) {
@@ -1864,9 +1863,9 @@ func getProviderGuide(provider string) ProviderGuide {
 				"3. Скачайте модель: ollama pull llama3.1:8b\n" +
 				"4. URL по умолчанию: http://localhost:11434\n" +
 				"5. Для удалённого доступа: OLLAMA_HOST=0.0.0.0 ollama serve",
-			HowToChoose: "Для роли Админ: llama3.1:8b или qwen2.5-coder:7b (поддержка tool calling).\n" +
-				"Для роли Кодер: qwen2.5-coder:7b (специализация на коде).\n" +
-				"Для роли Послушник: любая модель (llama3.1:8b — универсальная).",
+			HowToChoose: "Сильные модели (7B+): llama3.1:8b, qwen2.5-coder:7b (поддержка tool calling).\n" +
+				"Компактные модели (≤3B): получат составные навыки (LEGO-блоки).\n" +
+				"Универсальный выбор: llama3.1:8b.",
 			HowToPay: "Все модели Ollama бесплатны — работают локально на вашем ПК.\n" +
 				"Оплата не требуется. Единственный ресурс — вычислительная мощность вашего GPU/CPU.",
 			HowToBalance: "Ограничений по токенам нет. Проверка не требуется.\n" +
@@ -1880,9 +1879,7 @@ func getProviderGuide(provider string) ProviderGuide {
 				"4. Вставьте ключ в поле API Key выше",
 			HowToChoose: "OpenRouter — агрегатор 200+ моделей от разных провайдеров.\n" +
 				"Бесплатные модели отмечены ярким цветом (цена $0).\n" +
-				"Для Админа: google/gemini-2.0-flash (бесплатная) или openai/gpt-4o.\n" +
-				"Для Кодера: deepseek/deepseek-coder или anthropic/claude-3.5-sonnet.\n" +
-				"Для Послушника: meta-llama/llama-3.1-8b-instruct (бесплатная).",
+				"Рекомендации: google/gemini-2.0-flash (бесплатная), meta-llama/llama-3.1-8b-instruct (бесплатная).",
 			HowToPay: "1. Перейдите на https://openrouter.ai/credits\n" +
 				"2. Нажмите 'Add Credits'\n" +
 				"3. Оплатите картой (Visa/Mastercard) от $5\n" +
@@ -1898,9 +1895,9 @@ func getProviderGuide(provider string) ProviderGuide {
 				"3. Получите 'Authorization Key' (Client Credentials)\n" +
 				"4. Вставьте ключ в поле API Key\n" +
 				"5. Укажите Scope: GIGACHAT_API_PERS (для физлиц) или GIGACHAT_API_B2B (для юрлиц)",
-			HowToChoose: "GigaChat Lite — быстрая, подходит для простых задач (Послушник).\n" +
-				"GigaChat Pro — сбалансированная (Кодер).\n" +
-				"GigaChat Max — самая мощная, для сложных задач (Админ).\n" +
+			HowToChoose: "GigaChat Lite — быстрая, для простых задач.\n" +
+				"GigaChat Pro — сбалансированная, для большинства задач.\n" +
+				"GigaChat Max — самая мощная, для сложных задач.\n" +
 				"Все модели поддерживают русский язык на высшем уровне.",
 			HowToPay: "Физлица (GIGACHAT_API_PERS):\n" +
 				"- Бесплатный тариф: 1 000 000 токенов GigaChat Lite в месяц.\n" +
@@ -1919,8 +1916,8 @@ func getProviderGuide(provider string) ProviderGuide {
 				"3. Создайте сервисный аккаунт с ролью ai.languageModels.user\n" +
 				"4. Создайте API-ключ: IAM → Сервисные аккаунты → Создать ключ API\n" +
 				"5. Вставьте API Key и Folder ID в поля выше",
-			HowToChoose: "yandexgpt-lite — быстрая и дешёвая, для простых задач (Послушник).\n" +
-				"yandexgpt — полная модель, для сложных задач (Админ, Кодер).\n" +
+			HowToChoose: "yandexgpt-lite — быстрая и дешёвая, для простых задач.\n" +
+				"yandexgpt — полная модель, для сложных задач.\n" +
 				"yandexgpt-32k — расширенный контекст 32K токенов, для больших документов.\n" +
 				"summarization — специализированная модель для суммаризации текстов.",
 			HowToPay: "При регистрации выдаётся грант на 4 000 руб. (действует 60 дней).\n" +
@@ -1938,9 +1935,9 @@ func getProviderGuide(provider string) ProviderGuide {
 				"2. Перейдите в https://platform.openai.com/api-keys\n" +
 				"3. Нажмите 'Create new secret key' и скопируйте ключ (начинается с sk-)\n" +
 				"4. Вставьте ключ в поле API Key выше",
-			HowToChoose: "gpt-4o — лучшая модель, для Админа (мультимодальная, быстрая).\n" +
-				"gpt-4o-mini — дешевле, для Кодера (хорошее соотношение цены/качества).\n" +
-				"gpt-3.5-turbo — самая дешёвая, для Послушника.\n" +
+			HowToChoose: "gpt-4o — лучшая модель (мультимодальная, быстрая).\n" +
+				"gpt-4o-mini — дешевле (хорошее соотношение цены/качества).\n" +
+				"gpt-3.5-turbo — самая дешёвая.\n" +
 				"o1 / o3 — модели с 'размышлением', для сложных логических задач.",
 			HowToPay: "1. Перейдите на https://platform.openai.com/settings/organization/billing\n" +
 				"2. Нажмите 'Add payment method' → привяжите карту (Visa/Mastercard)\n" +
@@ -1957,9 +1954,9 @@ func getProviderGuide(provider string) ProviderGuide {
 				"2. Перейдите в https://console.anthropic.com/settings/keys\n" +
 				"3. Нажмите 'Create Key' и скопируйте ключ (начинается с sk-ant-)\n" +
 				"4. Вставьте ключ в поле API Key выше",
-			HowToChoose: "claude-sonnet-4 — новейшая модель, баланс цены/качества (Админ).\n" +
-				"claude-3.5-sonnet — отличная для кода (Кодер).\n" +
-				"claude-3.5-haiku — быстрая и дешёвая (Послушник).\n" +
+			HowToChoose: "claude-sonnet-4 — новейшая модель, баланс цены/качества.\n" +
+				"claude-3.5-sonnet — отличная для кода.\n" +
+				"claude-3.5-haiku — быстрая и дешёвая.\n" +
 				"claude-3-opus — самая мощная, для самых сложных задач.",
 			HowToPay: "1. Перейдите на https://console.anthropic.com/settings/billing\n" +
 				"2. Нажмите 'Add payment method' → привяжите карту\n" +
@@ -1978,9 +1975,7 @@ func getProviderGuide(provider string) ProviderGuide {
 				"4. Вставьте ключ в поле API Key",
 			HowToChoose: "Routeway — агрегатор 70+ моделей, 200 бесплатных запросов/день.\n" +
 				"Бесплатные модели: llama-3.3-70b-instruct:free, deepseek-r1:free, qwen2.5-72b:free.\n" +
-				"Для Админа: llama-3.3-70b-instruct:free (бесплатная, tool calling).\n" +
-				"Для Кодера: qwen2.5-coder-32b:free.\n" +
-				"Для Послушника: llama-3.1-8b-instruct:free.",
+				"Рекомендации: llama-3.3-70b-instruct:free (tool calling), qwen2.5-coder-32b:free (код).",
 			HowToPay: "Бесплатные модели (с суффиксом :free) не требуют оплаты.\n" +
 				"Лимит: 200 запросов в день (в 4 раза больше OpenRouter).",
 			HowToBalance: "Лимит сбрасывается ежедневно.\n" +
@@ -1993,8 +1988,8 @@ func getProviderGuide(provider string) ProviderGuide {
 				"3. Нажмите 'Create API Key', дайте имя и скопируйте ключ (csk-...)\n" +
 				"4. Вставьте ключ в поле API Key выше",
 			HowToChoose: "Cerebras — сверхбыстрый инференс (до 2500 токенов/сек, 20x быстрее OpenAI).\n" +
-				"llama3.1-8b — быстрая и лёгкая, для Послушника.\n" +
-				"llama-3.3-70b — мощная, для Админа и Кодера.\n" +
+				"llama3.1-8b — быстрая и лёгкая.\n" +
+				"llama-3.3-70b — мощная.\n" +
 				"qwen-3-32b — сбалансированная (32B параметров).\n" +
 				"qwen-3-235b-a22b-instruct — самая мощная (MoE, 235B параметров).\n" +
 				"gpt-oss-120b — открытая GPT-модель (120B).\n" +
@@ -2023,9 +2018,9 @@ func getProviderGuide(provider string) ProviderGuide {
 				"7. API Key не требуется (оставьте пустым)\n" +
 				"8. Нажмите кнопку ↻ (обновить) в панели провайдеров для загрузки списка моделей",
 			HowToChoose: "LM Studio — бесплатные локальные модели, без лимитов запросов.\n" +
-				"Для Админа: ministral-3-14b-reasoning (14B, reasoning + tool calling).\n" +
-				"Для Кодера: qwen2.5-coder-14b-instruct (14B, специализация на коде).\n" +
-				"Для Послушника: llama-3.1-8b-instruct (8B, универсальная).\n" +
+				"Рекомендации: ministral-3-14b-reasoning (14B, reasoning + tool calling),\n" +
+				"qwen2.5-coder-14b-instruct (14B, специализация на коде),\n" +
+				"llama-3.1-8b-instruct (8B, универсальная).\n" +
 				"Требования: минимум 10GB RAM для 14B, 8GB для 8B моделей.",
 			HowToPay: "Полностью бесплатно! Модели работают локально на вашем ПК.\n" +
 				"Никаких лимитов, никаких подписок, данные не покидают компьютер.",

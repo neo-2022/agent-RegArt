@@ -1,22 +1,30 @@
+// Package config — централизованная конфигурация agent-service.
+//
+// Все параметры загружаются из переменных окружения с указанными значениями по умолчанию.
+// Используется для единообразного доступа к настройкам из любого пакета сервиса.
 package config
 
 import "os"
 
+// Config — структура конфигурации agent-service.
+// Содержит все параметры подключения к БД, внешним сервисам и пути к ресурсам.
 type Config struct {
-	Port              string
-	DBHost            string
-	DBPort            string
-	DBUser            string
-	DBPassword        string
-	DBName            string
-	MemoryServiceURL  string
-	ToolsServiceURL   string
-	BrowserServiceURL string
-	OllamaURL         string
-	UploadsDir        string
-	SkillsDir         string
+	Port              string // Порт HTTP-сервера агента (по умолчанию 8083)
+	DBHost            string // Хост PostgreSQL (по умолчанию localhost)
+	DBPort            string // Порт PostgreSQL (по умолчанию 5432)
+	DBUser            string // Пользователь PostgreSQL
+	DBPassword        string // Пароль PostgreSQL
+	DBName            string // Имя базы данных
+	MemoryServiceURL  string // URL сервиса памяти (RAG)
+	ToolsServiceURL   string // URL сервиса инструментов
+	BrowserServiceURL string // URL сервиса браузера
+	OllamaURL         string // URL Ollama API для LLM
+	UploadsDir        string // Директория для загруженных файлов
+	SkillsDir         string // Директория с пользовательскими скиллами
 }
 
+// Load — загружает конфигурацию из переменных окружения.
+// Если переменная не задана, используется значение по умолчанию.
 func Load() *Config {
 	return &Config{
 		Port:              getEnv("AGENT_PORT", "8083"),
@@ -34,6 +42,7 @@ func Load() *Config {
 	}
 }
 
+// getEnv — возвращает значение переменной окружения или fallback, если не задана.
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

@@ -1,3 +1,12 @@
+// Package executor — работа с файловой системой через API.
+//
+// Предоставляет безопасные функции для чтения, записи, просмотра
+// и удаления файлов с многоуровневой защитой:
+//   - Запрещённые системные директории (ForbiddenPaths)
+//   - Разрешённые системные файлы (AllowedSystemFiles)
+//   - Защита от path traversal (проход через ..)
+//   - Ограничение максимального размера файла (MaxFileSize = 10 МБ)
+//   - Поддержка ~ как домашней директории пользователя
 package executor
 
 import (
@@ -8,12 +17,15 @@ import (
 )
 
 // ForbiddenPaths — системные директории, доступ к которым запрещён через API.
+// Защищает критические файлы системы от случайного или намеренного повреждения.
 var ForbiddenPaths = []string{
 	"/etc/shadow", "/etc/passwd", "/etc/sudoers",
 	"/proc", "/sys", "/dev",
 	"/boot", "/sbin", "/usr/sbin",
 }
 
+// AllowedSystemFiles — исключения из запрещённых путей.
+// Эти файлы из /proc разрешены для чтения (информация о CPU и памяти).
 var AllowedSystemFiles = map[string]struct{}{
 	"/proc/cpuinfo": {},
 	"/proc/meminfo": {},
@@ -22,7 +34,13 @@ var AllowedSystemFiles = map[string]struct{}{
 // MaxFileSize — максимальный размер файла для чтения/записи (10 МБ).
 const MaxFileSize = 10 * 1024 * 1024
 
-// validatePath проверяет путь на path traversal и запрещённые директории.
+// validatePath — проверяет путь на безопасность.
+// Выполняет:
+//  1. Разрешение ~ в домашнюю директорию
+//  2. Нормализацию пути (filepath.Clean)
+//  3. Проверку на path traversal (..)
+//  4. Проверку по белому списку системных файлов
+//  5. Проверку по чёрному списку запрещённых директорий
 func validatePath(path string) (string, error) {
 	path = resolveHomePath(path)
 	cleanPath := filepath.Clean(path)
@@ -44,6 +62,8 @@ func validatePath(path string) (string, error) {
 	return cleanPath, nil
 }
 
+// ReadFile — безопасное чтение файла по указанному пути.
+// Проверяет путь на безопасность и ограничивает размер файла до MaxFileSize.
 func ReadFile(path string) (string, error) {
 	cleanPath, err := validatePath(path)
 	if err != nil {
@@ -65,6 +85,8 @@ func ReadFile(path string) (string, error) {
 	return string(data), nil
 }
 
+// WriteFile — безопасная запись файла по указанному пути.
+// Проверяет путь и размер содержимого. Автоматически создаёт родительские директории.
 func WriteFile(path, content string) error {
 	cleanPath, err := validatePath(path)
 	if err != nil {
@@ -82,6 +104,8 @@ func WriteFile(path, content string) error {
 	return os.WriteFile(cleanPath, []byte(content), 0644)
 }
 
+// ListDirectory — получение списка файлов и папок в указанной директории.
+// Возвращает только имена (без полных путей).
 func ListDirectory(path string) ([]string, error) {
 	cleanPath, err := validatePath(path)
 	if err != nil {
@@ -99,6 +123,8 @@ func ListDirectory(path string) ([]string, error) {
 	return names, nil
 }
 
+// DeleteFile — безопасное удаление файла по указанному пути.
+// Перед удалением проверяет путь на безопасность.
 func DeleteFile(path string) error {
 	cleanPath, err := validatePath(path)
 	if err != nil {
@@ -107,6 +133,9 @@ func DeleteFile(path string) error {
 	return os.Remove(cleanPath)
 }
 
+// resolveHomePath — заменяет ~ на домашнюю директорию текущего пользователя.
+// Если путь пустой или равен "~" — возвращает домашнюю директорию.
+// Если начинается с "~/" — заменяет префикс на домашнюю директорию.
 func resolveHomePath(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" || path == "~" || path == "~/" {

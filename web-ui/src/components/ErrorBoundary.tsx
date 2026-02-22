@@ -1,14 +1,41 @@
+/**
+ * ErrorBoundary — компонент-обёртка для перехвата ошибок рендеринга React.
+ *
+ * Если дочерний компонент выбрасывает ошибку при рендеринге,
+ * ErrorBoundary перехватывает её и отображает экран ошибки
+ * с возможностью повторной попытки (сброса состояния).
+ *
+ * Используется как обёртка вокруг корневого компонента приложения
+ * для предотвращения полного краша UI при непредвиденных ошибках.
+ */
 import React from 'react';
 
+/**
+ * ErrorBoundaryProps — свойства компонента ErrorBoundary.
+ * children — дочерние компоненты, которые оборачиваются обработчиком ошибок.
+ */
 interface ErrorBoundaryProps {
   children: React.ReactNode;
 }
 
+/**
+ * ErrorBoundaryState — внутреннее состояние ErrorBoundary.
+ * hasError — флаг наличия ошибки.
+ * error — объект перехваченной ошибки (null, если ошибки нет).
+ */
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
 }
 
+/**
+ * ErrorBoundary — классовый компонент React для перехвата ошибок рендеринга.
+ *
+ * При возникновении ошибки:
+ * 1. getDerivedStateFromError — обновляет состояние (hasError=true).
+ * 2. componentDidCatch — логирует ошибку и стек компонентов в консоль.
+ * 3. render — отображает экран ошибки с кнопкой «Попробовать снова».
+ */
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);

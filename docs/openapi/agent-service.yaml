@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  title: Agent Service API
+  title: API сервиса агентов
   description: Управление агентами, чат с LLM, модели, провайдеры, рабочие пространства
   version: 1.0.0
 servers:
   - url: http://localhost:8083
-    description: Local development
+    description: Локальная разработка
 paths:
   /chat:
     post:
@@ -19,7 +19,7 @@ paths:
               $ref: '#/components/schemas/ChatRequest'
       responses:
         '200':
-          description: Ответ агента (streaming SSE)
+          description: Ответ агента (потоковый SSE)
           content:
             text/event-stream:
               schema:
@@ -33,7 +33,7 @@ paths:
       summary: Список агентов
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -51,7 +51,7 @@ paths:
               $ref: '#/components/schemas/AgentUpdate'
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /models:
     get:
@@ -59,7 +59,7 @@ paths:
       summary: Список доступных моделей
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -85,7 +85,7 @@ paths:
               required: [agent_name, model]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /providers:
     get:
@@ -93,7 +93,7 @@ paths:
       summary: Список провайдеров LLM
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -111,7 +111,7 @@ paths:
               $ref: '#/components/schemas/ProviderConfig'
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /cloud-models:
     get:
@@ -119,7 +119,7 @@ paths:
       summary: Список моделей облачных провайдеров
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -133,7 +133,7 @@ paths:
       summary: Список рабочих пространств
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -151,7 +151,7 @@ paths:
               $ref: '#/components/schemas/WorkspaceCreate'
       responses:
         '200':
-          description: OK
+          description: ОК
     delete:
       tags: [Workspaces]
       summary: Удалить рабочее пространство
@@ -163,7 +163,7 @@ paths:
             type: integer
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /prompts:
     get:
@@ -171,7 +171,7 @@ paths:
       summary: Список файлов промптов
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -197,7 +197,7 @@ paths:
               required: [agent_name, file_name]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /agent/prompt:
     post:
@@ -217,7 +217,7 @@ paths:
               required: [agent_name, prompt]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /avatar:
     post:
@@ -237,7 +237,7 @@ paths:
                   format: binary
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /avatar-info:
     get:
@@ -251,7 +251,7 @@ paths:
             type: string
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -266,7 +266,7 @@ paths:
       summary: Статистика обучения агентов
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -292,7 +292,7 @@ paths:
             default: 50
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -419,7 +419,7 @@ components:
 
   responses:
     InternalError:
-      description: Internal server error
+      description: Внутренняя ошибка сервера
       content:
         application/json:
           schema:

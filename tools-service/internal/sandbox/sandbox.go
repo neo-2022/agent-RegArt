@@ -1,3 +1,7 @@
+// Package sandbox — изолированное выполнение команд в Docker-контейнерах.
+//
+// Обеспечивает безопасное выполнение пользовательских команд с ограничениями
+// по памяти, CPU, количеству процессов и сети. Использует Docker-in-Docker.
 package sandbox
 
 import (
@@ -9,17 +13,21 @@ import (
 	"time"
 )
 
+// Config — конфигурация песочницы (sandbox).
+// Определяет образ Docker, ограничения ресурсов и точки монтирования.
 type Config struct {
-	Enabled        bool
-	Image          string
-	MemoryLimit    string
-	CPULimit       string
-	NetworkDisable bool
-	Timeout        time.Duration
-	MountReadOnly  []string
-	MountReadWrite []string
+	Enabled        bool          // Включена ли песочница (из переменной SANDBOX_ENABLED)
+	Image          string        // Docker-образ для контейнера (по умолчанию ubuntu:22.04)
+	MemoryLimit    string        // Лимит оперативной памяти (по умолчанию 256m)
+	CPULimit       string        // Лимит CPU (по умолчанию 0.5 ядра)
+	NetworkDisable bool          // Отключить сетевой доступ в контейнере
+	Timeout        time.Duration // Таймаут выполнения команды (по умолчанию 30 секунд)
+	MountReadOnly  []string      // Точки монтирования только для чтения
+	MountReadWrite []string      // Точки монтирования для чтения и записи
 }
 
+// DefaultConfig — создаёт конфигурацию по умолчанию из переменных окружения.
+// Если переменная не задана, используется значение по умолчанию.
 func DefaultConfig() Config {
 	return Config{
 		Enabled:        os.Getenv("SANDBOX_ENABLED") == "true",
@@ -31,19 +39,30 @@ func DefaultConfig() Config {
 	}
 }
 
+// Result — результат выполнения команды в песочнице.
 type Result struct {
-	Stdout     string `json:"stdout"`
-	Stderr     string `json:"stderr"`
-	ReturnCode int    `json:"returncode"`
-	Error      string `json:"error,omitempty"`
-	Sandboxed  bool   `json:"sandboxed"`
+	Stdout     string `json:"stdout"`          // Стандартный вывод команды
+	Stderr     string `json:"stderr"`          // Стандартный поток ошибок
+	ReturnCode int    `json:"returncode"`      // Код возврата процесса
+	Error      string `json:"error,omitempty"` // Ошибка выполнения (если есть)
+	Sandboxed  bool   `json:"sandboxed"`       // Была ли команда выполнена в песочнице
 }
 
+// Execute — выполнить команду в изолированном Docker-контейнере.
+//
+// Создаёт контейнер с ограничениями ресурсов (память, CPU, PID-лимит),
+// монтирует файловую систему только для чтения (кроме /tmp),
+// применяет политику безопасности no-new-privileges,
+// и опционально отключает сеть.
+//
+// Если песочница не включена (Enabled=false), возвращает ошибку без выполнения.
+// Если команда превышает таймаут, процесс принудительно завершается.
 func Execute(cfg Config, command string) Result {
 	if !cfg.Enabled {
-		return Result{Error: "sandbox is not enabled", Sandboxed: false}
+		return Result{Error: "песочница не включена", Sandboxed: false}
 	}
 
+	// Сборка аргументов docker run с ограничениями безопасности
 	args := []string{
 		"run", "--rm",
 		"--memory", cfg.MemoryLimit,
@@ -54,10 +73,12 @@ func Execute(cfg Config, command string) Result {
 		"--security-opt", "no-new-privileges",
 	}
 
+	// Отключение сети, если задано в конфигурации
 	if cfg.NetworkDisable {
 		args = append(args, "--network", "none")
 	}
 
+	// Добавление точек монтирования
 	for _, m := range cfg.MountReadOnly {
 		args = append(args, "-v", m+":ro")
 	}
@@ -67,10 +88,11 @@ func Execute(cfg Config, command string) Result {
 
 	args = append(args, cfg.Image, "bash", "-c", command)
 
-	log.Printf("[SANDBOX] executing: docker %s", strings.Join(args, " "))
+	log.Printf("[ПЕСОЧНИЦА] выполняем: docker %s", strings.Join(args, " "))
 
 	cmd := exec.Command("docker", args...)
 
+	// Таймер принудительного завершения при превышении таймаута
 	timer := time.AfterFunc(cfg.Timeout, func() {
 		if cmd.Process != nil {
 			cmd.Process.Kill()
@@ -88,7 +110,7 @@ func Execute(cfg Config, command string) Result {
 			exitCode = exitErr.ExitCode()
 		} else {
 			return Result{
-				Error:     fmt.Sprintf("sandbox execution failed: %v", err),
+				Error:     fmt.Sprintf("ошибка выполнения в песочнице: %v", err),
 				Sandboxed: true,
 			}
 		}
@@ -102,11 +124,14 @@ func Execute(cfg Config, command string) Result {
 	}
 }
 
+// IsAvailable — проверяет, доступен ли Docker для выполнения команд.
+// Возвращает true, если docker info выполняется успешно.
 func IsAvailable() bool {
 	cmd := exec.Command("docker", "info")
 	return cmd.Run() == nil
 }
 
+// getEnv — возвращает значение переменной окружения или fallback, если не задана.
 func getEnv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

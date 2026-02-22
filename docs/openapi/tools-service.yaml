@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  title: Tools Service API
+  title: API сервиса инструментов
   description: Выполнение команд, работа с файлами, управление приложениями, Яндекс.Диск
   version: 1.0.0
 servers:
   - url: http://localhost:8082
-    description: Local development
+    description: Локальная разработка
 paths:
   /health:
     get:
@@ -13,7 +13,7 @@ paths:
       summary: Проверка работоспособности
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -53,7 +53,7 @@ paths:
               required: [path]
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -80,7 +80,7 @@ paths:
               required: [path, content]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /list:
     post:
@@ -98,7 +98,7 @@ paths:
               required: [path]
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -125,7 +125,7 @@ paths:
               required: [path]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /sysinfo:
     get:
@@ -133,7 +133,7 @@ paths:
       summary: Информация о системе
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -145,7 +145,7 @@ paths:
       summary: Информация о CPU
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /meminfo:
     get:
@@ -153,7 +153,7 @@ paths:
       summary: Информация о памяти
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /cputemp:
     get:
@@ -161,7 +161,7 @@ paths:
       summary: Температура CPU
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /sysload:
     get:
@@ -169,7 +169,7 @@ paths:
       summary: Нагрузка системы
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /findapp:
     post:
@@ -187,7 +187,7 @@ paths:
               required: [name]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /launchapp:
     post:
@@ -205,7 +205,7 @@ paths:
               required: [desktop_file]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/info:
     get:
@@ -213,7 +213,7 @@ paths:
       summary: Информация о Яндекс.Диске
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/list:
     get:
@@ -227,7 +227,7 @@ paths:
             default: /
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/download:
     get:
@@ -241,7 +241,7 @@ paths:
             type: string
       responses:
         '200':
-          description: File content
+          description: Содержимое файла
           content:
             application/octet-stream:
               schema:
@@ -268,7 +268,7 @@ paths:
               required: [path, content]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/mkdir:
     post:
@@ -286,7 +286,7 @@ paths:
               required: [path]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/delete:
     post:
@@ -306,7 +306,7 @@ paths:
               required: [path]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/move:
     post:
@@ -328,7 +328,7 @@ paths:
               required: [from, to]
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /ydisk/search:
     get:
@@ -342,7 +342,7 @@ paths:
             type: string
       responses:
         '200':
-          description: OK
+          description: ОК
 
 components:
   schemas:

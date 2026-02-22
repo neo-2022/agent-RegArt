@@ -1,11 +1,11 @@
 openapi: 3.0.3
 info:
-  title: Memory Service API (RAG)
+  title: API сервиса памяти (RAG)
   description: Сервис долговременной памяти агентов — факты, файлы, обучение, RAG-поиск
   version: 1.0.0
 servers:
   - url: http://localhost:8001
-    description: Local development
+    description: Локальная разработка
 paths:
   /health:
     get:
@@ -13,7 +13,7 @@ paths:
       summary: Проверка работоспособности
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -36,7 +36,7 @@ paths:
               $ref: '#/components/schemas/FactAddRequest'
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -54,7 +54,7 @@ paths:
               $ref: '#/components/schemas/SearchRequest'
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -72,7 +72,7 @@ paths:
               $ref: '#/components/schemas/FileChunkAddRequest'
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -84,7 +84,7 @@ paths:
       summary: Список загруженных файлов
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -107,7 +107,7 @@ paths:
             type: string
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /files/{file_id}:
     delete:
@@ -121,7 +121,7 @@ paths:
             type: string
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -133,7 +133,7 @@ paths:
       summary: Статистика коллекций
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -151,7 +151,7 @@ paths:
               $ref: '#/components/schemas/LearningAddRequest'
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -169,7 +169,7 @@ paths:
               $ref: '#/components/schemas/LearningSearchRequest'
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -181,7 +181,7 @@ paths:
       summary: Статистика обучения по моделям
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -203,7 +203,7 @@ paths:
             type: string
       responses:
         '200':
-          description: OK
+          description: ОК
 
   /reindex:
     post:
@@ -224,7 +224,7 @@ paths:
                   default: all
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -247,7 +247,7 @@ paths:
             enum: [facts, files, learnings]
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -272,7 +272,7 @@ paths:
       summary: Удалить документы с истёкшим TTL
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:

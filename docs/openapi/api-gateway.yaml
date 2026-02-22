@@ -1,13 +1,13 @@
 openapi: 3.0.3
 info:
-  title: API Gateway
+  title: Шлюз API
   description: |
     Центральный маршрутизатор — принимает запросы от web-ui и перенаправляет
-    на соответствующие микросервисы. Включает CORS, rate limiting, circuit breaker.
+    на соответствующие микросервисы. Включает CORS, ограничение частоты запросов и предохранитель от отказов.
   version: 1.0.0
 servers:
   - url: http://localhost:8080
-    description: Local development
+    description: Локальная разработка
 paths:
   /memory/{path}:
     get:
@@ -21,7 +21,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от memory-service
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -39,7 +39,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от tools-service
         '429':
           $ref: '#/components/responses/RateLimited'
         '503':
@@ -57,7 +57,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от agent-service
 
   /chat:
     post:
@@ -65,7 +65,7 @@ paths:
       summary: Чат (без удаления префикса)
       responses:
         '200':
-          description: SSE stream
+          description: Потоковый ответ (SSE)
         '429':
           $ref: '#/components/responses/RateLimited'
 
@@ -75,7 +75,7 @@ paths:
       summary: Список моделей
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от agent-service
 
   /providers:
     get:
@@ -83,7 +83,7 @@ paths:
       summary: Провайдеры LLM
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от agent-service
 
   /workspaces:
     get:
@@ -91,7 +91,7 @@ paths:
       summary: Рабочие пространства
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от agent-service
 
   /health:
     get:
@@ -99,7 +99,7 @@ paths:
       summary: Проверка здоровья (проксируется на memory-service)
       responses:
         '200':
-          description: OK
+          description: ОК
           content:
             application/json:
               schema:
@@ -120,7 +120,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Proxied response
+          description: Проксированный ответ от tools-service
 
 components:
   responses:
@@ -133,10 +133,10 @@ components:
             properties:
               error:
                 type: string
-                example: rate limit exceeded
+                example: превышен лимит запросов
 
     CircuitOpen:
-      description: Сервис временно недоступен (circuit breaker open)
+      description: Сервис временно недоступен (предохранитель разомкнут)
       content:
         application/json:
           schema:
@@ -144,7 +144,7 @@ components:
             properties:
               error:
                 type: string
-                example: service unavailable
+                example: сервис недоступен
               reason:
                 type: string
-                example: circuit breaker open
+                example: предохранитель разомкнут

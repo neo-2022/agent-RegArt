@@ -6,13 +6,21 @@ import (
 	"time"
 )
 
+// RateLimiter — ограничитель частоты запросов (Rate Limiter).
+//
+// Использует алгоритм скользящего окна: для каждого клиента (по IP-адресу)
+// хранит временные метки запросов и ограничивает количество запросов
+// в пределах заданного окна (window).
 type RateLimiter struct {
-	mu       sync.Mutex
-	requests map[string][]time.Time
-	limit    int
-	window   time.Duration
+	mu       sync.Mutex             // Мьютекс для потокобезопасного доступа
+	requests map[string][]time.Time // Временные метки запросов по ключу (IP-адрес)
+	limit    int                    // Максимальное количество запросов в окне
+	window   time.Duration          // Размер скользящего окна
 }
 
+// NewRateLimiter — создаёт новый Rate Limiter.
+// limit — максимум запросов в окне, window — размер окна (например, 1 минута).
+// Запускает фоновую горутину для периодической очистки устаревших записей.
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	rl := &RateLimiter{
 		requests: make(map[string][]time.Time),
@@ -23,6 +31,9 @@ func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
 	return rl
 }
 
+// Allow — проверяет, можно ли пропустить запрос от указанного клиента (key).
+// Возвращает true, если лимит не превышен, и регистрирует новый запрос.
+// Возвращает false, если клиент превысил лимит в текущем окне.
 func (rl *RateLimiter) Allow(key string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -30,6 +41,7 @@ func (rl *RateLimiter) Allow(key string) bool {
 	now := time.Now()
 	cutoff := now.Add(-rl.window)
 
+	// Отфильтровать запросы, попадающие в текущее окно
 	times := rl.requests[key]
 	var valid []time.Time
 	for _, t := range times {
@@ -38,6 +50,7 @@ func (rl *RateLimiter) Allow(key string) bool {
 		}
 	}
 
+	// Проверить, не превышен ли лимит
 	if len(valid) >= rl.limit {
 		rl.requests[key] = valid
 		return false
@@ -47,6 +60,9 @@ func (rl *RateLimiter) Allow(key string) bool {
 	return true
 }
 
+// cleanup — фоновая горутина для периодической очистки устаревших записей.
+// Удаляет клиентов, у которых нет запросов в текущем окне,
+// и обновляет списки запросов для остальных.
 func (rl *RateLimiter) cleanup() {
 	ticker := time.NewTicker(rl.window)
 	defer ticker.Stop()
@@ -71,6 +87,10 @@ func (rl *RateLimiter) cleanup() {
 	}
 }
 
+// RateLimitMiddleware — HTTP-мидлварь для ограничения частоты запросов.
+//
+// Определяет клиента по IP-адресу (или заголовку X-Forwarded-For для прокси).
+// Если лимит превышен — возвращает 429 Too Many Requests.
 func RateLimitMiddleware(limiter *RateLimiter) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +99,7 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.HandlerFunc) http.Handl
 				key = forwarded
 			}
 			if !limiter.Allow(key) {
-				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+				http.Error(w, `{"error":"превышен лимит запросов"}`, http.StatusTooManyRequests)
 				return
 			}
 			next.ServeHTTP(w, r)

@@ -272,7 +272,7 @@ class MemoryStore:
         Args:
             text: Текст знания (факт, правило, предпочтение)
             model_name: Имя модели LLM (например, 'llama3.1:8b', 'gpt-4o')
-            agent_name: Имя агента (admin, coder, novice)
+            agent_name: Имя агента (admin)
             category: Категория знания (general, preference, fact, skill, correction)
             metadata: Дополнительные метаданные
         

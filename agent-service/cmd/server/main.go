@@ -268,65 +268,7 @@ func callTool(toolName string, args map[string]interface{}) (map[string]interfac
 	return map[string]interface{}{"result": string(bodyBytes)}, nil
 }
 
-// callAgent — внутренний вызов другого агента для оркестрации.
-// Используется Admin-агентом для делегирования задач Coder или Novice.
-// Агент получает полную историю диалога + конкретную задачу.
-//
-// Порядок действий:
-//  1. Загрузка агента из БД по имени
-//  2. Формирование сообщений: системный промпт + история + задача
-//  3. Определение провайдера (ollama по умолчанию)
-//  4. Получение провайдера из глобального реестра
-//  5. Формирование запроса к LLM с инструментами (если агент их поддерживает)
-//  6. Отправка запроса и возврат текста ответа
-//
-// Параметры:
-//   - agentName: имя вызываемого агента (coder или novice)
-//   - task: текст задачи для агента
-//   - history: полная история диалога для контекста
-//
-// Возвращает:
-//   - string: текст ответа от вызванного агента
-//   - error: ошибка (агент не найден, провайдер недоступен, LLM ошибка)
-func callAgent(agentName string, task string, history []llm.Message) (string, error) {
-	agent, err := repository.GetAgentByName(agentName)
-	if err != nil {
-		return "", err
-	}
-	messages := make([]llm.Message, 0, len(history)+2)
-	messages = append(messages, llm.Message{Role: "system", Content: agent.Prompt})
-	messages = append(messages, history...)
-	messages = append(messages, llm.Message{Role: "user", Content: task})
-
-	providerName := agent.Provider
-	if providerName == "" {
-		providerName = "ollama"
-	}
-
-	provider, err := llm.GlobalRegistry.Get(providerName)
-	if err != nil {
-		return "", err
-	}
-
-	// Стриминг отключаем когда есть инструменты — Ollama не поддерживает tool calling в режиме stream
-	useStream := providerName == "ollama" && !agent.SupportsTools
-	chatReq := &llm.ChatRequest{
-		Model:    agent.LLMModel,
-		Messages: messages,
-		Stream:   useStream,
-	}
-	if agent.SupportsTools {
-		chatReq.Tools = tools.GetToolsForAgent(agentName, agent.LLMModel)
-	}
-
-	chatResp, err := provider.Chat(chatReq)
-	if err != nil {
-		return "", err
-	}
-	return chatResp.Content, nil
-}
-
-// chatHandler — основной обработчик чат-запросов (POST /chat).
+// chatHandler— основной обработчик чат-запросов (POST /chat).
 // Это главная точка взаимодействия пользователя с AI-агентами.
 //
 // Алгоритм обработки запроса:
@@ -665,36 +607,13 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 //   - history: история сообщений (для делегирования задач другим агентам)
 func dispatchTool(agentName, toolName string, args map[string]interface{}, history []llm.Message) map[string]interface{} {
 	switch toolName {
-	case "call_coder", "call_novice":
-		if agentName != "admin" {
-			return map[string]interface{}{"error": "call_coder/call_novice доступны только для admin"}
-		}
-		task, ok := args["task"].(string)
-		if !ok {
-			return map[string]interface{}{"error": "task is not a string"}
-		}
-		targetAgent := "coder"
-		if toolName == "call_novice" {
-			targetAgent = "novice"
-		}
-		answer, callErr := callAgent(targetAgent, task, history)
-		if callErr != nil {
-			return map[string]interface{}{"error": callErr.Error()}
-		}
-		return map[string]interface{}{"response": answer}
 	case "configure_agent":
-		if agentName != "admin" {
-			return map[string]interface{}{"error": "configure_agent доступен только для admin"}
-		}
 		return handleConfigureAgent(args)
 	case "get_agent_info":
 		return handleGetAgentInfo(args)
 	case "list_models_for_role":
 		return handleListModelsForRole(args)
 	case "view_logs":
-		if agentName != "admin" {
-			return map[string]interface{}{"error": "view_logs доступен только для admin"}
-		}
 		return handleViewLogs(args)
 	case "debug_code":
 		filePath, _ := args["file_path"].(string)
@@ -748,13 +667,7 @@ func dispatchTool(agentName, toolName string, args map[string]interface{}, histo
 	case "check_resources_batch":
 		return handleCheckResourcesBatch(args)
 
-	// БЛОК 3: Команда
-	case "team_status":
-		return handleTeamStatus()
-	case "delegate_tasks":
-		return handleDelegateTasks(args, history)
-
-	// БЛОК 4: Файлы и отчёты
+	// БЛОК 3: Файлы и отчёты
 	case "generate_report":
 		return handleGenerateReport(args)
 	case "create_script":
@@ -1711,7 +1624,7 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, ollamaResp)
 
-		cloudProviders := []string{"openai", "anthropic", "yandexgpt", "gigachat", "openrouter", "routeway", "cerebras", "lmstudio"}
+		cloudProviders := []string{"yandexgpt", "gigachat"}
 		for _, name := range cloudProviders {
 			pr := ProviderResponse{Name: name, Guide: getProviderGuide(name)}
 			for _, cfg := range configs {
@@ -3231,68 +3144,6 @@ func handleCheckResourcesBatch(args map[string]interface{}) map[string]interface
 	}
 }
 
-// handleTeamStatus — LEGO-блок: получить статус ВСЕХ агентов за один вызов.
-// Запрашивает информацию о каждом агенте (admin, coder, novice) через
-// handleGetAgentInfo и собирает в единый отчёт о команде.
-func handleTeamStatus() map[string]interface{} {
-	agents := []string{"admin", "coder", "novice"}
-	var teamInfo []map[string]interface{}
-
-	for _, agentName := range agents {
-		info := handleGetAgentInfo(map[string]interface{}{"agent_name": agentName})
-		teamInfo = append(teamInfo, map[string]interface{}{
-			"agent": agentName,
-			"info":  info,
-		})
-	}
-
-	return map[string]interface{}{
-		"success": true,
-		"message": fmt.Sprintf("Статус команды: %d агентов", len(agents)),
-		"team":    teamInfo,
-	}
-}
-
-// handleDelegateTasks — LEGO-блок: делегирование задач нескольким агентам.
-// Отправляет задачу Кодеру и/или Послушнику, собирает оба ответа.
-// Если задача для одного из агентов пустая — пропускает его.
-func handleDelegateTasks(args map[string]interface{}, history []llm.Message) map[string]interface{} {
-	coderTask, _ := args["coder_task"].(string)
-	noviceTask, _ := args["novice_task"].(string)
-
-	if coderTask == "" && noviceTask == "" {
-		return map[string]interface{}{"error": "Нужно указать хотя бы одну задачу: coder_task или novice_task"}
-	}
-
-	result := map[string]interface{}{}
-	delegated := 0
-
-	// Делегируем Кодеру (если задача указана)
-	if coderTask != "" {
-		answer, err := callAgent("coder", coderTask, history)
-		if err != nil {
-			result["coder_error"] = err.Error()
-		} else {
-			result["coder_response"] = answer
-		}
-		delegated++
-	}
-
-	// Делегируем Послушнику (если задача указана)
-	if noviceTask != "" {
-		answer, err := callAgent("novice", noviceTask, history)
-		if err != nil {
-			result["novice_error"] = err.Error()
-		} else {
-			result["novice_response"] = answer
-		}
-		delegated++
-	}
-
-	result["success"] = true
-	result["message"] = fmt.Sprintf("Делегировано задач: %d", delegated)
-	return result
-}
 
 // handleGenerateReport — LEGO-блок: создание текстового отчёта с верификацией.
 // Выполняет: 1) mkdir -p для директории, 2) write содержимого в файл,
@@ -3462,7 +3313,7 @@ func initProvidersFromDB() {
 //  1. Подключение к PostgreSQL и миграции (db.InitDB)
 //  2. Инициализация локального провайдера Ollama (llm.InitProviders)
 //  3. Загрузка конфигурации облачных провайдеров из БД (initProvidersFromDB)
-//  4. Создание агентов по умолчанию (admin, coder, novice), если их нет
+//  4. Создание агента Admin по умолчанию, если его нет
 //  5. Инициализация метрик OpenTelemetry
 //  6. Регистрация HTTP-обработчиков для всех эндпоинтов
 //  7. Настройка раздачи статических файлов из uploads/
@@ -3517,8 +3368,6 @@ func main() {
 		filepath.Join(".", "uploads", "avatars"),
 		filepath.Join(".", "prompts"),
 		filepath.Join(".", "prompts", "admin"),
-		filepath.Join(".", "prompts", "coder"),
-		filepath.Join(".", "prompts", "novice"),
 	} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			log.Printf("Warning: failed to create directory %s: %v", dir, err)

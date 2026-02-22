@@ -9,10 +9,13 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/execmode"
 )
 
 type Role string
@@ -80,20 +83,26 @@ func LoadTokensFromEnv() map[string]Role {
 // Если tokenRoles пуст (legacy-режим), пропускает все запросы с предупреждением.
 func WithAuth(requiredRole Role, tokenRoles map[string]Role, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get("X-Request-ID")
+
 		if len(tokenRoles) == 0 {
-			ctx := context.WithValue(r.Context(), roleContextKey, RoleAdmin)
+			role := RoleAdmin
+			if execmode.IsSafe() {
+				role = RoleViewer
+			}
+			ctx := context.WithValue(r.Context(), roleContextKey, role)
 			next(w, r.WithContext(ctx))
 			return
 		}
 
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, `{"error":"отсутствует заголовок Authorization"}`, http.StatusUnauthorized)
+			writeAuthError(w, http.StatusUnauthorized, "UNAUTHORIZED", "отсутствует заголовок Authorization", "Добавьте Authorization: Bearer <token>", requestID)
 			return
 		}
 
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			http.Error(w, `{"error":"формат: Authorization: Bearer <token>"}`, http.StatusUnauthorized)
+			writeAuthError(w, http.StatusUnauthorized, "UNAUTHORIZED", "формат: Authorization: Bearer <token>", "Используйте Bearer-токен", requestID)
 			return
 		}
 
@@ -101,8 +110,12 @@ func WithAuth(requiredRole Role, tokenRoles map[string]Role, next http.HandlerFu
 		role, ok := tokenRoles[token]
 		if !ok {
 			slog.Warn("Невалидный токен", slog.String("endpoint", r.URL.Path))
-			http.Error(w, `{"error":"невалидный токен"}`, http.StatusUnauthorized)
+			writeAuthError(w, http.StatusUnauthorized, "UNAUTHORIZED", "невалидный токен", "Проверьте TOOLS_AUTH_TOKENS", requestID)
 			return
+		}
+
+		if execmode.IsSafe() {
+			role = RoleViewer
 		}
 
 		if !HasAccess(role, requiredRole) {
@@ -111,13 +124,33 @@ func WithAuth(requiredRole Role, tokenRoles map[string]Role, next http.HandlerFu
 				slog.String("требуется", string(requiredRole)),
 				slog.String("endpoint", r.URL.Path),
 			)
-			http.Error(w, `{"error":"недостаточно прав (требуется `+string(requiredRole)+`)"}`, http.StatusForbidden)
+			writeAuthError(w, http.StatusForbidden, "FORBIDDEN", "недостаточно прав (требуется "+string(requiredRole)+")", "Используйте токен с ролью "+string(requiredRole)+" или выше", requestID)
 			return
 		}
 
 		ctx := context.WithValue(r.Context(), roleContextKey, role)
 		next(w, r.WithContext(ctx))
 	}
+}
+
+type authErrorResponse struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Hint      string `json:"hint,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
+	Retryable bool   `json:"retryable"`
+}
+
+func writeAuthError(w http.ResponseWriter, status int, code, message, hint, requestID string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(authErrorResponse{
+		Code:      code,
+		Message:   message,
+		Hint:      hint,
+		RequestID: requestID,
+		Retryable: false,
+	})
 }
 
 // RoleFromContext — извлекает роль из контекста запроса.

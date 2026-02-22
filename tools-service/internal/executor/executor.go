@@ -15,6 +15,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/execmode"
 )
 
 // extractSubCommands — извлекает имена всех команд из составной команды.
@@ -166,28 +168,33 @@ func CheckCommand(command string) ([]string, error) {
 	return subCommands, nil
 }
 
-// ExecuteCommand — выполняет команду безопасно через bash -c.
+// ExecuteCommand — выполняет команду через bash -c.
 //
-// Алгоритм:
-//  1. Проверка команды на запрещённые паттерны (BlockedPatterns)
-//  2. Извлечение всех подкоманд из цепочки (&&, ||, |, ;)
-//  3. Проверка каждой подкоманды по белому списку (AllowedCommands)
-//  4. Проверка на опасные команды (DangerousCommands)
-//  5. Выполнение через bash -c с захватом stdout и stderr
+// В ADMIN_TRUSTED_MODE: проверки логируются как WARN, но НЕ блокируют выполнение.
+// В обычном режиме: полная проверка (whitelist, dangerous, blocked patterns).
 //
 // Параметр command — строка как в терминале (например, "ls -la && df -h").
 func ExecuteCommand(command string) Result {
+	trusted := execmode.IsTrusted()
 	cmdLower := strings.ToLower(strings.TrimSpace(command))
 
 	if subshellRe.MatchString(command) {
-		slog.Warn("Заблокирована подстановка команды", slog.String("команда", command))
-		return Result{Error: "подстановка команд (backtick/$()) запрещена"}
+		if trusted {
+			slog.Warn("[TRUSTED] Подстановка команды — пропущено", slog.String("команда", command))
+		} else {
+			slog.Warn("Заблокирована подстановка команды", slog.String("команда", command))
+			return Result{Error: "подстановка команд (backtick/$()) запрещена"}
+		}
 	}
 
 	for _, pattern := range BlockedPatterns {
 		if strings.Contains(cmdLower, pattern) {
-			slog.Warn("Заблокирован опасный паттерн", slog.String("паттерн", pattern), slog.String("команда", command))
-			return Result{Error: "command contains blocked pattern: " + pattern}
+			if trusted {
+				slog.Warn("[TRUSTED] Опасный паттерн — пропущено", slog.String("паттерн", pattern), slog.String("команда", command))
+			} else {
+				slog.Warn("Заблокирован опасный паттерн", slog.String("паттерн", pattern), slog.String("команда", command))
+				return Result{Error: "command contains blocked pattern: " + pattern}
+			}
 		}
 	}
 
@@ -197,16 +204,24 @@ func ExecuteCommand(command string) Result {
 	}
 	for _, sub := range subCommands {
 		if !AllowedCommands[sub] {
-			slog.Warn("Команда не в белом списке", slog.String("команда", sub))
-			return Result{Error: "command not allowed: " + sub}
+			if trusted {
+				slog.Warn("[TRUSTED] Команда не в белом списке — пропущено", slog.String("команда", sub))
+			} else {
+				slog.Warn("Команда не в белом списке", slog.String("команда", sub))
+				return Result{Error: "command not allowed: " + sub}
+			}
 		}
 		if reason, blocked := DangerousCommands[sub]; blocked {
-			slog.Warn("Опасная команда заблокирована", slog.String("команда", sub), slog.String("причина", reason))
-			return Result{Error: "dangerous command blocked: " + sub + " — " + reason}
+			if trusted {
+				slog.Warn("[TRUSTED] Опасная команда — пропущено", slog.String("команда", sub), slog.String("причина", reason))
+			} else {
+				slog.Warn("Опасная команда заблокирована", slog.String("команда", sub), slog.String("причина", reason))
+				return Result{Error: "dangerous command blocked: " + sub + " — " + reason}
+			}
 		}
 	}
 
-	slog.Info("Выполнение команды", slog.String("команда", command))
+	slog.Info("Выполнение команды", slog.String("команда", command), slog.String("режим", execmode.String()))
 	cmd := exec.Command("bash", "-c", command)
 
 	stdout, err := cmd.Output()

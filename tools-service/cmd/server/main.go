@@ -9,10 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/apierror"
 	"github.com/neo-2022/openclaw-memory/tools-service/internal/auth"
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/execmode"
 	"github.com/neo-2022/openclaw-memory/tools-service/internal/executor"
 	"github.com/neo-2022/openclaw-memory/tools-service/internal/logger"
 )
@@ -57,6 +60,21 @@ type AddAutostartRequest struct {
 	AppName string `json:"app_name"`
 }
 
+var toolsRequestCounter uint64
+
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			n := atomic.AddUint64(&toolsRequestCounter, 1)
+			requestID = fmt.Sprintf("tools-%d-%d", time.Now().UnixNano(), n)
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		r.Header.Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -65,7 +83,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 func executeHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -73,7 +91,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	var req ExecuteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "execute"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 
@@ -81,9 +99,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 	subCmds, err := executor.CheckCommand(req.Command)
 	if err != nil {
 		logger.С(ctx).Warn("Команда заблокирована", slog.String("команда", req.Command), slog.String("ошибка", err.Error()))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		apierror.Forbidden(w, cid, err.Error(), "Команда не прошла проверку безопасности")
 		return
 	}
 	for _, sub := range subCmds {
@@ -92,9 +108,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 				slog.String("роль", string(role)),
 				slog.String("команда", sub),
 			)
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusForbidden)
-			json.NewEncoder(w).Encode(map[string]string{"error": "команда " + sub + " недоступна для роли " + string(role)})
+			apierror.Forbidden(w, cid, "команда "+sub+" недоступна для роли "+string(role), "Требуется роль с более высоким уровнем доступа")
 			return
 		}
 	}
@@ -114,7 +128,7 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 
 func readFileHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -122,23 +136,24 @@ func readFileHandler(w http.ResponseWriter, r *http.Request) {
 	var req ReadFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "read"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	logger.С(ctx).Info("Чтение файла", slog.String("путь", req.Path))
 	content, err := executor.ReadFile(req.Path)
 	if err != nil {
 		logger.С(ctx).Error("Ошибка чтения файла", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Проверьте путь и права доступа")
 		return
 	}
 	logger.С(ctx).Info("Файл прочитан", slog.Int("байт", len(content)), slog.String("путь", req.Path))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"content": content})
 }
 
 func writeFileHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -146,23 +161,24 @@ func writeFileHandler(w http.ResponseWriter, r *http.Request) {
 	var req WriteFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "write"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	logger.С(ctx).Info("Запись файла", slog.String("путь", req.Path), slog.Int("байт", len(req.Content)))
 	err := executor.WriteFile(req.Path, req.Content)
 	if err != nil {
 		logger.С(ctx).Error("Ошибка записи файла", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Проверьте путь и права доступа")
 		return
 	}
 	logger.С(ctx).Info("Файл записан", slog.String("путь", req.Path))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func listDirHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -170,23 +186,24 @@ func listDirHandler(w http.ResponseWriter, r *http.Request) {
 	var req ListDirRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "list"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	logger.С(ctx).Info("Листинг директории", slog.String("путь", req.Path))
 	files, err := executor.ListDirectory(req.Path)
 	if err != nil {
 		logger.С(ctx).Error("Ошибка чтения директории", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Проверьте путь и права доступа")
 		return
 	}
 	logger.С(ctx).Info("Директория прочитана", slog.Int("файлов", len(files)), slog.String("путь", req.Path))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string][]string{"files": files})
 }
 
 func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -194,17 +211,18 @@ func deleteFileHandler(w http.ResponseWriter, r *http.Request) {
 	var req DeleteFileRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "delete"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	logger.С(ctx).Info("Удаление файла", slog.String("путь", req.Path))
 	err := executor.DeleteFile(req.Path)
 	if err != nil {
 		logger.С(ctx).Error("Ошибка удаления файла", slog.String("путь", req.Path), slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Проверьте путь и права доступа")
 		return
 	}
 	logger.С(ctx).Info("Файл удалён", slog.String("путь", req.Path))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
@@ -218,20 +236,28 @@ func systemInfoHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func cpuInfoHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	data, err := executor.GetCPUInfo()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logger.С(ctx).Error("Ошибка получения информации CPU", slog.String("ошибка", err.Error()))
+		apierror.InternalError(w, cid, err.Error(), "Попробуйте повторить запрос позже")
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"cpuinfo": data})
 }
 
 func memInfoHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	data, err := executor.GetMemInfo()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logger.С(ctx).Error("Ошибка получения информации памяти", slog.String("ошибка", err.Error()))
+		apierror.InternalError(w, cid, err.Error(), "Попробуйте повторить запрос позже")
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"meminfo": data})
 }
 
@@ -242,10 +268,11 @@ func cpuTemperatureHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := executor.GetCPUTemperature()
 	if err != nil {
 		logger.С(ctx).Error("Ошибка получения температуры", slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Попробуйте повторить запрос позже")
 		return
 	}
 	logger.С(ctx).Info("Температура получена", slog.Int("байт", len(data)))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"temperature": data})
 }
 
@@ -256,16 +283,17 @@ func systemLoadHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := executor.GetSystemLoad()
 	if err != nil {
 		logger.С(ctx).Error("Ошибка получения загрузки", slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Попробуйте повторить запрос позже")
 		return
 	}
 	logger.С(ctx).Info("Загрузка системы получена")
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(data)
 }
 
 func findAppHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -273,23 +301,24 @@ func findAppHandler(w http.ResponseWriter, r *http.Request) {
 	var req FindAppRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "findapp"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	logger.С(ctx).Info("Поиск приложения", slog.String("имя", req.Name))
 	apps, err := executor.FindApplication(req.Name)
 	if err != nil {
 		logger.С(ctx).Error("Ошибка поиска приложения", slog.String("имя", req.Name), slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Попробуйте изменить запрос поиска")
 		return
 	}
 	logger.С(ctx).Info("Приложения найдены", slog.Int("количество", len(apps)), slog.String("имя", req.Name))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"found": apps})
 }
 
 func launchAppHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, r.Header.Get("X-Request-ID"))
 		return
 	}
 	cid := r.Header.Get("X-Request-ID")
@@ -297,42 +326,46 @@ func launchAppHandler(w http.ResponseWriter, r *http.Request) {
 	var req LaunchAppRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		logger.С(ctx).Error("Ошибка парсинга JSON", slog.String("обработчик", "launchapp"), slog.String("ошибка", err.Error()))
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	logger.С(ctx).Info("Запуск приложения", slog.String("файл", req.DesktopFile))
 	err := executor.LaunchApplication(req.DesktopFile)
 	if err != nil {
 		logger.С(ctx).Error("Ошибка запуска приложения", slog.String("файл", req.DesktopFile), slog.String("ошибка", err.Error()))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "Проверьте путь к .desktop файлу")
 		return
 	}
 	logger.С(ctx).Info("Приложение запущено", slog.String("файл", req.DesktopFile))
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func addAutostartHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
+	ctx := logger.WithCorrelationID(r.Context(), cid)
 	var req AddAutostartRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
-	// сначала ищем приложение
+	logger.С(ctx).Info("Добавление в автозапуск", slog.String("приложение", req.AppName))
 	apps, err := executor.FindApplication(req.AppName)
 	if err != nil || len(apps) == 0 {
-		http.Error(w, "Application not found", http.StatusNotFound)
+		apierror.NotFound(w, cid, "Приложение не найдено")
 		return
 	}
-	// берём первое
 	err = executor.AddToAutostart(apps[0].DesktopPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		logger.С(ctx).Error("Ошибка добавления в автозапуск", slog.String("ошибка", err.Error()))
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
@@ -356,14 +389,15 @@ func getYandexDiskClient() (*executor.YandexDiskClient, error) {
 // ydiskInfoHandler — возвращает информацию о Яндекс.Диске пользователя.
 // GET /ydisk/info
 func ydiskInfoHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	info, err := client.GetDiskInfo()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -373,9 +407,10 @@ func ydiskInfoHandler(w http.ResponseWriter, r *http.Request) {
 // ydiskListHandler — возвращает содержимое папки на Яндекс.Диске.
 // GET /ydisk/list?path=/&limit=20&offset=0
 func ydiskListHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	path := r.URL.Query().Get("path")
@@ -384,7 +419,7 @@ func ydiskListHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	resource, err := client.ListDir(path, 100, 0)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	var items []executor.SimpleDiskItem
@@ -402,19 +437,20 @@ func ydiskListHandler(w http.ResponseWriter, r *http.Request) {
 // ydiskDownloadHandler — скачивает файл с Яндекс.Диска.
 // GET /ydisk/download?path=/Documents/file.txt
 func ydiskDownloadHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	path := r.URL.Query().Get("path")
 	if path == "" {
-		http.Error(w, "параметр path обязателен", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "параметр path обязателен", "Добавьте ?path=/...")
 		return
 	}
 	data, err := client.DownloadFile(path)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -432,23 +468,24 @@ type YdiskUploadRequest struct {
 // ydiskUploadHandler — загружает файл на Яндекс.Диск.
 // POST /ydisk/upload {"path":"/Documents/file.txt","content":"..."}
 func ydiskUploadHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	var req YdiskUploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	err = client.UploadFile(req.Path, strings.NewReader(req.Content), req.Overwrite)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -463,23 +500,24 @@ type YdiskCreateDirRequest struct {
 // ydiskCreateDirHandler — создаёт папку на Яндекс.Диске.
 // POST /ydisk/mkdir {"path":"/Projects/NewProject"}
 func ydiskCreateDirHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	var req YdiskCreateDirRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	err = client.CreateDir(req.Path)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -495,23 +533,24 @@ type YdiskDeleteRequest struct {
 // ydiskDeleteHandler — удаляет файл или папку с Яндекс.Диска.
 // POST /ydisk/delete {"path":"/old_file.txt","permanently":false}
 func ydiskDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	var req YdiskDeleteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	err = client.Delete(req.Path, req.Permanently)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -528,23 +567,24 @@ type YdiskMoveRequest struct {
 // ydiskMoveHandler — перемещает файл/папку на Яндекс.Диске.
 // POST /ydisk/move {"from":"/old.txt","to":"/new.txt"}
 func ydiskMoveHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	var req YdiskMoveRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	err = client.Move(req.From, req.To, req.Overwrite)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -565,18 +605,19 @@ type OpenURLRequest struct {
 // openURLHandler — открывает URL в браузере пользователя через xdg-open.
 // POST /browser/open {"url":"https://chat.openai.com"}
 func openURLHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var req OpenURLRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	err := executor.OpenURL(req.URL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -591,18 +632,19 @@ type FetchURLRequest struct {
 // fetchURLHandler — получает текстовое содержимое веб-страницы.
 // POST /browser/fetch {"url":"https://example.com"}
 func fetchURLHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var req FetchURLRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	statusCode, body, err := executor.FetchURL(req.URL)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -623,18 +665,19 @@ type SendToAIChatRequest struct {
 // sendToAIChatHandler — отправляет POST-запрос к AI-чату.
 // POST /browser/ai-chat {"url":"...","payload":"..."}
 func sendToAIChatHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var req SendToAIChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	statusCode, body, err := executor.SendToAIChat(req.URL, req.Payload, req.ContentType)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -646,15 +689,16 @@ func sendToAIChatHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func ydiskSearchHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	client, err := getYandexDiskClient()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		apierror.ServiceUnavailable(w, cid, err.Error(), "Настройте YANDEX_DISK_TOKEN")
 		return
 	}
 	mediaType := r.URL.Query().Get("media_type")
 	results, err := client.Search(mediaType, 50, 0)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	items := executor.ToSimpleItems(results)
@@ -667,6 +711,7 @@ func ydiskSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	logger.Init("tools-service")
+	execmode.Init()
 
 	tokenRoles := auth.LoadTokensFromEnv()
 
@@ -710,7 +755,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         ":" + port,
-		Handler:      mux,
+		Handler:      requestIDMiddleware(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  60 * time.Second,

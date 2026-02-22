@@ -28,9 +28,17 @@ class SearchRequest(BaseModel):
     include_files: bool = Field(False, description="Включать ли фрагменты файлов")
 
 
+class SearchResultItem(BaseModel):
+    """Структурированный результат поиска."""
+    text: str = Field(..., description="Текст найденного документа")
+    score: float = Field(0.0, description="Оценка релевантности (0..1)")
+    source: str = Field("facts", description="Источник: facts, files, learnings")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Метаданные документа")
+
+
 class SearchResponse(BaseModel):
-    """Ответ на поиск."""
-    results: List[str] = Field(default_factory=list)
+    """Ответ на поиск — структурированный формат с оценками и метаданными."""
+    results: List[SearchResultItem] = Field(default_factory=list)
     count: int
 
 
@@ -109,8 +117,8 @@ class LearningSearchRequest(BaseModel):
 
 
 class LearningSearchResponse(BaseModel):
-    """Ответ на поиск знаний."""
-    results: List[str] = Field(default_factory=list)
+    """Ответ на поиск знаний — структурированный формат."""
+    results: List[SearchResultItem] = Field(default_factory=list)
     count: int
     model_name: str
 

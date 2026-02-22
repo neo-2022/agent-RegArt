@@ -1508,9 +1508,14 @@ func fetchModelLearnings(modelName string, query string) []string {
 	}
 
 	var result struct {
-		Results   []string `json:"results"`
-		Count     int      `json:"count"`
-		ModelName string   `json:"model_name"`
+		Results []struct {
+			Text     string                 `json:"text"`
+			Score    float64                `json:"score"`
+			Source   string                 `json:"source"`
+			Metadata map[string]interface{} `json:"metadata"`
+		} `json:"results"`
+		Count     int    `json:"count"`
+		ModelName string `json:"model_name"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		slog.Error("Ошибка декодирования ответа знаний", slog.String("ошибка", err.Error()))
@@ -1520,7 +1525,11 @@ func fetchModelLearnings(modelName string, query string) []string {
 	if len(result.Results) > 0 {
 		slog.Info("Знания найдены", slog.Int("количество", len(result.Results)), slog.String("модель", modelName))
 	}
-	return result.Results
+	texts := make([]string, 0, len(result.Results))
+	for _, r := range result.Results {
+		texts = append(texts, r.Text)
+	}
+	return texts
 }
 
 // extractAndStoreLearnings — извлечение и сохранение знаний из диалога.

@@ -1,8 +1,12 @@
 
 # Игнорируем скомпилированные бинарники
 agent-service/agent-agent
+agent-service/server
 api-gateway/agent-gateway
+api-gateway/api-gateway
 tools-service/agent-tools
+tools-service/server
+browser-service/server
 
 # Игнорируем базы данных и временные файлы Chroma
 *.sqlite3

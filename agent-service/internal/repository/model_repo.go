@@ -95,10 +95,10 @@ func parseParamSize(s string) float64 {
 }
 
 // isCodeModel — определяет, является ли модель специализированной на генерации кода.
-// Проверяет имя модели и семейство на наличие ключевых слов: coder, code, codestral, deepseek-coder.
+// Проверяет имя модели и семейство на наличие ключевых слов: code, codestral, codellama, codegemma.
 func isCodeModel(modelName, family string) bool {
 	lower := strings.ToLower(modelName)
-	codeKeywords := []string{"coder", "code", "codestral", "deepseek-coder", "starcoder", "codellama", "codegemma"}
+	codeKeywords := []string{"code", "codestral", "codellama", "codegemma"}
 	for _, kw := range codeKeywords {
 		if strings.Contains(lower, kw) {
 			return true

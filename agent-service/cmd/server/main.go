@@ -3160,7 +3160,6 @@ func handleCheckResourcesBatch(args map[string]interface{}) map[string]interface
 	}
 }
 
-
 // handleGenerateReport — LEGO-блок: создание текстового отчёта с верификацией.
 // Выполняет: 1) mkdir -p для директории, 2) write содержимого в файл,
 // 3) read для проверки записи, 4) stat для проверки размера файла.

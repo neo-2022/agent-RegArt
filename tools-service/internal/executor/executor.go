@@ -61,7 +61,7 @@ var AllowedCommands = map[string]bool{
 	"ip": true, "ifconfig": true, "netstat": true, "ss": true, "ping": true,
 	"mount": true, "umount": true,
 	"crontab": true,
-	"diff": true, "patch": true, "env": true, "true": true,
+	"diff":    true, "patch": true, "env": true, "true": true,
 }
 
 // DangerousCommands — команды, запрещённые для прямого вызова через API.

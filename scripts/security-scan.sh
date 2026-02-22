@@ -54,5 +54,43 @@ for svc in agent-service api-gateway tools-service; do
   fi
 done
 
+# Аудит Dockerfile: проверка non-root пользователя и HEALTHCHECK
+echo "--- Аудит Dockerfile ---"
+for df in agent-service/Dockerfile api-gateway/Dockerfile tools-service/Dockerfile memory-service/Dockerfile; do
+  if [ ! -f "$df" ]; then
+    echo "[ВНИМАНИЕ] $df не найден"
+    continue
+  fi
+  if ! grep -q "^USER" "$df"; then
+    echo "[ВНИМАНИЕ] $df: контейнер запускается от root (нет директивы USER)"
+    ERRORS=$((ERRORS+1))
+  else
+    echo "[OK] $df: non-root USER задан"
+  fi
+  if ! grep -q "HEALTHCHECK" "$df"; then
+    echo "[ВНИМАНИЕ] $df: HEALTHCHECK не задан"
+  else
+    echo "[OK] $df: HEALTHCHECK задан"
+  fi
+done
+
+# Проверка docker-compose на cap_drop: ALL
+echo "--- Аудит docker-compose.yml ---"
+if [ -f docker-compose.yml ]; then
+  CAP_COUNT=$(grep -c 'cap_drop' docker-compose.yml 2>/dev/null || true)
+  echo "[INFO] cap_drop директив найдено: $CAP_COUNT"
+  if grep -q 'read_only: true' docker-compose.yml; then
+    echo "[OK] read_only: true найдено"
+  fi
+fi
+
+# Проверка на потенциальные RCE через os/exec без валидации
+echo "--- Проверка RCE-паттернов ---"
+if grep -rn 'exec.Command' --include="*.go" --exclude-dir=vendor . 2>/dev/null | grep -v '_test.go' | grep -v 'executor.go' | grep -v 'sandbox.go'; then
+  echo "[ВНИМАНИЕ] Найдены вызовы exec.Command вне executor/sandbox — проверьте вручную"
+else
+  echo "[OK] exec.Command используется только в executor/sandbox"
+fi
+
 echo "=== Сканирование завершено (ошибок: $ERRORS) ==="
 exit $ERRORS

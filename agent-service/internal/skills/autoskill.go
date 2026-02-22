@@ -161,6 +161,7 @@ func (p *AutoSkillPipeline) Rollback(intent string) error {
 		if len(history) > 1 {
 			prev := history[len(history)-2]
 			p.candidates[key] = &prev
+			p.publishedSkills[key] = history[:len(history)-1]
 			slog.Info("[AUTO-SKILL] Откат к предыдущей версии",
 				slog.String("intent", intent),
 				slog.Int("версия", prev.Version))

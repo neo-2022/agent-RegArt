@@ -17,30 +17,18 @@ import (
 // Параметр modelName используется для определения размера модели.
 // Если modelName пустой — считаем модель слабой (безопасный дефолт).
 func GetToolsForAgent(agentName string, modelName ...string) []llm.Tool {
-	// Определяем, слабая ли модель (3B и меньше)
 	isWeakModel := true
 	if len(modelName) > 0 && modelName[0] != "" {
 		m := modelName[0]
-		// Модели 7B+ считаются сильными: llama3, mistral, qwen2.5:7b, qwen2.5:14b и т.д.
-		// Модели 3B и меньше считаются слабыми: qwen2.5:3b, qwen2.5:1.5b, phi-3-mini и т.д.
-		// Также все облачные модели (через OpenRouter) считаются сильными.
 		isWeakModel = isSmallModel(m)
 	}
 
-	if agentName == "admin" {
-		if isWeakModel {
-			// Слабая модель: ТОЛЬКО составные скилы (LEGO-блоки).
-			// Модель вызывает 3-5 скилов вместо 15+ базовых инструментов.
-			return GetCompoundSkillTools()
-		}
-		// Сильная модель: базовые + оркестрация. Сама строит цепочку.
-		base := GetBaseTools()
-		base = append(base, GetOrchestratorTools()...)
-		return base
+	if isWeakModel {
+		return GetCompoundSkillTools()
 	}
-
-	// Для coder и novice — только базовые инструменты.
-	return GetBaseTools()
+	base := GetBaseTools()
+	base = append(base, GetAdminTools()...)
+	return base
 }
 
 // isSmallModel — определяет, является ли модель слабой (3B и меньше).
@@ -188,41 +176,7 @@ func GetCompoundSkillTools() []llm.Tool {
 			},
 		},
 		// =====================================================================
-		// БЛОК 3: Команда — статус агентов, делегирование
-		// =====================================================================
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        "team_status",
-				Description: "Универсальный LEGO-блок: получить статус ВСЕХ агентов (admin, coder, novice) за один вызов. Показывает модель, провайдера, промпт и готовность каждого. ПРИОРИТЕТ: сначала попробуй вызвать get_agent_info для каждого агента отдельно. Используй этот скил ТОЛЬКО если не можешь.",
-				Parameters: map[string]any{
-					"type":       "object",
-					"properties": map[string]any{},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        "delegate_tasks",
-				Description: "Универсальный LEGO-блок: поручить задачи нескольким агентам за один вызов. Отправляет задачу Кодеру И Послушнику одновременно, собирает оба ответа. ПРИОРИТЕТ: сначала попробуй вызвать call_coder и call_novice по отдельности. Используй этот скил ТОЛЬКО если не можешь.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"coder_task": map[string]any{
-							"type":        "string",
-							"description": "Задача для Кодера (программирование, скрипты, код). Оставь пустым если задача для Кодера не нужна.",
-						},
-						"novice_task": map[string]any{
-							"type":        "string",
-							"description": "Задача для Послушника (документация, инструкции, поиск). Оставь пустым если задача для Послушника не нужна.",
-						},
-					},
-				},
-			},
-		},
-		// =====================================================================
-		// БЛОК 4: Файлы и отчёты
+		// БЛОК 3: Файлы и отчёты
 		// =====================================================================
 		{
 			Type: "function",
@@ -398,42 +352,8 @@ func GetCompoundSkillTools() []llm.Tool {
 	}
 }
 
-func GetOrchestratorTools() []llm.Tool {
+func GetAdminTools() []llm.Tool {
 	return []llm.Tool{
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        "call_coder",
-				Description: "Вызвать агента Coder для выполнения задачи, связанной с программированием.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"task": map[string]any{
-							"type":        "string",
-							"description": "Задача для кодера",
-						},
-					},
-					"required": []string{"task"},
-				},
-			},
-		},
-		{
-			Type: "function",
-			Function: llm.FunctionDefinition{
-				Name:        "call_novice",
-				Description: "Вызвать агента Novice для простых вопросов или поиска информации.",
-				Parameters: map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"task": map[string]any{
-							"type":        "string",
-							"description": "Задача для послушника",
-						},
-					},
-					"required": []string{"task"},
-				},
-			},
-		},
 		{
 			Type: "function",
 			Function: llm.FunctionDefinition{
@@ -501,13 +421,13 @@ func GetOrchestratorTools() []llm.Tool {
 			Type: "function",
 			Function: llm.FunctionDefinition{
 				Name:        "configure_agent",
-				Description: "Настроить агента: изменить модель, провайдера или промпт. Админ может настраивать Кодера и Послушника, подбирая правильные модели на их роли.",
+				Description: "Настроить агента: изменить модель, провайдера или промпт.",
 				Parameters: map[string]any{
 					"type": "object",
 					"properties": map[string]any{
 						"agent_name": map[string]any{
 							"type":        "string",
-							"description": "Имя агента для настройки (coder, novice, admin)",
+							"description": "Имя агента для настройки (admin)",
 						},
 						"model": map[string]any{
 							"type":        "string",
@@ -515,7 +435,7 @@ func GetOrchestratorTools() []llm.Tool {
 						},
 						"provider": map[string]any{
 							"type":        "string",
-							"description": "Провайдер модели: ollama, openai, anthropic, yandexgpt, gigachat (опционально)",
+							"description": "Провайдер модели: ollama, yandexgpt, gigachat (опционально)",
 						},
 						"prompt": map[string]any{
 							"type":        "string",
@@ -536,7 +456,7 @@ func GetOrchestratorTools() []llm.Tool {
 					"properties": map[string]any{
 						"agent_name": map[string]any{
 							"type":        "string",
-							"description": "Имя агента (admin, coder, novice)",
+							"description": "Имя агента (admin)",
 						},
 					},
 					"required": []string{"agent_name"},
@@ -553,7 +473,7 @@ func GetOrchestratorTools() []llm.Tool {
 					"properties": map[string]any{
 						"role": map[string]any{
 							"type":        "string",
-							"description": "Роль агента: admin, coder, novice",
+							"description": "Роль агента: admin",
 						},
 					},
 					"required": []string{"role"},
@@ -1008,7 +928,7 @@ func GetOrchestratorTools() []llm.Tool {
 }
 
 func GetAllTools() []llm.Tool {
-	return append(GetBaseTools(), GetOrchestratorTools()...)
+	return append(GetBaseTools(), GetAdminTools()...)
 }
 
 func GetBaseTools() []llm.Tool {

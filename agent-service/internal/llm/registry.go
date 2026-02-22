@@ -82,8 +82,6 @@ func (r *Registry) ListAll() []ProviderInfo {
 //
 // Ollama регистрируется всегда (по умолчанию http://localhost:11434).
 // Облачные провайдеры регистрируются только при наличии API-ключей:
-//   - OPENAI_API_KEY, OPENAI_BASE_URL — для OpenAI (GPT-4, GPT-4o и др.)
-//   - ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL — для Anthropic (Claude)
 //   - YANDEXGPT_API_KEY, YANDEXGPT_FOLDER_ID, YANDEXGPT_BASE_URL — для YandexGPT
 //   - GIGACHAT_CLIENT_SECRET, GIGACHAT_CLIENT_ID, GIGACHAT_SCOPE, GIGACHAT_BASE_URL — для GigaChat
 func InitProviders() {
@@ -94,19 +92,7 @@ func InitProviders() {
 	}
 	GlobalRegistry.Register(NewOllamaProvider(ollamaURL))
 
-	// OpenAI — облачный провайдер (GPT-4, GPT-4o, GPT-3.5-turbo и др.)
-	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
-		baseURL := os.Getenv("OPENAI_BASE_URL")
-		GlobalRegistry.Register(NewOpenAIProvider(key, baseURL))
-	}
-
-	// Anthropic — облачный провайдер (Claude Sonnet, Haiku, Opus)
-	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
-		baseURL := os.Getenv("ANTHROPIC_BASE_URL")
-		GlobalRegistry.Register(NewAnthropicProvider(key, baseURL))
-	}
-
-	// YandexGPT — российский облачный провайдер от Яндекса
+	// YandexGPT— российский облачный провайдер от Яндекса
 	// Требует API-ключ и ID каталога (folder_id) из Yandex Cloud
 	if key := os.Getenv("YANDEXGPT_API_KEY"); key != "" {
 		folderID := os.Getenv("YANDEXGPT_FOLDER_ID")
@@ -123,41 +109,6 @@ func InitProviders() {
 		baseURL := os.Getenv("GIGACHAT_BASE_URL")
 		GlobalRegistry.Register(NewGigaChatProvider(clientID, secret, scope, baseURL))
 	}
-
-	// OpenRouter — агрегатор LLM-моделей (сотни моделей через один API-ключ)
-	// Поддерживает модели от OpenAI, Anthropic, Google, Meta, Mistral, DeepSeek и др.
-	// API полностью совместим с OpenAI Chat Completions API
-	if key := os.Getenv("OPENROUTER_API_KEY"); key != "" {
-		baseURL := os.Getenv("OPENROUTER_BASE_URL")
-		GlobalRegistry.Register(NewOpenRouterProvider(key, baseURL))
-	}
-
-	// Routeway — альтернативный агрегатор LLM-моделей (70+ моделей)
-	// 200 бесплатных запросов в день (в 4 раза больше OpenRouter)
-	// Бесплатные модели: llama-3.1-8b-instruct:free, deepseek-r1:free и др.
-	// API полностью совместим с OpenAI Chat Completions API
-	if key := os.Getenv("ROUTEWAY_API_KEY"); key != "" {
-		baseURL := os.Getenv("ROUTEWAY_BASE_URL")
-		GlobalRegistry.Register(NewRoutewayProvider(key, baseURL))
-	}
-
-	// Cerebras — сверхбыстрый облачный инференс (до 2500 токенов/сек)
-	// Free tier: 1M токенов/день, 30 RPM, без карты
-	// Модели: llama3.1-8b, gpt-oss-120b, qwen-3-32b, qwen-3-235b, zai-glm-4.7
-	// API полностью совместим с OpenAI Chat Completions API
-	if key := os.Getenv("CEREBRAS_API_KEY"); key != "" {
-		baseURL := os.Getenv("CEREBRAS_BASE_URL")
-		GlobalRegistry.Register(NewCerebrasProvider(key, baseURL))
-	}
-
-	// LM Studio — бесплатное десктопное приложение для запуска LLM локально.
-	// Без лимитов запросов, работает офлайн, OpenAI-совместимый API.
-	// По умолчанию сервер на http://localhost:1234/v1
-	// Регистрируется ВСЕГДА (как и Ollama) — если LM Studio не запущен,
-	// ListModels() вернёт пустой список без ошибки.
-	lmsURL := os.Getenv("LMSTUDIO_BASE_URL")
-	lmsKey := os.Getenv("LMSTUDIO_API_KEY")
-	GlobalRegistry.Register(NewLMStudioProvider(lmsKey, lmsURL))
 }
 
 // RegisterProvider — динамически регистрирует провайдера по имени и параметрам.
@@ -171,26 +122,10 @@ func InitProviders() {
 // новым экземпляром с обновлёнными настройками.
 func RegisterProvider(name, apiKey, baseURL, extra, saJSON string) error {
 	switch name {
-	case "openai":
-		GlobalRegistry.Register(NewOpenAIProvider(apiKey, baseURL))
-	case "anthropic":
-		GlobalRegistry.Register(NewAnthropicProvider(apiKey, baseURL))
 	case "yandexgpt":
 		GlobalRegistry.Register(NewYandexGPTProvider(apiKey, extra, baseURL, saJSON))
 	case "gigachat":
-		// extra = scope для GigaChat, apiKey = client_secret
 		GlobalRegistry.Register(NewGigaChatProvider("", apiKey, extra, baseURL))
-	case "openrouter":
-		// OpenRouter — агрегатор LLM-моделей, один API-ключ для всех
-		GlobalRegistry.Register(NewOpenRouterProvider(apiKey, baseURL))
-	case "routeway":
-		// Routeway — альтернативный агрегатор (200 бесплатных запросов/день)
-		GlobalRegistry.Register(NewRoutewayProvider(apiKey, baseURL))
-	case "cerebras":
-		GlobalRegistry.Register(NewCerebrasProvider(apiKey, baseURL))
-	case "lmstudio":
-		// LM Studio — бесплатный локальный провайдер (без лимитов)
-		GlobalRegistry.Register(NewLMStudioProvider(apiKey, baseURL))
 	case "ollama":
 		if baseURL == "" {
 			baseURL = "http://localhost:11434"

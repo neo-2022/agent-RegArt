@@ -21,13 +21,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/neo-2022/openclaw-memory/api-gateway/gates"
+	"github.com/neo-2022/openclaw-memory/api-gateway/internal/middleware"
 )
 
 // parseAllowedOrigins — разбирает переменную окружения CORS_ALLOWED_ORIGINS
@@ -61,11 +65,52 @@ func parseAllowedOrigins() map[string]struct{} {
 //   - next: следующий обработчик в цепочке
 //   - allowedMethods: разрешённые HTTP-методы для данного маршрута
 //   - allowedOrigins: белый список доменов
+var requestCounter uint64
+
+func generateRequestID() string {
+	requestCounter++
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), requestCounter)
+}
+
+func requestIDMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = generateRequestID()
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		r.Header.Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r)
+	}
+}
+
+func panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("[GATEWAY] PANIC: %v (path=%s)", err, r.URL.Path)
+				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	}
+}
+
+func timeoutMiddleware(next http.HandlerFunc, timeout time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		duration := time.Since(start)
+		if duration > timeout {
+			log.Printf("[GATEWAY] SLOW: %s %s занял %v (лимит %v)", r.Method, r.URL.Path, duration, timeout)
+		}
+	}
+}
+
 func corsMiddleware(next http.HandlerFunc, allowedMethods []string, allowedOrigins map[string]struct{}) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {
-			// Проверяем, разрешён ли домен запроса
 			if _, ok := allowedOrigins[origin]; ok {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Add("Vary", "Origin")
@@ -75,7 +120,6 @@ func corsMiddleware(next http.HandlerFunc, allowedMethods []string, allowedOrigi
 		w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
-		// Preflight-запрос (OPTIONS) — отвечаем 204 без дальнейшей обработки
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -94,6 +138,21 @@ func main() {
 	toolsURL := getEnv("TOOLS_SERVICE_URL", "http://localhost:8082")
 	agentURL := getEnv("AGENT_SERVICE_URL", "http://localhost:8083")
 	port := getEnv("GATEWAY_PORT", "8080")
+
+	// Ограничитель частоты запросов: настраиваемый через переменные окружения
+	rlLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_RPS", "60"))
+	rlWindow, _ := time.ParseDuration(getEnv("RATE_LIMIT_WINDOW", "1m"))
+	rateLimiter := middleware.NewRateLimiter(rlLimit, rlWindow)
+	rateLimitMW := middleware.RateLimitMiddleware(rateLimiter)
+	log.Printf("[GATEWAY] Ограничитель частоты: %d запросов / %v", rlLimit, rlWindow)
+
+	// Предохранители от отказов для каждого бэкенда
+	cbMemory := middleware.NewCircuitBreaker(5, 30*time.Second)
+	cbTools := middleware.NewCircuitBreaker(5, 30*time.Second)
+	cbAgent := middleware.NewCircuitBreaker(10, 30*time.Second)
+
+	// Мидлварь распределённой трассировки
+	traceMW := middleware.TracingMiddleware("api-gateway")
 
 	// Парсим URL для создания reverse proxy
 	memoryTarget, _ := url.Parse(memoryURL)
@@ -153,17 +212,51 @@ func main() {
 			proxy = gates.NewProxyWithoutStrip(r.Target)
 		}
 		// Оборачиваем proxy в CORS middleware с проверкой допустимых HTTP-методов
-		handler := corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			log.Printf("[GATEWAY] %s %s → %s (target: %s)", req.Method, req.URL.Path, r.Path, r.Target.Host)
-			for _, m := range r.Methods {
-				if m == req.Method {
-					proxy.ServeHTTP(w, req)
-					return
-				}
-			}
-			log.Printf("[GATEWAY] ОТКАЗ: метод %s не разрешён для %s", req.Method, req.URL.Path)
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}), r.Methods, allowedOrigins)
+		routeTimeout := 60 * time.Second
+		if r.Path == "/chat" {
+			routeTimeout = 300 * time.Second
+		}
+
+		// Выбираем предохранитель по целевому сервису
+		var cb *middleware.CircuitBreaker
+		var svcName string
+		switch r.Target {
+		case memoryTarget:
+			cb = cbMemory
+			svcName = "memory"
+		case toolsTarget:
+			cb = cbTools
+			svcName = "tools"
+		default:
+			cb = cbAgent
+			svcName = "agent"
+		}
+		cbMW := middleware.CircuitBreakerMiddleware(cb, svcName)
+
+		handler := requestIDMiddleware(
+			traceMW(
+				rateLimitMW(
+					panicRecoveryMiddleware(
+						timeoutMiddleware(
+							cbMW(
+								corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+									log.Printf("[GATEWAY] %s %s → %s (target: %s, rid: %s)", req.Method, req.URL.Path, r.Path, r.Target.Host, req.Header.Get("X-Request-ID"))
+									for _, m := range r.Methods {
+										if m == req.Method {
+											proxy.ServeHTTP(w, req)
+											return
+										}
+									}
+									log.Printf("[GATEWAY] ОТКАЗ: метод %s не разрешён для %s", req.Method, req.URL.Path)
+									http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+								}), r.Methods, allowedOrigins),
+							),
+							routeTimeout,
+						),
+					),
+				),
+			),
+		)
 
 		http.Handle(r.Path, handler)
 	}

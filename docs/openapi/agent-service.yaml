@@ -1,0 +1,429 @@
+openapi: 3.0.3
+info:
+  title: API сервиса агентов
+  description: Управление агентами, чат с LLM, модели, провайдеры, рабочие пространства
+  version: 1.0.0
+servers:
+  - url: http://localhost:8083
+    description: Локальная разработка
+paths:
+  /chat:
+    post:
+      tags: [Chat]
+      summary: Отправить сообщение агенту
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: Ответ агента (потоковый SSE)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /agents/:
+    get:
+      tags: [Agents]
+      summary: Список агентов
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+    post:
+      tags: [Agents]
+      summary: Обновить агента
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentUpdate'
+      responses:
+        '200':
+          description: ОК
+
+  /models:
+    get:
+      tags: [Models]
+      summary: Список доступных моделей
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Model'
+
+  /update-model:
+    post:
+      tags: [Models]
+      summary: Обновить модель агента
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_name:
+                  type: string
+                model:
+                  type: string
+              required: [agent_name, model]
+      responses:
+        '200':
+          description: ОК
+
+  /providers:
+    get:
+      tags: [Providers]
+      summary: Список провайдеров LLM
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProviderConfig'
+    post:
+      tags: [Providers]
+      summary: Сохранить конфигурацию провайдера
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderConfig'
+      responses:
+        '200':
+          description: ОК
+
+  /cloud-models:
+    get:
+      tags: [Models]
+      summary: Список моделей облачных провайдеров
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Model'
+
+  /workspaces:
+    get:
+      tags: [Workspaces]
+      summary: Список рабочих пространств
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workspace'
+    post:
+      tags: [Workspaces]
+      summary: Создать рабочее пространство
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkspaceCreate'
+      responses:
+        '200':
+          description: ОК
+    delete:
+      tags: [Workspaces]
+      summary: Удалить рабочее пространство
+      parameters:
+        - name: id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: ОК
+
+  /prompts:
+    get:
+      tags: [Prompts]
+      summary: Список файлов промптов
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /prompts/load:
+    post:
+      tags: [Prompts]
+      summary: Загрузить файл промпта для агента
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_name:
+                  type: string
+                file_name:
+                  type: string
+              required: [agent_name, file_name]
+      responses:
+        '200':
+          description: ОК
+
+  /agent/prompt:
+    post:
+      tags: [Prompts]
+      summary: Обновить промпт агента
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agent_name:
+                  type: string
+                prompt:
+                  type: string
+              required: [agent_name, prompt]
+      responses:
+        '200':
+          description: ОК
+
+  /avatar:
+    post:
+      tags: [Avatar]
+      summary: Загрузить аватар агента
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                agent:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: ОК
+
+  /avatar-info:
+    get:
+      tags: [Avatar]
+      summary: Информация об аватаре агента
+      parameters:
+        - name: agent
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+
+  /learning-stats:
+    get:
+      tags: [Learnings]
+      summary: Статистика обучения агентов
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningStats'
+
+  /logs:
+    get:
+      tags: [Logs]
+      summary: Получить системные логи
+      parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+        - name: service
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemLog'
+
+components:
+  schemas:
+    ChatRequest:
+      type: object
+      properties:
+        message:
+          type: string
+        agent:
+          type: string
+        chat_id:
+          type: string
+        workspace_id:
+          type: integer
+      required: [message, agent]
+
+    Agent:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        prompt:
+          type: string
+        llm_model:
+          type: string
+        provider:
+          type: string
+        supports_tools:
+          type: boolean
+        avatar:
+          type: string
+
+    AgentUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        prompt:
+          type: string
+        llm_model:
+          type: string
+
+    Model:
+      type: object
+      properties:
+        name:
+          type: string
+        provider:
+          type: string
+        size:
+          type: string
+
+    ProviderConfig:
+      type: object
+      properties:
+        provider_name:
+          type: string
+        api_key:
+          type: string
+        base_url:
+          type: string
+        enabled:
+          type: boolean
+
+    Workspace:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        path:
+          type: string
+
+    WorkspaceCreate:
+      type: object
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+      required: [name, path]
+
+    LearningStats:
+      type: object
+      properties:
+        total_learnings:
+          type: integer
+        by_model:
+          type: object
+          additionalProperties:
+            type: integer
+        by_category:
+          type: object
+          additionalProperties:
+            type: integer
+
+    SystemLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        level:
+          type: string
+        service:
+          type: string
+        message:
+          type: string
+        details:
+          type: string
+        resolved:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+  responses:
+    InternalError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string

@@ -138,10 +138,26 @@ func initRAG() {
 		}
 	}
 
+	maxChunkLen := rag.DefaultMaxChunkLen
+	if v := getEnv("RAG_MAX_CHUNK_LEN", ""); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			maxChunkLen = parsed
+		}
+	}
+
+	maxContextLen := rag.DefaultMaxContextLen
+	if v := getEnv("RAG_MAX_CONTEXT_LEN", ""); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			maxContextLen = parsed
+		}
+	}
+
 	config := &rag.Config{
 		ChromaURL:      chromaURL,
 		EmbeddingModel: embModel,
 		TopK:           topK,
+		MaxChunkLen:    maxChunkLen,
+		MaxContextLen:  maxContextLen,
 		DBHost:         getEnv("DB_HOST", "localhost"),
 		DBPort:         getEnv("DB_PORT", "5432"),
 		DBUser:         getEnv("DB_USER", "postgres"),
@@ -3144,7 +3160,6 @@ func handleCheckResourcesBatch(args map[string]interface{}) map[string]interface
 	}
 }
 
-
 // handleGenerateReport — LEGO-блок: создание текстового отчёта с верификацией.
 // Выполняет: 1) mkdir -p для директории, 2) write содержимого в файл,
 // 3) read для проверки записи, 4) stat для проверки размера файла.
@@ -3318,7 +3333,36 @@ func initProvidersFromDB() {
 //  6. Регистрация HTTP-обработчиков для всех эндпоинтов
 //  7. Настройка раздачи статических файлов из uploads/
 //  8. Запуск HTTP-сервера на порту AGENT_SERVICE_PORT (по умолчанию 8083)
+func validateEnv() {
+	log.Println("=== Проверка переменных окружения ===")
+
+	dbURL := os.Getenv("DATABASE_URL")
+	dbHost := os.Getenv("DB_HOST")
+	if dbURL == "" && dbHost == "" {
+		log.Println("[ENV] DATABASE_URL и DB_HOST не заданы — будут использованы значения по умолчанию (localhost:5432)")
+		log.Println("[ENV] Для настройки см. .env.example или документацию")
+	}
+
+	port := getEnv("AGENT_SERVICE_PORT", "8083")
+	log.Printf("[ENV] Порт agent-service: %s", port)
+
+	toolsURL := getEnv("TOOLS_SERVICE_URL", "http://localhost:8082")
+	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
+	log.Printf("[ENV] tools-service: %s", toolsURL)
+	log.Printf("[ENV] memory-service: %s", memoryURL)
+
+	ollamaURL := getEnv("OLLAMA_URL", "")
+	if ollamaURL == "" {
+		ollamaURL = getEnv("OLLAMA_HOST", "http://localhost:11434")
+	}
+	log.Printf("[ENV] Ollama: %s", ollamaURL)
+
+	log.Println("=== Проверка окружения завершена ===")
+}
+
 func main() {
+	validateEnv()
+
 	db.InitDB()
 
 	llm.InitProviders()

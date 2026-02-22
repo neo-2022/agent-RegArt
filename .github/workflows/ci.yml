@@ -1,14 +1,20 @@
+# CI-пайплайн для agent-RegArt.
+#
+# Запускается при push и pull request в ветку main.
+# Проверяет все сервисы: сборку, форматирование, статический анализ, тесты и безопасность.
 name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
+  # === agent-service: Go-сервис агентов ===
+  # Проверки: сборка, gofmt, go vet, юнит-тесты
   agent-service:
-    name: agent-service (build, fmt, vet)
+    name: "agent-service (сборка, формат, vet, тесты)"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -19,12 +25,19 @@ jobs:
         with:
           go-version: '1.24'
           cache-dependency-path: agent-service/go.sum
-      - run: go build ./cmd/server/
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
+      - name: "Сборка"
+        run: go build ./cmd/server/
+      - name: "Проверка форматирования (gofmt)"
+        run: test -z "$(gofmt -l .)"
+      - name: "Статический анализ (go vet)"
+        run: go vet ./...
+      - name: "Юнит-тесты"
+        run: go test ./... -v -count=1 -timeout 60s
 
+  # === tools-service: Go-сервис инструментов ===
+  # Проверки: сборка, gofmt, go vet, юнит-тесты
   tools-service:
-    name: tools-service (build, fmt, vet)
+    name: "tools-service (сборка, формат, vet, тесты)"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,12 +48,19 @@ jobs:
         with:
           go-version: '1.24'
           cache: false
-      - run: go build ./cmd/server/
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
+      - name: "Сборка"
+        run: go build ./cmd/server/
+      - name: "Проверка форматирования (gofmt)"
+        run: test -z "$(gofmt -l .)"
+      - name: "Статический анализ (go vet)"
+        run: go vet ./...
+      - name: "Юнит-тесты"
+        run: go test ./... -v -count=1 -timeout 60s
 
+  # === api-gateway: Go-сервис API-шлюза ===
+  # Проверки: сборка, gofmt, go vet, юнит-тесты
   api-gateway:
-    name: api-gateway (build, fmt, vet)
+    name: "api-gateway (сборка, формат, vet, тесты)"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,12 +71,19 @@ jobs:
         with:
           go-version: '1.24'
           cache: false
-      - run: go build -o api-gateway ./cmd/main.go
-      - run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
+      - name: "Сборка"
+        run: go build -o api-gateway ./cmd/main.go
+      - name: "Проверка форматирования (gofmt)"
+        run: test -z "$(gofmt -l .)"
+      - name: "Статический анализ (go vet)"
+        run: go vet ./...
+      - name: "Юнит-тесты"
+        run: go test ./... -v -count=1 -timeout 60s
 
+  # === web-ui: React/TypeScript фронтенд ===
+  # Проверки: проверка типов (tsc), сборка (vite build)
   web-ui:
-    name: web-ui (typecheck, build)
+    name: "web-ui (проверка типов, сборка)"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -68,6 +95,48 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: web-ui/package-lock.json
-      - run: npm ci
-      - run: npx tsc --noEmit
-      - run: npm run build
+      - name: "Установка зависимостей"
+        run: npm ci
+      - name: "Проверка типов (TypeScript)"
+        run: npx tsc --noEmit
+      - name: "Сборка фронтенда"
+        run: npm run build
+
+  # === memory-service: Python-сервис памяти (RAG) ===
+  # Проверки: установка зависимостей, юнит-тесты (pytest)
+  memory-service:
+    name: "memory-service (линтинг, тесты)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: memory-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: memory-service/requirements.txt
+      - name: "Установка зависимостей"
+        run: pip install -r requirements.txt
+      - name: "Установка тестовых зависимостей"
+        run: pip install pytest requests
+      - name: "Юнит-тесты"
+        run: python -m pytest tests/ -v --tb=short -x
+
+  # === Проверка безопасности ===
+  # Поиск захардкоженных секретов (пароли, токены, ключи API) в коде
+  security-scan:
+    name: "безопасность (проверка секретов)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: "Поиск захардкоженных секретов"
+        run: |
+          PATTERNS='(password|secret|api_key|token|credential)\s*[:=]\s*["'"'"'][^"'"'"']{8,}'
+          if grep -rEi "$PATTERNS" --include="*.go" --include="*.py" --include="*.ts" --include="*.tsx" \
+             --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=vendor . 2>/dev/null; then
+            echo "::warning::Обнаружены потенциальные захардкоженные секреты"
+          else
+            echo "Захардкоженные секреты не обнаружены"
+          fi

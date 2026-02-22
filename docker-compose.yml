@@ -1,6 +1,26 @@
 version: '3.8'
 
 services:
+  # --- PostgreSQL ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: agent-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: agentcore
+      POSTGRES_PASSWORD: agentcore
+      POSTGRES_DB: agentcore
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentcore"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # --- ChromaDB (векторное хранилище для RAG) ---
   chroma:
     image: chromadb/chroma:latest
     container_name: agent-chroma
@@ -12,6 +32,7 @@ services:
       - IS_PERSISTENT=TRUE
     restart: unless-stopped
 
+  # --- Memory Service (Python/FastAPI + ChromaDB + эмбеддинги) ---
   memory-service:
     build: ./memory-service
     container_name: agent-memory
@@ -25,3 +46,11 @@ services:
       - EMBEDDING_MODEL=all-MiniLM-L6-v2
       - DEBUG=False
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  pgdata:

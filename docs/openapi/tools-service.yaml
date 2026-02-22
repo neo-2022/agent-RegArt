@@ -1,0 +1,388 @@
+openapi: 3.0.3
+info:
+  title: API сервиса инструментов
+  description: Выполнение команд, работа с файлами, управление приложениями, Яндекс.Диск
+  version: 1.0.0
+servers:
+  - url: http://localhost:8082
+    description: Локальная разработка
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Проверка работоспособности
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /execute:
+    post:
+      tags: [Executor]
+      summary: Выполнить команду (whitelist-защита)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecuteRequest'
+      responses:
+        '200':
+          description: Результат выполнения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecuteResponse'
+
+  /read:
+    post:
+      tags: [Files]
+      summary: Прочитать файл
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+
+  /write:
+    post:
+      tags: [Files]
+      summary: Записать файл
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                content:
+                  type: string
+              required: [path, content]
+      responses:
+        '200':
+          description: ОК
+
+  /list:
+    post:
+      tags: [Files]
+      summary: Список файлов в директории
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files:
+                    type: array
+                    items:
+                      type: string
+
+  /delete:
+    post:
+      tags: [Files]
+      summary: Удалить файл
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '200':
+          description: ОК
+
+  /sysinfo:
+    get:
+      tags: [System]
+      summary: Информация о системе
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInfo'
+
+  /cpuinfo:
+    get:
+      tags: [System]
+      summary: Информация о CPU
+      responses:
+        '200':
+          description: ОК
+
+  /meminfo:
+    get:
+      tags: [System]
+      summary: Информация о памяти
+      responses:
+        '200':
+          description: ОК
+
+  /cputemp:
+    get:
+      tags: [System]
+      summary: Температура CPU
+      responses:
+        '200':
+          description: ОК
+
+  /sysload:
+    get:
+      tags: [System]
+      summary: Нагрузка системы
+      responses:
+        '200':
+          description: ОК
+
+  /findapp:
+    post:
+      tags: [Apps]
+      summary: Поиск приложения
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+              required: [name]
+      responses:
+        '200':
+          description: ОК
+
+  /launchapp:
+    post:
+      tags: [Apps]
+      summary: Запуск приложения
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                desktop_file:
+                  type: string
+              required: [desktop_file]
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/info:
+    get:
+      tags: [YandexDisk]
+      summary: Информация о Яндекс.Диске
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/list:
+    get:
+      tags: [YandexDisk]
+      summary: Содержимое папки
+      parameters:
+        - name: path
+          in: query
+          schema:
+            type: string
+            default: /
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/download:
+    get:
+      tags: [YandexDisk]
+      summary: Скачать файл
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Содержимое файла
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /ydisk/upload:
+    post:
+      tags: [YandexDisk]
+      summary: Загрузить файл
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                content:
+                  type: string
+                overwrite:
+                  type: boolean
+              required: [path, content]
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/mkdir:
+    post:
+      tags: [YandexDisk]
+      summary: Создать папку
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+              required: [path]
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/delete:
+    post:
+      tags: [YandexDisk]
+      summary: Удалить файл/папку
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path:
+                  type: string
+                permanently:
+                  type: boolean
+              required: [path]
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/move:
+    post:
+      tags: [YandexDisk]
+      summary: Переместить/переименовать
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+                overwrite:
+                  type: boolean
+              required: [from, to]
+      responses:
+        '200':
+          description: ОК
+
+  /ydisk/search:
+    get:
+      tags: [YandexDisk]
+      summary: Поиск файлов
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ОК
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+
+    ExecuteRequest:
+      type: object
+      properties:
+        command:
+          type: string
+      required: [command]
+
+    ExecuteResponse:
+      type: object
+      properties:
+        stdout:
+          type: string
+        stderr:
+          type: string
+        returncode:
+          type: integer
+        error:
+          type: string
+
+    SystemInfo:
+      type: object
+      properties:
+        os:
+          type: string
+        arch:
+          type: string
+        hostname:
+          type: string
+        home_dir:
+          type: string
+        user:
+          type: string

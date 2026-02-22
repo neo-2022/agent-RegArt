@@ -15,6 +15,7 @@ class Settings:
     
     # Модель для эмбеддингов
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    EMBEDDING_MODEL_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "1")
     
     # Размер чанков при разбиении текста
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))
@@ -31,5 +32,13 @@ class Settings:
     
     # Режим отладки
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+
+    # TTL для документов (в днях, 0 = без ограничения)
+    FACTS_TTL_DAYS = int(os.getenv("FACTS_TTL_DAYS", "90"))
+    FILES_TTL_DAYS = int(os.getenv("FILES_TTL_DAYS", "30"))
+    LEARNINGS_TTL_DAYS = int(os.getenv("LEARNINGS_TTL_DAYS", "0"))
+
+    # Интервал проверки TTL/переиндексации (в секундах)
+    REINDEX_CHECK_INTERVAL = int(os.getenv("REINDEX_CHECK_INTERVAL", "3600"))
 
 settings = Settings()

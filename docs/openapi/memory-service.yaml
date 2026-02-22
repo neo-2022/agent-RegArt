@@ -1,0 +1,417 @@
+openapi: 3.0.3
+info:
+  title: API сервиса памяти (RAG)
+  description: Сервис долговременной памяти агентов — факты, файлы, обучение, RAG-поиск
+  version: 1.0.0
+servers:
+  - url: http://localhost:8001
+    description: Локальная разработка
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Проверка работоспособности
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  service:
+                    type: string
+
+  /facts:
+    post:
+      tags: [Facts]
+      summary: Добавить факт в память
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FactAddRequest'
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactAddResponse'
+
+  /search:
+    post:
+      tags: [Search]
+      summary: Поиск релевантных фактов и файлов
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+
+  /files/chunks:
+    post:
+      tags: [Files]
+      summary: Добавить фрагмент файла
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileChunkAddRequest'
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileChunkAddResponse'
+
+  /files:
+    get:
+      tags: [Files]
+      summary: Список загруженных файлов
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    file_name:
+                      type: string
+                    chunks_count:
+                      type: integer
+    delete:
+      tags: [Files]
+      summary: Удалить файл по имени
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ОК
+
+  /files/{file_id}:
+    delete:
+      tags: [Files]
+      summary: Удалить фрагменты файла по ID
+      parameters:
+        - name: file_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileDeleteResponse'
+
+  /stats:
+    get:
+      tags: [Stats]
+      summary: Статистика коллекций
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsResponse'
+
+  /learnings:
+    post:
+      tags: [Learnings]
+      summary: Добавить знание для модели LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LearningAddRequest'
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningAddResponse'
+
+  /learnings/search:
+    post:
+      tags: [Learnings]
+      summary: Поиск знаний для модели
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LearningSearchRequest'
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningSearchResponse'
+
+  /learnings/stats:
+    get:
+      tags: [Learnings]
+      summary: Статистика обучения по моделям
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningStatsResponse'
+
+  /learnings/{model_name}:
+    delete:
+      tags: [Learnings]
+      summary: Удалить знания модели
+      parameters:
+        - name: model_name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ОК
+
+  /reindex:
+    post:
+      tags: [Maintenance]
+      summary: Запустить переиндексацию устаревших документов
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  default: false
+                collection:
+                  type: string
+                  enum: [facts, files, learnings, all]
+                  default: all
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reindexed_count:
+                    type: integer
+                  status:
+                    type: string
+
+  /ttl/expired:
+    get:
+      tags: [Maintenance]
+      summary: Список документов с истёкшим TTL
+      parameters:
+        - name: collection
+          in: query
+          schema:
+            type: string
+            enum: [facts, files, learnings]
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  expired_count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        created_at:
+                          type: string
+                        ttl_days:
+                          type: integer
+
+    delete:
+      tags: [Maintenance]
+      summary: Удалить документы с истёкшим TTL
+      responses:
+        '200':
+          description: ОК
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_count:
+                    type: integer
+
+components:
+  schemas:
+    FactAddRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        metadata:
+          type: object
+      required: [text]
+
+    FactAddResponse:
+      type: object
+      properties:
+        id:
+          type: string
+
+    SearchRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        top_k:
+          type: integer
+          default: 5
+        agent_name:
+          type: string
+        include_files:
+          type: boolean
+          default: false
+      required: [query]
+
+    SearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: string
+        count:
+          type: integer
+
+    FileChunkAddRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        metadata:
+          type: object
+      required: [text, metadata]
+
+    FileChunkAddResponse:
+      type: object
+      properties:
+        id:
+          type: string
+
+    FileDeleteResponse:
+      type: object
+      properties:
+        deleted_count:
+          type: integer
+
+    StatsResponse:
+      type: object
+      properties:
+        facts_count:
+          type: integer
+        files_count:
+          type: integer
+        learnings_count:
+          type: integer
+
+    LearningAddRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        model_name:
+          type: string
+        agent_name:
+          type: string
+        category:
+          type: string
+          default: general
+        metadata:
+          type: object
+      required: [text, model_name, agent_name]
+
+    LearningAddResponse:
+      type: object
+      properties:
+        id:
+          type: string
+
+    LearningSearchRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        model_name:
+          type: string
+        top_k:
+          type: integer
+          default: 5
+        category:
+          type: string
+      required: [query, model_name]
+
+    LearningSearchResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: string
+        count:
+          type: integer
+        model_name:
+          type: string
+
+    LearningStatsResponse:
+      type: object
+      properties:
+        total_learnings:
+          type: integer
+        by_model:
+          type: object
+          additionalProperties:
+            type: integer
+        by_category:
+          type: object
+          additionalProperties:
+            type: integer

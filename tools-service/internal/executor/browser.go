@@ -7,11 +7,83 @@ package executor
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
 )
+
+const maxURLLength = 2048
+
+func allowPrivateURLs() bool {
+	return strings.ToLower(strings.TrimSpace(os.Getenv("BROWSER_ALLOW_PRIVATE_URLS"))) == "true"
+}
+
+func normalizeURL(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("URL не может быть пустым")
+	}
+	if len(raw) > maxURLLength {
+		return nil, fmt.Errorf("URL слишком длинный")
+	}
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("некорректный URL: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("поддерживаются только http/https URL")
+	}
+	if u.Hostname() == "" {
+		return nil, fmt.Errorf("некорректный URL: отсутствует host")
+	}
+	return u, nil
+}
+
+func isPrivateHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "localhost" {
+		return true
+	}
+	if strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
+		return true
+	}
+	if ip.String() == "169.254.169.254" {
+		return true
+	}
+	return false
+}
+
+func validateExternalURL(raw string) (string, error) {
+	u, err := normalizeURL(raw)
+	if err != nil {
+		return "", err
+	}
+
+	if !allowPrivateURLs() {
+		if isPrivateHost(u.Hostname()) {
+			return "", fmt.Errorf("доступ к локальным/приватным адресам запрещён")
+		}
+	}
+
+	return u.String(), nil
+}
 
 // OpenURL — открывает URL в браузере пользователя через xdg-open.
 // Работает на Linux (использует xdg-open для определения браузера по умолчанию).
@@ -19,14 +91,12 @@ import (
 //   - url: полный URL для открытия (например, "https://chat.openai.com")
 //
 // Возвращает ошибку, если xdg-open не найден или URL некорректен.
-func OpenURL(url string) error {
-	if url == "" {
-		return fmt.Errorf("URL не может быть пустым")
+func OpenURL(urlStr string) error {
+	validated, err := validateExternalURL(urlStr)
+	if err != nil {
+		return err
 	}
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		url = "https://" + url
-	}
-	cmd := exec.Command("xdg-open", url)
+	cmd := exec.Command("xdg-open", validated)
 	return cmd.Start()
 }
 
@@ -40,19 +110,15 @@ func OpenURL(url string) error {
 //   - statusCode: HTTP-код ответа (200, 404, 500 и т.д.)
 //   - body: текстовое содержимое ответа (обрезанное до 100 КБ)
 //   - error: ошибка, если запрос не удался
-func FetchURL(url string) (int, string, error) {
-	if url == "" {
-		return 0, "", fmt.Errorf("URL не может быть пустым")
-	}
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		url = "https://" + url
+func FetchURL(urlStr string) (int, string, error) {
+	validated, err := validateExternalURL(urlStr)
+	if err != nil {
+		return 0, "", err
 	}
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := &http.Client{Timeout: 30 * time.Second}
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", validated, nil)
 	if err != nil {
 		return 0, "", fmt.Errorf("ошибка создания запроса: %w", err)
 	}
@@ -64,7 +130,6 @@ func FetchURL(url string) (int, string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Ограничиваем чтение 100 КБ
 	limited := io.LimitReader(resp.Body, 100*1024)
 	body, err := io.ReadAll(limited)
 	if err != nil {
@@ -86,19 +151,18 @@ func FetchURL(url string) (int, string, error) {
 //   - statusCode: HTTP-код ответа
 //   - body: текстовое содержимое ответа
 //   - error: ошибка, если запрос не удался
-func SendToAIChat(url, payload, contentType string) (int, string, error) {
-	if url == "" {
-		return 0, "", fmt.Errorf("URL не может быть пустым")
+func SendToAIChat(urlStr, payload, contentType string) (int, string, error) {
+	validated, err := validateExternalURL(urlStr)
+	if err != nil {
+		return 0, "", err
 	}
 	if contentType == "" {
 		contentType = "application/json"
 	}
 
-	client := &http.Client{
-		Timeout: 60 * time.Second,
-	}
+	client := &http.Client{Timeout: 60 * time.Second}
 
-	req, err := http.NewRequest("POST", url, strings.NewReader(payload))
+	req, err := http.NewRequest("POST", validated, strings.NewReader(payload))
 	if err != nil {
 		return 0, "", fmt.Errorf("ошибка создания запроса: %w", err)
 	}

@@ -1,3 +1,15 @@
+// Package rag — система извлечения документов (Retrieval-Augmented Generation).
+//
+// Предоставляет функциональность для:
+//   - Хранения и индексации документов (через ChromaDB или fallback)
+//   - Семантического поиска по документам с использованием эмбеддингов
+//   - Multi-hop поиска (многошаговый поиск с расширением запроса)
+//   - Обрезки чанков и ограничения контекста по длине
+//   - Вычисления косинусного сходства между векторами
+//
+// Поддерживает два режима работы:
+//   - ChromaDB (если CHROMA_URL задан) — полноценный векторный поиск
+//   - Fallback (без ChromaDB) — демо-режим с примерными результатами
 package rag
 
 import (
@@ -14,7 +26,8 @@ import (
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/embeddings"
 )
 
-// RagDoc представляет документ в RAG системе
+// RagDoc — документ в RAG-системе.
+// Содержит текст, метаданные и опциональный вектор эмбеддинга.
 type RagDoc struct {
 	ID        string    `json:"id"`
 	Title     string    `json:"title"`
@@ -24,14 +37,15 @@ type RagDoc struct {
 	Embedding []float64 `json:"embedding,omitempty"`
 }
 
-// SearchResult результат поиска с метаданными
+// SearchResult — результат поиска документа с оценкой релевантности и рангом.
 type SearchResult struct {
 	Doc   RagDoc  `json:"doc"`
 	Score float64 `json:"score"`
 	Rank  int     `json:"rank"`
 }
 
-// Config конфигурация RAG системы
+// Config — конфигурация RAG-системы.
+// Включает настройки ChromaDB, модели эмбеддингов, параметры поиска и подключения к БД.
 type Config struct {
 	DBHost         string
 	DBPort         string
@@ -42,16 +56,62 @@ type Config struct {
 	EmbeddingModel string
 	TopK           int
 	EnableMultiHop bool
+	MaxChunkLen    int
+	MaxContextLen  int
 }
 
-// DBRetriever обеспечивает работу с базой данных документов
+const (
+	DefaultMaxChunkLen   = 2000
+	DefaultMaxContextLen = 8000
+)
+
+// TruncateChunk — обрезает текст чанка до максимальной длины.
+// Если текст короче maxLen — возвращает как есть.
+// Иначе обрезает и добавляет "...[обрезано]".
+func TruncateChunk(text string, maxLen int) string {
+	if maxLen <= 0 {
+		maxLen = DefaultMaxChunkLen
+	}
+	if len(text) <= maxLen {
+		return text
+	}
+	return text[:maxLen] + "...[обрезано]"
+}
+
+// LimitContext — ограничивает суммарную длину контекста из результатов поиска.
+// Последовательно добавляет результаты, пока общая длина не превысит maxTotalLen.
+// Последний результат может быть обрезан, если остаток > 100 символов.
+func LimitContext(results []SearchResult, maxTotalLen int) []SearchResult {
+	if maxTotalLen <= 0 {
+		maxTotalLen = DefaultMaxContextLen
+	}
+	var limited []SearchResult
+	totalLen := 0
+	for _, r := range results {
+		contentLen := len(r.Doc.Content)
+		if totalLen+contentLen > maxTotalLen {
+			remaining := maxTotalLen - totalLen
+			if remaining > 100 {
+				r.Doc.Content = TruncateChunk(r.Doc.Content, remaining)
+				limited = append(limited, r)
+			}
+			break
+		}
+		totalLen += contentLen
+		limited = append(limited, r)
+	}
+	return limited
+}
+
+// DBRetriever — основной компонент RAG-системы.
+// Обеспечивает работу с ChromaDB и fallback-поиском документов.
 type DBRetriever struct {
 	config    *Config
 	embedding embeddings.EmbeddingModel
 	chromaURL string
 }
 
-// NewDBRetriever создаёт новый экземпляр DBRetriever
+// NewDBRetriever — создаёт новый экземпляр DBRetriever с заданной конфигурацией.
 func NewDBRetriever(config *Config) *DBRetriever {
 	emb := embeddings.NewLocalEmbeddingModel()
 	return &DBRetriever{
@@ -61,19 +121,24 @@ func NewDBRetriever(config *Config) *DBRetriever {
 	}
 }
 
-// Config возвращает конфигурацию RAG
+// Config — возвращает текущую конфигурацию RAG-системы.
 func (d *DBRetriever) Config() *Config {
 	return d.config
 }
 
-// EnsureTable создаёт таблицу rag_docs если её нет
+// EnsureTable — создаёт таблицу rag_docs в PostgreSQL, если её нет.
 func (d *DBRetriever) EnsureTable() error {
-	// TODO: реализовать миграцию таблицы в PostgreSQL
-	fmt.Println("[RAG] Table rag_docs ready (placeholder)")
+	// ЗАДАЧА: реализовать миграцию таблицы rag_docs в PostgreSQL.
+	fmt.Println("[RAG] Таблица rag_docs готова (заглушка)")
 	return nil
 }
 
-// AddDocument добавляет документ в ChromA хранилище
+// AddDocument — добавляет документ в ChromaDB-хранилище.
+//
+// Алгоритм работы:
+//  1. Если ChromaDB не настроен (chromaURL пуст) — метод завершает работу без ошибки.
+//  2. Вычисляет эмбеддинг по содержимому документа.
+//  3. Отправляет документ, эмбеддинг и метаданные в коллекцию rag_docs через HTTP API ChromaDB.
 func (d *DBRetriever) AddDocument(doc RagDoc) error {
 	if d.chromaURL == "" {
 		fmt.Printf("[RAG] ChromA не настроен, документ %s не добавлен\n", doc.Title)
@@ -112,7 +177,8 @@ func (d *DBRetriever) AddDocument(doc RagDoc) error {
 	return nil
 }
 
-// SeedDemoDocuments добавляет демо-документы в ChromA
+// SeedDemoDocuments — загружает демонстрационный набор документов в ChromaDB.
+// Используется для быстрого запуска и проверки RAG-поиска в окружениях разработки.
 func (d *DBRetriever) SeedDemoDocuments() error {
 	if d.chromaURL == "" {
 		fmt.Println("[RAG] ChromA не настроен, используется fallback")
@@ -162,17 +228,17 @@ func (d *DBRetriever) SeedDemoDocuments() error {
 	return nil
 }
 
-// SeedFromLocalCorpus загружает документы из локальных источников
+// SeedFromLocalCorpus — загружает документы из локальных директорий в RAG-систему.
 func (d *DBRetriever) SeedFromLocalCorpus(paths []string) error {
-	fmt.Printf("[RAG] Seeding from paths: %v\n", paths)
+	fmt.Printf("[RAG] Загрузка из путей: %v\n", paths)
 
 	for _, path := range paths {
 		if err := d.seedFromPath(path); err != nil {
-			fmt.Printf("[RAG] Error seeding from %s: %v\n", path, err)
+			fmt.Printf("[RAG] Ошибка загрузки из %s: %v\n", path, err)
 		}
 	}
 
-	fmt.Println("[RAG] Seed complete")
+	fmt.Println("[RAG] Загрузка завершена")
 	return nil
 }
 
@@ -216,14 +282,16 @@ func (d *DBRetriever) seedFromPath(path string) error {
 				doc.Embedding = emb
 			}
 
-			fmt.Printf("[RAG] Indexed: %s (%s)\n", doc.Title, doc.Source)
+			fmt.Printf("[RAG] Индексирован: %s (%s)\n", doc.Title, doc.Source)
 		}
 	}
 
 	return nil
 }
 
-// Search выполняет поиск документов по запросу
+// Search — выполняет семантический поиск документов по запросу.
+// Сначала пытается использовать ChromaDB, при неудаче — fallback.
+// Результаты обрезаются по MaxChunkLen и ограничиваются по MaxContextLen.
 func (d *DBRetriever) Search(query string, topK int) ([]SearchResult, error) {
 	if topK <= 0 {
 		topK = d.config.TopK
@@ -232,26 +300,40 @@ func (d *DBRetriever) Search(query string, topK int) ([]SearchResult, error) {
 		}
 	}
 
-	// Вычисляем эмбеддинг запроса
 	queryEmb, err := d.embedding.Compute(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to compute query embedding: %w", err)
+		return nil, fmt.Errorf("ошибка вычисления эмбеддинга запроса: %w", err)
 	}
 
-	// Пытаемся использовать ChromA если доступен
+	var results []SearchResult
+
 	if d.chromaURL != "" {
-		results, err := d.searchChroma(query, queryEmb, topK)
-		if err == nil && len(results) > 0 {
-			return results, nil
+		results, err = d.searchChroma(query, queryEmb, topK)
+		if err != nil || len(results) == 0 {
+			fmt.Printf("[RAG] Поиск через ChromaDB не удался, используем fallback: %v\n", err)
+			results, err = d.searchFallback(query, queryEmb, topK)
 		}
-		fmt.Printf("[RAG] ChromA search failed, using fallback: %v\n", err)
+	} else {
+		results, err = d.searchFallback(query, queryEmb, topK)
 	}
 
-	// Fallback: имитация поиска (для демо)
-	return d.searchFallback(query, queryEmb, topK)
+	if err != nil {
+		return nil, err
+	}
+
+	maxChunk := d.config.MaxChunkLen
+	for i := range results {
+		results[i].Doc.Content = TruncateChunk(results[i].Doc.Content, maxChunk)
+	}
+
+	maxCtx := d.config.MaxContextLen
+	results = LimitContext(results, maxCtx)
+
+	return results, nil
 }
 
-// searchChroma выполняет поиск через ChromA API
+// searchChroma — выполняет поиск документов через HTTP API ChromaDB.
+// Отправляет эмбеддинг запроса и получает topK ближайших результатов.
 func (d *DBRetriever) searchChroma(query string, queryEmb []float64, topK int) ([]SearchResult, error) {
 	url := fmt.Sprintf("%s/api/v1/collections/rag_docs/query", d.chromaURL)
 
@@ -270,7 +352,7 @@ func (d *DBRetriever) searchChroma(query string, queryEmb []float64, topK int) (
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("chroma returned %d", resp.StatusCode)
+		return nil, fmt.Errorf("ChromaDB вернул статус %d", resp.StatusCode)
 	}
 
 	var result map[string]interface{}
@@ -318,9 +400,10 @@ func (d *DBRetriever) searchChroma(query string, queryEmb []float64, topK int) (
 	return results, nil
 }
 
-// searchFallback имитация поиска для демо
+// searchFallback — имитация поиска для демо-режима (без ChromaDB).
+// Генерирует примерные результаты с рандомными оценками релевантности.
 func (d *DBRetriever) searchFallback(query string, queryEmb []float64, topK int) ([]SearchResult, error) {
-	// Генерируем демо результаты
+	// Генерируем демонстрационные результаты
 	sampleDocs := []RagDoc{
 		{
 			ID:      "doc-1",
@@ -354,12 +437,12 @@ func (d *DBRetriever) searchFallback(query string, queryEmb []float64, topK int)
 		},
 	}
 
-	// Вычисляем similarity с эмбеддингом запроса
+	// Вычисляем сходство (релевантность) относительно эмбеддинга запроса
 	rand.Seed(time.Now().UnixNano())
 
 	var results []SearchResult
 	for i, doc := range sampleDocs {
-		// Симулируем similarity score
+		// Симулируем оценку релевантности (оценку сходства)
 		score := 0.5 + rand.Float64()*0.5
 
 		results = append(results, SearchResult{
@@ -369,7 +452,7 @@ func (d *DBRetriever) searchFallback(query string, queryEmb []float64, topK int)
 		})
 	}
 
-	// Сортируем по score
+	// Сортируем по убыванию оценки релевантности
 	for i := 0; i < len(results); i++ {
 		for j := i + 1; j < len(results); j++ {
 			if results[j].Score > results[i].Score {
@@ -385,7 +468,9 @@ func (d *DBRetriever) searchFallback(query string, queryEmb []float64, topK int)
 	return results, nil
 }
 
-// MultiHopSearch выполняет multi-hop поиск
+// MultiHopSearch — выполняет многошаговый (multi-hop) поиск.
+// На каждом шаге расширяет запрос контекстом из найденных документов.
+// Результаты дедуплицируются и ограничиваются topK.
 func (d *DBRetriever) MultiHopSearch(query string, hops int) ([]SearchResult, error) {
 	if hops <= 0 {
 		hops = 2
@@ -430,6 +515,7 @@ func (d *DBRetriever) MultiHopSearch(query string, hops int) ([]SearchResult, er
 	return deduped, nil
 }
 
+// min — возвращает минимальное из двух целых чисел.
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -437,7 +523,8 @@ func min(a, b int) int {
 	return b
 }
 
-// CosineSimilarity вычисляет косинусное сходство между векторами
+// CosineSimilarity — вычисляет косинусное сходство между двумя векторами.
+// Возвращает значение от -1 до 1 (1 = идентичны, 0 = ортогональны).
 func CosineSimilarity(a, b []float64) float64 {
 	if len(a) != len(b) {
 		return 0

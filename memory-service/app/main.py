@@ -7,9 +7,13 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .memory import memory_store
+from .ttl import TTLManager
 from . import models
 
 logger = logging.getLogger(__name__)
+
+
+ttl_manager = TTLManager(memory_store)
 
 
 @asynccontextmanager
@@ -17,12 +21,12 @@ async def lifespan(app: FastAPI):
     """
     Действия при запуске и остановке приложения.
     """
-    # При запуске: проверяем, что модель эмбеддингов загружена (она уже загружена в memory_store)
     logger.info("Сервис памяти запущен")
     logger.info(f"Статистика: фактов {memory_store.get_stats()['facts_count']}, "
                 f"файловых чанков {memory_store.get_stats()['files_count']}")
+    ttl_manager.start_scheduler()
     yield
-    # При остановке: можно закрыть соединения, но ChromaDB не требует явного закрытия
+    ttl_manager.stop_scheduler()
     logger.info("Сервис памяти остановлен")
 
 
@@ -216,6 +220,51 @@ async def delete_learnings(model_name: str, category: str = None):
     except Exception as e:
         logger.exception("Ошибка удаления знаний")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/reindex", tags=["Maintenance"])
+async def reindex(collection: str = "all", force: bool = False):
+    """Запустить переиндексацию документов."""
+    try:
+        if collection == "all":
+            total = 0
+            for col in ["facts", "files", "learnings"]:
+                total += ttl_manager.reindex_collection(col, force=force)
+            return {"reindexed_count": total, "status": "ok"}
+        else:
+            count = ttl_manager.reindex_collection(collection, force=force)
+            return {"reindexed_count": count, "status": "ok"}
+    except Exception as e:
+        logger.exception("Ошибка переиндексации")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/ttl/expired", tags=["Maintenance"])
+async def get_expired(collection: str = "all"):
+    """Получить список документов с истёкшим TTL."""
+    from .ttl import DEFAULT_FACTS_TTL, DEFAULT_FILES_TTL, DEFAULT_LEARNINGS_TTL
+    ttl_map = {"facts": DEFAULT_FACTS_TTL, "files": DEFAULT_FILES_TTL, "learnings": DEFAULT_LEARNINGS_TTL}
+    collections = [collection] if collection != "all" else list(ttl_map.keys())
+    result = {"expired_count": 0, "by_collection": {}}
+    for col in collections:
+        ttl = ttl_map.get(col, 0)
+        expired = ttl_manager.get_expired_ids(col, ttl)
+        result["by_collection"][col] = len(expired)
+        result["expired_count"] += len(expired)
+    return result
+
+
+@app.delete("/ttl/expired", tags=["Maintenance"])
+async def cleanup_expired(collection: str = "all"):
+    """Удалить документы с истёкшим TTL."""
+    result = ttl_manager.cleanup_expired(collection)
+    return {"deleted_count": result["total_deleted"], "status": "ok"}
+
+
+@app.get("/reindex/status", tags=["Maintenance"])
+async def reindex_status():
+    """Проверить, нужна ли переиндексация."""
+    return ttl_manager.check_reindex_needed()
 
 
 @app.exception_handler(Exception)

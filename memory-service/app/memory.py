@@ -48,13 +48,26 @@ class MemoryStore:
     
     def _get_or_create_collection(self, name: str):
         """Вспомогательный метод для получения или создания коллекции."""
+        collection_meta = {
+            "hnsw:space": "cosine",
+            "embedding_model": settings.EMBEDDING_MODEL,
+            "embedding_model_version": settings.EMBEDDING_MODEL_VERSION,
+        }
         try:
-            return self.client.get_collection(name)
+            col = self.client.get_collection(name)
+            existing_model = (col.metadata or {}).get("embedding_model", "")
+            if existing_model and existing_model != settings.EMBEDDING_MODEL:
+                logger.warning(
+                    f"Коллекция {name}: модель эмбеддингов изменилась "
+                    f"({existing_model} -> {settings.EMBEDDING_MODEL}). "
+                    f"Векторы могут быть несовместимы. Рекомендуется переиндексация."
+                )
+            return col
         except (ValueError, NotFoundError):
             logger.info(f"Создание новой коллекции: {name}")
             return self.client.create_collection(
                 name=name,
-                metadata={"hnsw:space": "cosine"}
+                metadata=collection_meta
             )
     
     def add_fact(self, fact_text: str, metadata: Optional[Dict[str, Any]] = None) -> str:

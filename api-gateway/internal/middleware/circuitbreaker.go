@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/neo-2022/openclaw-memory/api-gateway/internal/apierror"
 )
 
 // CircuitState — состояние автоматического выключателя (Circuit Breaker).
@@ -131,7 +133,8 @@ func CircuitBreakerMiddleware(cb *CircuitBreaker, serviceName string) func(http.
 
 			if state == StateOpen {
 				log.Printf("[CIRCUIT-BREAKER] %s: цепь разомкнута, запрос отклонён", serviceName)
-				http.Error(w, `{"error":"сервис недоступен","reason":"circuit breaker open"}`, http.StatusServiceUnavailable)
+				cid := r.Header.Get("X-Request-ID")
+				apierror.ServiceUnavailable(w, cid, "сервис недоступен", "circuit breaker open")
 				return
 			}
 

@@ -34,6 +34,7 @@ import (
 	"time"
 
 	"github.com/neo-2022/openclaw-memory/api-gateway/gates"
+	"github.com/neo-2022/openclaw-memory/api-gateway/internal/apierror"
 	"github.com/neo-2022/openclaw-memory/api-gateway/internal/logger"
 	"github.com/neo-2022/openclaw-memory/api-gateway/internal/middleware"
 )
@@ -95,7 +96,7 @@ func panicRecoveryMiddleware(next http.HandlerFunc) http.HandlerFunc {
 				cid := r.Header.Get("X-Request-ID")
 				ctx := logger.WithCorrelationID(r.Context(), cid)
 				logger.С(ctx).Error("ПАНИКА в обработчике", slog.Any("ошибка", err), slog.String("путь", r.URL.Path))
-				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+				apierror.InternalError(w, cid, "внутренняя ошибка сервера")
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -258,7 +259,7 @@ func main() {
 										}
 									}
 									logger.С(ctx).Warn("Метод не разрешён", slog.String("метод", req.Method), slog.String("путь", req.URL.Path))
-									http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+									apierror.MethodNotAllowed(w, cid)
 								}), r.Methods, allowedOrigins),
 							),
 							routeTimeout,

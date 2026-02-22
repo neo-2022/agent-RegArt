@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/neo-2022/openclaw-memory/api-gateway/internal/apierror"
 )
 
 // RateLimiter — ограничитель частоты запросов (Rate Limiter).
@@ -99,7 +101,8 @@ func RateLimitMiddleware(limiter *RateLimiter) func(http.HandlerFunc) http.Handl
 				key = forwarded
 			}
 			if !limiter.Allow(key) {
-				http.Error(w, `{"error":"превышен лимит запросов"}`, http.StatusTooManyRequests)
+				cid := r.Header.Get("X-Request-ID")
+				apierror.TooManyRequests(w, cid, "превышен лимит запросов", "Попробуйте повторить запрос позже")
 				return
 			}
 			next.ServeHTTP(w, r)

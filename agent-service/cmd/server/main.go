@@ -41,12 +41,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/metrics"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/rag"
 
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/apierror"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/db"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/handlers"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/intent"
@@ -124,6 +126,31 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+var requestCounter uint64
+
+func generateRequestID() string {
+	n := atomic.AddUint64(&requestCounter, 1)
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), n)
+}
+
+func requestIDHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = generateRequestID()
+		}
+		w.Header().Set("X-Request-ID", requestID)
+		r.Header.Set("X-Request-ID", requestID)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func requestIDMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestIDHandler(http.HandlerFunc(next)).ServeHTTP(w, r)
+	}
 }
 
 // Глобальный RAG-ретривер для поиска документов
@@ -235,29 +262,57 @@ func resolveToolRoute(toolName string) (string, string) {
 // Возвращает:
 //   - map[string]interface{}: результат выполнения инструмента
 //   - error: ошибка HTTP-запроса
+func sanitizeArgs(args map[string]interface{}) map[string]interface{} {
+	safe := make(map[string]interface{}, len(args))
+	for k, v := range args {
+		lower := strings.ToLower(k)
+		if strings.Contains(lower, "token") || strings.Contains(lower, "secret") || strings.Contains(lower, "password") || strings.Contains(lower, "key") {
+			safe[k] = "***"
+		} else if s, ok := v.(string); ok && len(s) > 200 {
+			safe[k] = s[:200] + "..."
+		} else {
+			safe[k] = v
+		}
+	}
+	return safe
+}
+
 func callTool(toolName string, args map[string]interface{}) (map[string]interface{}, error) {
+	callStart := time.Now()
 	baseURL, path := resolveToolRoute(toolName)
 	fullURL := baseURL + path
-	slog.Info("Вызов инструмента", slog.String("инструмент", toolName), slog.String("url", fullURL))
+	slog.Info("[TOOL-CALL] начало",
+		slog.String("инструмент", toolName),
+		slog.String("url", fullURL),
+		slog.Any("параметры", sanitizeArgs(args)),
+	)
 
 	data, err := json.Marshal(args)
 	if err != nil {
+		slog.Error("[TOOL-CALL] ошибка маршалинга", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
 		return nil, err
 	}
 	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(data))
 	if err != nil {
+		slog.Error("[TOOL-CALL] ошибка HTTP", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Читаем тело ответа целиком для надёжного парсинга
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
+		slog.Error("[TOOL-CALL] ошибка чтения", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
 		return nil, fmt.Errorf("ошибка чтения ответа: %v", err)
 	}
 
-	// Если HTTP-статус не 2xx — возвращаем ошибку с телом ответа
+	duration := time.Since(callStart)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		slog.Warn("[TOOL-CALL] HTTP ошибка",
+			slog.String("инструмент", toolName),
+			slog.Int("статус", resp.StatusCode),
+			slog.Duration("длительность", duration),
+			slog.String("outcome", "error"),
+		)
 		return map[string]interface{}{
 			"error":       fmt.Sprintf("HTTP %d от %s", resp.StatusCode, fullURL),
 			"status_code": resp.StatusCode,
@@ -265,25 +320,29 @@ func callTool(toolName string, args map[string]interface{}) (map[string]interfac
 		}, nil
 	}
 
-	// Попытка 1: JSON-объект
+	slog.Info("[TOOL-CALL] завершён",
+		slog.String("инструмент", toolName),
+		slog.Int("статус", resp.StatusCode),
+		slog.Duration("длительность", duration),
+		slog.Int("байт_ответа", len(bodyBytes)),
+		slog.String("outcome", "success"),
+	)
+
 	var result map[string]interface{}
 	if err := json.Unmarshal(bodyBytes, &result); err == nil {
 		return result, nil
 	}
 
-	// Попытка 2: JSON-массив
 	var arrResult []interface{}
 	if err := json.Unmarshal(bodyBytes, &arrResult); err == nil {
 		return map[string]interface{}{"result": arrResult}, nil
 	}
 
-	// Попытка 3: JSON-строка или число
 	var anyResult interface{}
 	if err := json.Unmarshal(bodyBytes, &anyResult); err == nil {
 		return map[string]interface{}{"result": anyResult}, nil
 	}
 
-	// Fallback: просто текст
 	return map[string]interface{}{"result": string(bodyBytes)}, nil
 }
 
@@ -340,19 +399,20 @@ func chatWithRetry(provider llm.ChatProvider, req *llm.ChatRequest) (*llm.ChatRe
 func chatHandler(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	statusCode := 200
+	cid := r.Header.Get("X-Request-ID")
 
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
 	var req ChatRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "Проверьте формат тела запроса")
 		return
 	}
 	if len(req.Messages) == 0 {
-		http.Error(w, "Empty messages", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Пустой список messages", "Передайте хотя бы одно сообщение")
 		return
 	}
 
@@ -361,8 +421,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	if intentType != intent.IntentNone {
 		resp, err := handlers.HandleIntent(intentType, params)
 		if err != nil {
-			slog.Error("Ошибка intent handler", slog.String("ошибка", err.Error()))
-			writeJSON(w, ChatResponse{Error: err.Error()})
+			slog.Error("Ошибка intent handler", slog.String("ошибка", err.Error()), slog.String("request_id", cid))
+			apierror.InternalError(w, cid, "Ошибка обработки намерения", "Попробуйте переформулировать запрос")
 			return
 		}
 		writeJSON(w, ChatResponse{Response: resp})
@@ -371,8 +431,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := repository.GetAgentByName(req.Agent)
 	if err != nil {
-		slog.Error("Не удалось получить агента", slog.String("агент", req.Agent), slog.String("ошибка", err.Error()))
-		writeJSON(w, ChatResponse{Error: "Agent not found or no suitable model: " + err.Error()})
+		slog.Error("Не удалось получить агента", slog.String("агент", req.Agent), slog.String("ошибка", err.Error()), slog.String("request_id", cid))
+		apierror.NotFound(w, cid, "Агент не найден")
 		return
 	}
 
@@ -383,9 +443,9 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	provider, err := llm.GlobalRegistry.Get(providerName)
 	if err != nil {
-		slog.Error("Провайдер не найден", slog.String("провайдер", providerName), slog.String("ошибка", err.Error()))
+		slog.Error("Провайдер не найден", slog.String("провайдер", providerName), slog.String("ошибка", err.Error()), slog.String("request_id", cid))
 		WriteSystemLog("error", "agent-service", fmt.Sprintf("Провайдер %s не найден", providerName), err.Error())
-		writeJSON(w, ChatResponse{Error: "Provider " + providerName + " not configured"})
+		apierror.InternalError(w, cid, "Провайдер не настроен", "Проверьте конфигурацию провайдера")
 		metrics.RecordChatError(req.Agent, providerName, agent.LLMModel, "provider_not_found")
 		return
 	}
@@ -477,8 +537,14 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	chatResp, err := chatWithRetry(provider, chatReq)
 	if err != nil {
-		slog.Error("Ошибка LLM", slog.String("ошибка", err.Error()))
-		WriteSystemLog("error", "agent-service", fmt.Sprintf("Ошибка LLM (%s/%s): %s", providerName, agent.LLMModel, llm.TranslateLLMError(err.Error())), err.Error())
+		slog.Error("[LLM-ERROR] ошибка провайдера",
+			slog.String("тип", "llm"),
+			slog.String("провайдер", providerName),
+			slog.String("модель", agent.LLMModel),
+			slog.String("ошибка", err.Error()),
+			slog.String("request_id", cid),
+		)
+		WriteSystemLog("error", "agent-service", fmt.Sprintf("[LLM] Ошибка (%s/%s): %s", providerName, agent.LLMModel, llm.TranslateLLMError(err.Error())), err.Error())
 		writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 		return
 	}
@@ -506,14 +572,14 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
 			if err != nil {
-				slog.Error("Ошибка LLM", slog.Int("раунд", round), slog.String("ошибка", err.Error()))
+				slog.Error("[LLM-ERROR] ошибка после tool-call", slog.String("тип", "llm"), slog.Int("раунд", round), slog.String("ошибка", err.Error()), slog.String("request_id", cid))
 				writeJSON(w, ChatResponse{Error: llm.TranslateLLMError(err.Error())})
 				return
 			}
 			continue
 		}
 
-		// --- Очистка thinking-тегов reasoning-моделей перед парсингом tool calls ---
+		// --- Очистка thinking-теговreasoning-моделей перед парсингом tool calls ---
 		// Модели типа ministral-3-14b-reasoning оборачивают размышления в [THINK]...[/THINK],
 		// что может помешать распознаванию JSON/XML/inline tool calls в тексте ответа.
 		contentForParsing := stripThinkingTags(chatResp.Content)
@@ -624,15 +690,38 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 //   - args: аргументы инструмента
 //   - history: история сообщений (для делегирования задач другим агентам)
 func dispatchTool(agentName, toolName string, args map[string]interface{}, history []llm.Message) map[string]interface{} {
+	dispatchStart := time.Now()
+	slog.Info("[DISPATCH] начало",
+		slog.String("агент", agentName),
+		slog.String("инструмент", toolName),
+		slog.Any("параметры", sanitizeArgs(args)),
+	)
+	var result map[string]interface{}
+	defer func() {
+		outcome := "success"
+		if _, hasErr := result["error"]; hasErr {
+			outcome = "error"
+		}
+		slog.Info("[DISPATCH] завершён",
+			slog.String("агент", agentName),
+			slog.String("инструмент", toolName),
+			slog.Duration("длительность", time.Since(dispatchStart)),
+			slog.String("outcome", outcome),
+		)
+	}()
 	switch toolName {
 	case "configure_agent":
-		return handleConfigureAgent(args)
+		result = handleConfigureAgent(args)
+		return result
 	case "get_agent_info":
-		return handleGetAgentInfo(args)
+		result = handleGetAgentInfo(args)
+		return result
 	case "list_models_for_role":
-		return handleListModelsForRole(args)
+		result = handleListModelsForRole(args)
+		return result
 	case "view_logs":
-		return handleViewLogs(args)
+		result = handleViewLogs(args)
+		return result
 	case "debug_code":
 		filePath, _ := args["file_path"].(string)
 		cmdArgs, _ := args["args"].(string)
@@ -640,29 +729,32 @@ func dispatchTool(agentName, toolName string, args map[string]interface{}, histo
 		if cmdArgs != "" {
 			cmd = filePath + " " + cmdArgs
 		}
-		result, err := callTool("execute", map[string]interface{}{"command": cmd})
-		if err != nil {
-			return map[string]interface{}{"error": err.Error()}
+		var callErr error
+		result, callErr = callTool("execute", map[string]interface{}{"command": cmd})
+		if callErr != nil {
+			result = map[string]interface{}{"error": callErr.Error()}
 		}
 		return result
 	case "edit_file":
 		filePath, _ := args["file_path"].(string)
 		oldText, _ := args["old_text"].(string)
 		newText, _ := args["new_text"].(string)
-		readResult, err := callTool("read", map[string]interface{}{"path": filePath})
-		if err != nil {
-			return map[string]interface{}{"error": err.Error()}
+		readResult, readErr := callTool("read", map[string]interface{}{"path": filePath})
+		if readErr != nil {
+			result = map[string]interface{}{"error": readErr.Error()}
+			return result
 		}
 		content, _ := readResult["content"].(string)
 		if !strings.Contains(content, oldText) {
-			return map[string]interface{}{"error": "old_text не найден в файле"}
+			result = map[string]interface{}{"error": "old_text не найден в файле"}
+			return result
 		}
 		newContent := strings.Replace(content, oldText, newText, 1)
-		writeResult, err := callTool("write", map[string]interface{}{"path": filePath, "content": newContent})
-		if err != nil {
-			return map[string]interface{}{"error": err.Error()}
+		result, readErr = callTool("write", map[string]interface{}{"path": filePath, "content": newContent})
+		if readErr != nil {
+			result = map[string]interface{}{"error": readErr.Error()}
 		}
-		return writeResult
+		return result
 
 	// ============================================================================
 	// Универсальные LEGO-блоки (compound skills)
@@ -673,43 +765,52 @@ func dispatchTool(agentName, toolName string, args map[string]interface{}, histo
 
 	// БЛОК 1: Системные
 	case "full_system_report":
-		return handleFullSystemReport()
+		result = handleFullSystemReport()
+		return result
 	case "check_stack":
-		return handleCheckStack(args)
+		result = handleCheckStack(args)
+		return result
 	case "diagnose_service":
-		return handleDiagnoseService(args)
+		result = handleDiagnoseService(args)
+		return result
 
-	// БЛОК 2: Интернет
 	case "web_research":
-		return handleWebResearch(args)
+		result = handleWebResearch(args)
+		return result
 	case "check_resources_batch":
-		return handleCheckResourcesBatch(args)
+		result = handleCheckResourcesBatch(args)
+		return result
 
-	// БЛОК 3: Файлы и отчёты
 	case "generate_report":
-		return handleGenerateReport(args)
+		result = handleGenerateReport(args)
+		return result
 	case "create_script":
-		return handleCreateScript(args)
+		result = handleCreateScript(args)
+		return result
 
-	// БЛОК 5: Утилиты
 	case "run_commands":
-		return handleRunCommands(args)
+		result = handleRunCommands(args)
+		return result
 	case "setup_cron_job":
-		return handleSetupCronJob(args)
+		result = handleSetupCronJob(args)
+		return result
 	case "setup_git_automation":
-		return handleSetupGitAutomation(args)
+		result = handleSetupGitAutomation(args)
+		return result
 	case "project_init":
-		return handleProjectInit(args)
+		result = handleProjectInit(args)
+		return result
 
-	// БЛОК 6: Установка ПО
 	case "install_packages":
-		return handleInstallPackages(args)
+		result = handleInstallPackages(args)
+		return result
 
 	default:
-		result, err := callTool(toolName, args)
-		if err != nil {
-			slog.Error("Ошибка вызова инструмента", slog.String("ошибка", err.Error()))
-			return map[string]interface{}{"error": err.Error()}
+		var callErr error
+		result, callErr = callTool(toolName, args)
+		if callErr != nil {
+			slog.Error("[TOOL-CALL] ошибка вызова инструмента", slog.String("инструмент", toolName), slog.String("ошибка", callErr.Error()))
+			result = map[string]interface{}{"error": callErr.Error()}
 		}
 		return result
 	}
@@ -948,13 +1049,14 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 // имя, текущая модель, провайдер, поддержка инструментов, аватар, промпт.
 // Используется фронтендом для отображения карточек агентов в панели моделей.
 func agentsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var agents []models.Agent
 	if err := db.DB.Find(&agents).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	var result []map[string]interface{}
@@ -981,19 +1083,20 @@ func agentsHandler(w http.ResponseWriter, r *http.Request) {
 // Возвращает JSON-массив объектов ModelInfo для отображения в UI.
 // Вся информация определяется автоматически — никаких жёстких привязок.
 func modelsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
 	ollamaModels, err := repository.GetOllamaModels()
 	if err != nil {
-		http.Error(w, "Failed to get models: "+err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось получить модели", err.Error())
 		return
 	}
 
 	if err := repository.SyncModels(ollamaModels); err != nil {
-		http.Error(w, "Failed to sync models: "+err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось синхронизировать модели", err.Error())
 		return
 	}
 
@@ -1040,13 +1143,14 @@ func modelsHandler(w http.ResponseWriter, r *http.Request) {
 // Ищет файлы .txt, .prompt, .md в директории prompts/{agent}.
 // Используется для отображения модального окна выбора промпта в UI.
 func promptsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	agentName := r.URL.Query().Get("agent")
 	if agentName == "" {
-		http.Error(w, "Missing agent parameter", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Не указан параметр agent", "")
 		return
 	}
 	promptsDir := filepath.Join(".", "prompts", agentName)
@@ -1056,7 +1160,7 @@ func promptsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	files, err := os.ReadDir(promptsDir)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	result := []string{}
@@ -1073,8 +1177,9 @@ func promptsHandler(w http.ResponseWriter, r *http.Request) {
 // Читает содержимое файла prompts/{agent}/{filename}, обновляет промпт агента в БД.
 // Устанавливает CurrentPromptFile для отображения текущего выбранного файла.
 func loadPromptHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var req struct {
@@ -1082,28 +1187,28 @@ func loadPromptHandler(w http.ResponseWriter, r *http.Request) {
 		Filename string `json:"filename"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "")
 		return
 	}
 	if req.Agent == "" || req.Filename == "" {
-		http.Error(w, "agent and filename required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуются agent и filename", "")
 		return
 	}
 	agent, err := repository.GetAgentByName(req.Agent)
 	if err != nil {
-		http.Error(w, "Agent not found", http.StatusNotFound)
+		apierror.NotFound(w, cid, "Агент не найден")
 		return
 	}
 	promptPath := filepath.Join(".", "prompts", req.Agent, req.Filename)
 	content, err := os.ReadFile(promptPath)
 	if err != nil {
-		http.Error(w, "Failed to read prompt file", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось прочитать файл промпта", "")
 		return
 	}
 	agent.Prompt = string(content)
 	agent.CurrentPromptFile = req.Filename
 	if err := db.DB.Save(agent).Error; err != nil {
-		http.Error(w, "Failed to update agent", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось обновить агента", "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -1114,28 +1219,29 @@ func loadPromptHandler(w http.ResponseWriter, r *http.Request) {
 // Устанавливает новый системный промпт, введённый пользователем через UI.
 // Сбрасывает CurrentPromptFile, так как промпт больше не привязан к файлу.
 func updatePromptHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var req UpdatePromptRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "")
 		return
 	}
 	if req.Agent == "" {
-		http.Error(w, "agent required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуется agent", "")
 		return
 	}
 	agent, err := repository.GetAgentByName(req.Agent)
 	if err != nil {
-		http.Error(w, "Agent not found", http.StatusNotFound)
+		apierror.NotFound(w, cid, "Агент не найден")
 		return
 	}
 	agent.Prompt = req.Prompt
-	agent.CurrentPromptFile = "" // сбрасываем, так как промпт введён вручную
+	agent.CurrentPromptFile = ""
 	if err := db.DB.Save(agent).Error; err != nil {
-		http.Error(w, "Failed to update agent", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось обновить агента", "")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -1147,23 +1253,24 @@ func updatePromptHandler(w http.ResponseWriter, r *http.Request) {
 // и при необходимости изменить провайдера.
 // Например: {"agent":"admin", "model":"gpt-4o", "provider":"openai"}
 func updateAgentModelHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	var req UpdateModelRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "")
 		return
 	}
 	if req.Agent == "" || req.Model == "" {
-		http.Error(w, "agent and model required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуются agent и model", "")
 		return
 	}
 
 	var agent models.Agent
 	if err := db.DB.Where("name = ?", req.Agent).First(&agent).Error; err != nil {
-		http.Error(w, "Agent not found", http.StatusNotFound)
+		apierror.NotFound(w, cid, "Агент не найден")
 		return
 	}
 
@@ -1172,7 +1279,7 @@ func updateAgentModelHandler(w http.ResponseWriter, r *http.Request) {
 		agent.Provider = req.Provider
 	}
 	if err := db.DB.Save(&agent).Error; err != nil {
-		http.Error(w, "Failed to update agent", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось обновить агента", "")
 		return
 	}
 
@@ -1185,32 +1292,33 @@ func updateAgentModelHandler(w http.ResponseWriter, r *http.Request) {
 // Сохраняет файл в uploads/avatars/{agent}_{filename} и обновляет поле Avatar в БД.
 // Файлы раздаются через /uploads/avatars/ как статика.
 func avatarUploadHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
 	agentName := r.URL.Query().Get("agent")
 	if agentName == "" {
-		http.Error(w, "agent parameter required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуется параметр agent", "")
 		return
 	}
 
-	err := r.ParseMultipartForm(10 << 20) // 10 MB
+	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
-		http.Error(w, "Failed to parse multipart form", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Не удалось разобрать multipart form", "")
 		return
 	}
 	file, handler, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "File not provided", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Файл не предоставлен", "")
 		return
 	}
 	defer file.Close()
 
 	uploadDir := filepath.Join("uploads", "avatars")
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
-		http.Error(w, "Failed to create upload dir", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось создать директорию", "")
 		return
 	}
 
@@ -1219,24 +1327,24 @@ func avatarUploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	out, err := os.Create(dst)
 	if err != nil {
-		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось сохранить файл", "")
 		return
 	}
 	defer out.Close()
 	if _, err := io.Copy(out, file); err != nil {
-		http.Error(w, "Failed to copy file", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось скопировать файл", "")
 		return
 	}
 	slog.Info("Аватар сохранён", slog.String("путь", dst))
 
 	agent, err := repository.GetAgentByName(agentName)
 	if err != nil {
-		http.Error(w, "Agent not found", http.StatusNotFound)
+		apierror.NotFound(w, cid, "Агент не найден")
 		return
 	}
 	agent.Avatar = filename
 	if err := db.DB.Save(agent).Error; err != nil {
-		http.Error(w, "Failed to update agent avatar", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось обновить аватар", "")
 		return
 	}
 
@@ -1247,14 +1355,15 @@ func avatarUploadHandler(w http.ResponseWriter, r *http.Request) {
 // avatarGetHandler — получение информации об аватаре агента (GET /avatar-info?agent=...).
 // Возвращает JSON с именем файла аватара или 404, если аватар не загружен.
 func avatarGetHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	agentName := r.URL.Query().Get("agent")
 	if agentName == "" {
-		http.Error(w, "agent parameter required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуется параметр agent", "")
 		return
 	}
 	agent, err := repository.GetAgentByName(agentName)
 	if err != nil {
-		http.Error(w, "Agent not found", http.StatusNotFound)
+		apierror.NotFound(w, cid, "Агент не найден")
 		return
 	}
 	if agent.Avatar == "" {
@@ -1270,17 +1379,18 @@ func avatarGetHandler(w http.ResponseWriter, r *http.Request) {
 // Используется для проверки работоспособности сервиса и отладки.
 // Обрабатывает только точный путь "/" — для остальных возвращает 404.
 func rootHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		apierror.NotFound(w, cid, "Маршрут не найден")
 		return
 	}
 	var agents []models.Agent
 	if err := db.DB.Find(&agents).Error; err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 	var result []map[string]interface{}
@@ -1573,15 +1683,16 @@ func formatLearningText(userMsg, assistantResp, category string) string {
 // Проксирует запрос к memory-service /learnings/stats и возвращает результат.
 // Показывает общее количество знаний, разбивку по моделям и категориям.
 func learningStatsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
 	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
 	resp, err := http.Get(memoryURL + "/learnings/stats")
 	if err != nil {
-		http.Error(w, "Ошибка подключения к memory-service: "+err.Error(), http.StatusBadGateway)
+		apierror.InternalError(w, cid, "Ошибка подключения к memory-service", err.Error())
 		return
 	}
 	defer resp.Body.Close()
@@ -1607,6 +1718,7 @@ func learningStatsHandler(w http.ResponseWriter, r *http.Request) {
 //
 // Используется UI для настройки облачных провайдеров в панели моделей.
 func providersHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	switch r.Method {
 	case http.MethodGet:
 		var configs []models.ProviderConfig
@@ -1677,11 +1789,11 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 			Enabled            bool   `json:"enabled"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "Невалидный JSON", "")
 			return
 		}
 		if req.Provider == "" {
-			http.Error(w, "provider required", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "Требуется provider", "")
 			return
 		}
 
@@ -1792,7 +1904,7 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 		cfg.Enabled = req.Enabled
 
 		if err := db.DB.Save(&cfg).Error; err != nil {
-			http.Error(w, "Failed to save config", http.StatusInternalServerError)
+			apierror.InternalError(w, cid, "Не удалось сохранить конфигурацию", "")
 			return
 		}
 
@@ -1803,11 +1915,11 @@ func providersHandler(w http.ResponseWriter, r *http.Request) {
 		})
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 	}
 }
 
-// getProviderHint — возвращает подсказку для пользователя при ошибке подключения провайдера.
+// getProviderHint— возвращает подсказку для пользователя при ошибке подключения провайдера.
 // Каждый провайдер имеет свои особенности аутентификации и настройки.
 func getProviderHint(provider string) string {
 	switch provider {
@@ -2041,8 +2153,9 @@ func getProviderGuide(provider string) ProviderGuide {
 //
 // Используется фронтендом для заполнения выпадающего списка облачных моделей.
 func cloudModelsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 	providerName := r.URL.Query().Get("provider")
@@ -2057,14 +2170,14 @@ func cloudModelsHandler(w http.ResponseWriter, r *http.Request) {
 	p, err := llm.GlobalRegistry.Get(providerName)
 	if err != nil {
 		slog.Error("Облачный провайдер не найден", slog.String("ошибка", err.Error()))
-		http.Error(w, "Provider not found: "+err.Error(), http.StatusNotFound)
+		apierror.NotFound(w, cid, "Провайдер не найден")
 		return
 	}
 	slog.Info("Облачный провайдер найден")
 	models, err := p.ListModels()
 	if err != nil {
 		slog.Error("Ошибка получения списка моделей", slog.String("ошибка", err.Error()))
-		http.Error(w, "Failed to get models: "+err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось получить модели", err.Error())
 		return
 	}
 	slog.Info("Облачные модели получены", slog.Int("количество", len(models)))
@@ -2083,6 +2196,7 @@ func cloudModelsHandler(w http.ResponseWriter, r *http.Request) {
 // POST   — создаёт новое пространство (JSON: {name, path})
 // DELETE — удаляет пространство по ID (?id=...)
 func workspacesHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	switch r.Method {
 	case http.MethodGet:
 		var workspaces []models.Workspace
@@ -2096,16 +2210,16 @@ func workspacesHandler(w http.ResponseWriter, r *http.Request) {
 			Path string `json:"path"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "Невалидный JSON", "")
 			return
 		}
 		if req.Name == "" {
-			http.Error(w, "name required", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "Требуется name", "")
 			return
 		}
 		ws := models.Workspace{Name: req.Name, Path: req.Path}
 		if err := db.DB.Create(&ws).Error; err != nil {
-			http.Error(w, "Failed to create workspace", http.StatusInternalServerError)
+			apierror.InternalError(w, cid, "Не удалось создать workspace", "")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -2114,18 +2228,18 @@ func workspacesHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		if id == "" {
-			http.Error(w, "id required", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "Требуется id", "")
 			return
 		}
 		if err := db.DB.Delete(&models.Workspace{}, id).Error; err != nil {
-			http.Error(w, "Failed to delete workspace", http.StatusInternalServerError)
+			apierror.InternalError(w, cid, "Не удалось удалить workspace", "")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		writeJSON(w, map[string]string{"status": "ok"})
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 	}
 }
 
@@ -2156,6 +2270,7 @@ func WriteSystemLog(level, service, message, details string) {
 // POST: принимает новый лог от внешних сервисов (tools-service, memory-service, api-gateway).
 // PATCH: отмечает лог как исправленный (?id=123&resolved=true).
 func logsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	switch r.Method {
 	case http.MethodGet:
 		query := db.DB.Model(&models.SystemLog{}).Order("created_at DESC")
@@ -2192,11 +2307,11 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 			Details string `json:"details"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "Невалидный JSON", "")
 			return
 		}
 		if req.Level == "" || req.Service == "" || req.Message == "" {
-			http.Error(w, "level, service, message обязательны", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "level, service, message обязательны", "")
 			return
 		}
 		WriteSystemLog(req.Level, req.Service, req.Message, req.Details)
@@ -2206,26 +2321,27 @@ func logsHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPatch:
 		id := r.URL.Query().Get("id")
 		if id == "" {
-			http.Error(w, "id обязателен", http.StatusBadRequest)
+			apierror.BadRequest(w, cid, "id обязателен", "")
 			return
 		}
 		resolved := r.URL.Query().Get("resolved") == "true"
 		if err := db.DB.Model(&models.SystemLog{}).Where("id = ?", id).Update("resolved", resolved).Error; err != nil {
-			http.Error(w, "Ошибка обновления", http.StatusInternalServerError)
+			apierror.InternalError(w, cid, "Ошибка обновления", "")
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		writeJSON(w, map[string]string{"status": "ok"})
 
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 	}
 }
 
 // ragAddHandler — обработчик для добавления документа в RAG базу знаний
 func ragAddHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
@@ -2235,12 +2351,12 @@ func ragAddHandler(w http.ResponseWriter, r *http.Request) {
 		Source  string `json:"source"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "")
 		return
 	}
 
 	if req.Title == "" || req.Content == "" {
-		http.Error(w, "title and content required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуются title и content", "")
 		return
 	}
 
@@ -2267,7 +2383,7 @@ func ragAddHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := db.DB.Create(&ragDoc).Error; err != nil {
 		slog.Error("Ошибка сохранения RAG документа в БД", slog.String("ошибка", err.Error()))
-		http.Error(w, "Failed to save document", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось сохранить документ", "")
 		return
 	}
 
@@ -2277,8 +2393,9 @@ func ragAddHandler(w http.ResponseWriter, r *http.Request) {
 
 // ragSearchHandler — обработчик для поиска по RAG базе знаний
 func ragSearchHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
@@ -2293,18 +2410,18 @@ func ragSearchHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if query == "" {
-		http.Error(w, "query required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуется query", "")
 		return
 	}
 
 	if ragRetriever == nil {
-		http.Error(w, "RAG not initialized", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "RAG не инициализирован", "")
 		return
 	}
 
 	results, err := ragRetriever.Search(query, 5)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apierror.InternalError(w, cid, err.Error(), "")
 		return
 	}
 
@@ -2378,13 +2495,15 @@ func ragFilesHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, folders)
 		return
 	}
-	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	cid := r.Header.Get("X-Request-ID")
+	apierror.MethodNotAllowed(w, cid)
 }
 
 // ragStatsHandler — обработчик для получения статистики RAG
 func ragStatsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
@@ -2401,8 +2520,9 @@ func ragStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 // ragDeleteHandler — обработчик для удаления документа из RAG
 func ragDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
@@ -2417,13 +2537,13 @@ func ragDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if fileName == "" {
-		http.Error(w, "name required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуется name", "")
 		return
 	}
 
 	if err := db.DB.Where("title = ?", fileName).Delete(&models.RagDocument{}).Error; err != nil {
 		slog.Error("Ошибка удаления RAG документа", slog.String("ошибка", err.Error()))
-		http.Error(w, "Failed to delete", http.StatusInternalServerError)
+		apierror.InternalError(w, cid, "Не удалось удалить", "")
 		return
 	}
 
@@ -2449,8 +2569,9 @@ var supportedExtensions = map[string]bool{
 
 // ragAddFolderHandler — обработчик для рекурсивной загрузки папки в RAG
 func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		apierror.MethodNotAllowed(w, cid)
 		return
 	}
 
@@ -2458,24 +2579,23 @@ func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
 		FolderPath string `json:"folder_path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Невалидный JSON", "")
 		return
 	}
 
 	folderPath := req.FolderPath
 	if folderPath == "" {
-		http.Error(w, "folder_path required", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Требуется folder_path", "")
 		return
 	}
 
-	// Проверяем, что папка существует
 	info, err := os.Stat(folderPath)
 	if err != nil {
-		http.Error(w, "Folder not found: "+err.Error(), http.StatusNotFound)
+		apierror.NotFound(w, cid, "Папка не найдена")
 		return
 	}
 	if !info.IsDir() {
-		http.Error(w, "Path is not a folder", http.StatusBadRequest)
+		apierror.BadRequest(w, cid, "Путь не является папкой", "")
 		return
 	}
 
@@ -3374,34 +3494,34 @@ func main() {
 	}
 
 	// Регистрация метрик endpoint (должна быть перед catch-all роутером)
-	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/metrics", requestIDMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		h := metrics.InitPrometheusHandler()
 		h.ServeHTTP(w, r)
-	})
+	}))
 
-	http.HandleFunc("/health", healthHandler)
-	http.HandleFunc("/chat", chatHandler)
-	http.HandleFunc("/agents", agentsHandler)
-	http.HandleFunc("/models", modelsHandler)
-	http.HandleFunc("/prompts", promptsHandler)
-	http.HandleFunc("/prompts/load", loadPromptHandler)
-	http.HandleFunc("/agent/prompt", updatePromptHandler)
-	http.HandleFunc("/update-model", updateAgentModelHandler)
-	http.HandleFunc("/avatar", avatarUploadHandler)
-	http.HandleFunc("/avatar-info", avatarGetHandler)
-	http.HandleFunc("/providers", providersHandler)
-	http.HandleFunc("/cloud-models", cloudModelsHandler)
-	http.HandleFunc("/workspaces", workspacesHandler)
-	http.HandleFunc("/learning-stats", learningStatsHandler)
-	http.HandleFunc("/logs", logsHandler)
+	http.HandleFunc("/health", requestIDMiddleware(healthHandler))
+	http.HandleFunc("/chat", requestIDMiddleware(chatHandler))
+	http.HandleFunc("/agents", requestIDMiddleware(agentsHandler))
+	http.HandleFunc("/models", requestIDMiddleware(modelsHandler))
+	http.HandleFunc("/prompts", requestIDMiddleware(promptsHandler))
+	http.HandleFunc("/prompts/load", requestIDMiddleware(loadPromptHandler))
+	http.HandleFunc("/agent/prompt", requestIDMiddleware(updatePromptHandler))
+	http.HandleFunc("/update-model", requestIDMiddleware(updateAgentModelHandler))
+	http.HandleFunc("/avatar", requestIDMiddleware(avatarUploadHandler))
+	http.HandleFunc("/avatar-info", requestIDMiddleware(avatarGetHandler))
+	http.HandleFunc("/providers", requestIDMiddleware(providersHandler))
+	http.HandleFunc("/cloud-models", requestIDMiddleware(cloudModelsHandler))
+	http.HandleFunc("/workspaces", requestIDMiddleware(workspacesHandler))
+	http.HandleFunc("/learning-stats", requestIDMiddleware(learningStatsHandler))
+	http.HandleFunc("/logs", requestIDMiddleware(logsHandler))
 
 	// RAG эндпоинты
-	http.HandleFunc("/rag/add", ragAddHandler)
-	http.HandleFunc("/rag/add-folder", ragAddFolderHandler)
-	http.HandleFunc("/rag/search", ragSearchHandler)
-	http.HandleFunc("/rag/files", ragFilesHandler)
-	http.HandleFunc("/rag/stats", ragStatsHandler)
-	http.HandleFunc("/rag/delete", ragDeleteHandler)
+	http.HandleFunc("/rag/add", requestIDMiddleware(ragAddHandler))
+	http.HandleFunc("/rag/add-folder", requestIDMiddleware(ragAddFolderHandler))
+	http.HandleFunc("/rag/search", requestIDMiddleware(ragSearchHandler))
+	http.HandleFunc("/rag/files", requestIDMiddleware(ragFilesHandler))
+	http.HandleFunc("/rag/stats", requestIDMiddleware(ragStatsHandler))
+	http.HandleFunc("/rag/delete", requestIDMiddleware(ragDeleteHandler))
 
 	for _, dir := range []string{
 		filepath.Join(".", "uploads"),
@@ -3415,9 +3535,9 @@ func main() {
 	}
 
 	uploadDir := filepath.Join(".", "uploads")
-	http.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadDir))))
+	http.Handle("/uploads/", requestIDHandler(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadDir)))))
 
-	http.HandleFunc("/", rootHandler)
+	http.HandleFunc("/", requestIDMiddleware(rootHandler))
 
 	port := getEnv("AGENT_SERVICE_PORT", "8083")
 

@@ -4,7 +4,15 @@
 //   - viewer: только безопасные read-only команды
 //   - operator: viewer + файловые операции, пакетные менеджеры
 //   - admin: полный AllowedCommands (но с dangerous/pattern checks)
+//
+// Режимы выполнения:
+//   - ADMIN_TRUSTED_MODE: admin разрешено всё, проверки только логируются
+//   - SAFE_MODE: все роли ограничены до viewer
 package auth
+
+import (
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/execmode"
+)
 
 // ViewerCommands — команды, доступные роли viewer (только чтение).
 var ViewerCommands = map[string]bool{
@@ -37,10 +45,15 @@ var OperatorCommands = map[string]bool{
 }
 
 // RoleAllowedCommand — проверяет, разрешена ли команда для данной роли.
-// admin имеет доступ ко всем командам из AllowedCommands executor'а.
-// operator = viewer + OperatorCommands.
-// viewer = только ViewerCommands.
+//
+// SAFE_MODE: все роли ограничены до viewer.
+// ADMIN_TRUSTED_MODE: admin разрешено всё без проверок.
+// Обычный режим: admin = AllowedCommands, operator = viewer + operator, viewer = viewer.
 func RoleAllowedCommand(role Role, cmd string) bool {
+	if execmode.IsSafe() {
+		return ViewerCommands[cmd]
+	}
+
 	switch role {
 	case RoleAdmin:
 		return true

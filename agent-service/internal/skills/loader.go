@@ -7,7 +7,7 @@
 //
 // Навыки хранятся в директории skills/ в корне проекта.
 // При запуске системы все навыки загружаются и становятся доступны
-// агентам в зависимости от их роли (admin, coder, novice).
+// агенту Admin.
 package skills
 
 import (
@@ -60,7 +60,7 @@ type Skill struct {
 	Template string `json:"template"`
 	// Теги для поиска и группировки навыков
 	Tags []string `json:"tags"`
-	// Список агентов, которым доступен навык: admin, coder, novice
+	// Список агентов, которым доступен навык (по умолчанию: admin)
 	Agents []string `json:"agents"`
 }
 
@@ -300,7 +300,7 @@ func (l *SkillLoader) GetSkill(name string) (*Skill, bool) {
 }
 
 // GetSkillsForAgent — возвращает все навыки, доступные указанному агенту.
-// agentRole — роль агента: "admin", "coder", "novice".
+// agentRole — роль агента (единственный агент: "admin").
 func (l *SkillLoader) GetSkillsForAgent(agentRole string) []*Skill {
 	l.mu.RLock()
 	defer l.mu.RUnlock()

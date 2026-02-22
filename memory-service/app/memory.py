@@ -98,58 +98,63 @@ class MemoryStore:
         logger.info(f"Добавлен факт (ID: {fact_id}): {fact_text[:50]}...")
         return fact_id
     
-    def search_facts(self, query: str, top_k: int = None, agent_name: Optional[str] = None, include_files: bool = False) -> List[str]:
+    def search_facts(self, query: str, top_k: int = None, agent_name: Optional[str] = None, include_files: bool = False) -> List[Dict[str, Any]]:
         """
         Поиск релевантных фактов и/или фрагментов файлов.
-        
-        Args:
-            query: Поисковый запрос
-            top_k: Количество результатов (по умолчанию settings.TOP_K)
-            agent_name: Фильтр по агенту
-            include_files: Включать ли результаты из файлов
-        
-        Returns:
-            Список текстов результатов
+        Возвращает структурированные результаты: text, score, source, metadata.
         """
         if top_k is None:
             top_k = settings.TOP_K
         
-        # Если коллекции пусты, возвращаем пустой список
         if self.facts_collection.count() == 0 and (not include_files or self.files_collection.count() == 0):
             return []
         
         query_embedding = self.encoder.encode(query).tolist()
-        results = []
+        results: List[Dict[str, Any]] = []
         
-        # Поиск по фактам
         if self.facts_collection.count() > 0:
             facts_res = self.facts_collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
+                include=["documents", "distances", "metadatas"],
                 where={"agent": agent_name} if agent_name else None
             )
             if facts_res and 'documents' in facts_res and facts_res['documents']:
-                results.extend(facts_res['documents'][0])
+                docs = facts_res['documents'][0]
+                dists = facts_res.get('distances', [[]])[0]
+                metas = facts_res.get('metadatas', [[]])[0]
+                for i, doc in enumerate(docs):
+                    dist = dists[i] if i < len(dists) else 1.0
+                    score = max(0.0, 1.0 - dist)
+                    meta = metas[i] if i < len(metas) else {}
+                    results.append({"text": doc, "score": round(score, 4), "source": "facts", "metadata": meta})
         
-        # Поиск по файлам
         if include_files and self.files_collection.count() > 0:
             files_res = self.files_collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
+                include=["documents", "distances", "metadatas"],
                 where={"agent": agent_name} if agent_name else None
             )
             if files_res and 'documents' in files_res and files_res['documents']:
-                results.extend(files_res['documents'][0])
+                docs = files_res['documents'][0]
+                dists = files_res.get('distances', [[]])[0]
+                metas = files_res.get('metadatas', [[]])[0]
+                for i, doc in enumerate(docs):
+                    dist = dists[i] if i < len(dists) else 1.0
+                    score = max(0.0, 1.0 - dist)
+                    meta = metas[i] if i < len(metas) else {}
+                    results.append({"text": doc, "score": round(score, 4), "source": "files", "metadata": meta})
         
-        # Убираем дубликаты
         seen = set()
-        unique_results = []
+        unique: List[Dict[str, Any]] = []
         for r in results:
-            if r not in seen:
-                seen.add(r)
-                unique_results.append(r)
+            if r["text"] not in seen:
+                seen.add(r["text"])
+                unique.append(r)
         
-        return unique_results
+        unique.sort(key=lambda x: x["score"], reverse=True)
+        return unique
     
     def add_file_chunk(self, chunk_text: str, metadata: Dict[str, Any]) -> str:
         """
@@ -306,28 +311,16 @@ class MemoryStore:
         return learning_id
     
     def search_learnings(self, query: str, model_name: str,
-                         top_k: int = 5, category: Optional[str] = None) -> List[str]:
+                         top_k: int = 5, category: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Поиск релевантных знаний для конкретной модели LLM.
-        
-        Вызывается перед каждым запросом к LLM — найденные знания
-        добавляются в системный промпт, обогащая контекст модели.
-        
-        Args:
-            query: Поисковый запрос (обычно — последнее сообщение пользователя)
-            model_name: Имя модели, для которой ищем знания
-            top_k: Максимальное количество результатов
-            category: Фильтр по категории (опционально)
-        
-        Returns:
-            Список текстов релевантных знаний
+        Возвращает структурированные результаты: text, score, source, metadata.
         """
         if self.learnings_collection.count() == 0:
             return []
         
         query_embedding = self.encoder.encode(query).tolist()
         
-        # Формируем фильтр по модели и (опционально) категории
         where_filter = {"model_name": model_name}
         if category:
             where_filter = {
@@ -341,10 +334,21 @@ class MemoryStore:
             results = self.learnings_collection.query(
                 query_embeddings=[query_embedding],
                 n_results=top_k,
+                include=["documents", "distances", "metadatas"],
                 where=where_filter
             )
             if results and 'documents' in results and results['documents']:
-                return results['documents'][0]
+                docs = results['documents'][0]
+                dists = results.get('distances', [[]])[0]
+                metas = results.get('metadatas', [[]])[0]
+                items: List[Dict[str, Any]] = []
+                for i, doc in enumerate(docs):
+                    dist = dists[i] if i < len(dists) else 1.0
+                    score = max(0.0, 1.0 - dist)
+                    meta = metas[i] if i < len(metas) else {}
+                    items.append({"text": doc, "score": round(score, 4), "source": "learnings", "metadata": meta})
+                items.sort(key=lambda x: x["score"], reverse=True)
+                return items
         except Exception as e:
             logger.error(f"Ошибка поиска знаний для модели {model_name}: {e}")
         

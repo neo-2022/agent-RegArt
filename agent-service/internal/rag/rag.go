@@ -13,6 +13,7 @@
 package rag
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -23,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/embeddings"
 )
 
@@ -127,9 +129,47 @@ func (d *DBRetriever) Config() *Config {
 }
 
 // EnsureTable — создаёт таблицу rag_docs в PostgreSQL, если её нет.
+// Использует подключение через database/sql с параметрами из Config.
 func (d *DBRetriever) EnsureTable() error {
-	// ЗАДАЧА: реализовать миграцию таблицы rag_docs в PostgreSQL.
-	fmt.Println("[RAG] Таблица rag_docs готова (заглушка)")
+	cfg := d.config
+	if cfg.DBHost == "" {
+		fmt.Println("[RAG] Параметры БД не заданы, миграция пропущена")
+		return nil
+	}
+
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName,
+	)
+
+	sqlDB, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return fmt.Errorf("ошибка подключения к БД: %w", err)
+	}
+	defer sqlDB.Close()
+
+	query := `CREATE TABLE IF NOT EXISTS rag_docs (
+		id          SERIAL PRIMARY KEY,
+		title       TEXT NOT NULL DEFAULT '',
+		content     TEXT NOT NULL DEFAULT '',
+		source      TEXT NOT NULL DEFAULT '',
+		chunk_index INTEGER DEFAULT 0,
+		total_chunks INTEGER DEFAULT 0,
+		workspace_id INTEGER,
+		created_at  TIMESTAMPTZ DEFAULT NOW(),
+		updated_at  TIMESTAMPTZ DEFAULT NOW(),
+		deleted_at  TIMESTAMPTZ
+	)`
+	if _, err := sqlDB.Exec(query); err != nil {
+		return fmt.Errorf("ошибка создания таблицы rag_docs: %w", err)
+	}
+
+	idx := `CREATE INDEX IF NOT EXISTS idx_rag_docs_source ON rag_docs(source)`
+	if _, err := sqlDB.Exec(idx); err != nil {
+		return fmt.Errorf("ошибка создания индекса: %w", err)
+	}
+
+	fmt.Println("[RAG] Таблица rag_docs готова")
 	return nil
 }
 

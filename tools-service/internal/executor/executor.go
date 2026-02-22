@@ -10,6 +10,7 @@
 package executor
 
 import (
+	"fmt"
 	"log/slog"
 	"os/exec"
 	"regexp"
@@ -133,6 +134,36 @@ type Result struct {
 	Stderr     string `json:"stderr"`
 	ReturnCode int    `json:"returncode"`
 	Error      string `json:"error,omitempty"`
+}
+
+// CheckCommand — проверяет команду на безопасность без выполнения.
+// Возвращает список подкоманд и ошибку, если команда заблокирована.
+func CheckCommand(command string) ([]string, error) {
+	cmdLower := strings.ToLower(strings.TrimSpace(command))
+
+	if subshellRe.MatchString(command) {
+		return nil, fmt.Errorf("подстановка команд (backtick/$()) запрещена")
+	}
+
+	for _, pattern := range BlockedPatterns {
+		if strings.Contains(cmdLower, pattern) {
+			return nil, fmt.Errorf("command contains blocked pattern: %s", pattern)
+		}
+	}
+
+	subCommands := extractSubCommands(command)
+	if len(subCommands) == 0 {
+		return nil, fmt.Errorf("empty command")
+	}
+	for _, sub := range subCommands {
+		if !AllowedCommands[sub] {
+			return nil, fmt.Errorf("command not allowed: %s", sub)
+		}
+		if reason, blocked := DangerousCommands[sub]; blocked {
+			return nil, fmt.Errorf("dangerous command blocked: %s — %s", sub, reason)
+		}
+	}
+	return subCommands, nil
 }
 
 // ExecuteCommand — выполняет команду безопасно через bash -c.

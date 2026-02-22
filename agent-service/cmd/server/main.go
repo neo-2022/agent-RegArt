@@ -1844,7 +1844,7 @@ func getProviderGuide(provider string) ProviderGuide {
 				"3. Скачайте модель: ollama pull llama3.1:8b\n" +
 				"4. URL по умолчанию: http://localhost:11434\n" +
 				"5. Для удалённого доступа: OLLAMA_HOST=0.0.0.0 ollama serve",
-			HowToChoose: "Сильные модели (7B+): llama3.1:8b, qwen2.5-coder:7b (поддержка tool calling).\n" +
+			HowToChoose: "Сильные модели (7B+): llama3.1:8b (поддержка tool calling).\n" +
 				"Компактные модели (≤3B): получат составные навыки (LEGO-блоки).\n" +
 				"Универсальный выбор: llama3.1:8b.",
 			HowToPay: "Все модели Ollama бесплатны — работают локально на вашем ПК.\n" +
@@ -1956,7 +1956,7 @@ func getProviderGuide(provider string) ProviderGuide {
 				"4. Вставьте ключ в поле API Key",
 			HowToChoose: "Routeway — агрегатор 70+ моделей, 200 бесплатных запросов/день.\n" +
 				"Бесплатные модели: llama-3.3-70b-instruct:free, deepseek-r1:free, qwen2.5-72b:free.\n" +
-				"Рекомендации: llama-3.3-70b-instruct:free (tool calling), qwen2.5-coder-32b:free (код).",
+				"Рекомендации: llama-3.3-70b-instruct:free (tool calling), qwen2.5-72b:free (универсальная).",
 			HowToPay: "Бесплатные модели (с суффиксом :free) не требуют оплаты.\n" +
 				"Лимит: 200 запросов в день (в 4 раза больше OpenRouter).",
 			HowToBalance: "Лимит сбрасывается ежедневно.\n" +
@@ -2000,7 +2000,6 @@ func getProviderGuide(provider string) ProviderGuide {
 				"8. Нажмите кнопку ↻ (обновить) в панели провайдеров для загрузки списка моделей",
 			HowToChoose: "LM Studio — бесплатные локальные модели, без лимитов запросов.\n" +
 				"Рекомендации: ministral-3-14b-reasoning (14B, reasoning + tool calling),\n" +
-				"qwen2.5-coder-14b-instruct (14B, специализация на коде),\n" +
 				"llama-3.1-8b-instruct (8B, универсальная).\n" +
 				"Требования: минимум 10GB RAM для 14B, 8GB для 8B моделей.",
 			HowToPay: "Полностью бесплатно! Модели работают локально на вашем ПК.\n" +

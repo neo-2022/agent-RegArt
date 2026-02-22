@@ -359,7 +359,6 @@ sudo -u postgres psql -c "CREATE DATABASE agentcore OWNER agent_user;"
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
 ollama pull llama3.1:8b
-ollama pull qwen2.5-coder:7b
 ```
 
 #### 5. Сборка и запуск

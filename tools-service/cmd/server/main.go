@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/neo-2022/openclaw-memory/tools-service/internal/auth"
 	"github.com/neo-2022/openclaw-memory/tools-service/internal/executor"
 	"github.com/neo-2022/openclaw-memory/tools-service/internal/logger"
 )
@@ -75,7 +76,30 @@ func executeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	logger.С(ctx).Info("Выполнение команды", slog.String("команда", req.Command))
+
+	role := auth.RoleFromContext(r.Context())
+	subCmds, err := executor.CheckCommand(req.Command)
+	if err != nil {
+		logger.С(ctx).Warn("Команда заблокирована", slog.String("команда", req.Command), slog.String("ошибка", err.Error()))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+		return
+	}
+	for _, sub := range subCmds {
+		if !auth.RoleAllowedCommand(role, sub) {
+			logger.С(ctx).Warn("Команда запрещена для роли",
+				slog.String("роль", string(role)),
+				slog.String("команда", sub),
+			)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{"error": "команда " + sub + " недоступна для роли " + string(role)})
+			return
+		}
+	}
+
+	logger.С(ctx).Info("Выполнение команды", slog.String("команда", req.Command), slog.String("роль", string(role)))
 	result := executor.ExecuteCommand(req.Command)
 	logger.С(ctx).Info("Результат выполнения", slog.Int("код", result.ReturnCode), slog.Int("stdout_байт", len(result.Stdout)), slog.Int("stderr_байт", len(result.Stderr)))
 	resp := ExecuteResponse{
@@ -644,34 +668,40 @@ func ydiskSearchHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	logger.Init("tools-service")
 
+	tokenRoles := auth.LoadTokensFromEnv()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
-	mux.HandleFunc("/execute", executeHandler)
-	mux.HandleFunc("/read", readFileHandler)
-	mux.HandleFunc("/write", writeFileHandler)
-	mux.HandleFunc("/list", listDirHandler)
-	mux.HandleFunc("/delete", deleteFileHandler)
-	mux.HandleFunc("/sysinfo", systemInfoHandler)
-	mux.HandleFunc("/cpuinfo", cpuInfoHandler)
-	mux.HandleFunc("/meminfo", memInfoHandler)
-	mux.HandleFunc("/cputemp", cpuTemperatureHandler)
-	mux.HandleFunc("/sysload", systemLoadHandler)
-	mux.HandleFunc("/findapp", findAppHandler)
-	mux.HandleFunc("/launchapp", launchAppHandler)
-	mux.HandleFunc("/addautostart", addAutostartHandler)
 
-	mux.HandleFunc("/ydisk/info", ydiskInfoHandler)
-	mux.HandleFunc("/ydisk/list", ydiskListHandler)
-	mux.HandleFunc("/ydisk/download", ydiskDownloadHandler)
-	mux.HandleFunc("/ydisk/upload", ydiskUploadHandler)
-	mux.HandleFunc("/ydisk/mkdir", ydiskCreateDirHandler)
-	mux.HandleFunc("/ydisk/delete", ydiskDeleteHandler)
-	mux.HandleFunc("/ydisk/move", ydiskMoveHandler)
-	mux.HandleFunc("/ydisk/search", ydiskSearchHandler)
+	mux.HandleFunc("/execute", auth.WithAuth(auth.RoleAdmin, tokenRoles, executeHandler))
+	mux.HandleFunc("/addautostart", auth.WithAuth(auth.RoleAdmin, tokenRoles, addAutostartHandler))
 
-	mux.HandleFunc("/browser/open", openURLHandler)
-	mux.HandleFunc("/browser/fetch", fetchURLHandler)
-	mux.HandleFunc("/browser/ai-chat", sendToAIChatHandler)
+	mux.HandleFunc("/read", auth.WithAuth(auth.RoleViewer, tokenRoles, readFileHandler))
+	mux.HandleFunc("/list", auth.WithAuth(auth.RoleViewer, tokenRoles, listDirHandler))
+	mux.HandleFunc("/findapp", auth.WithAuth(auth.RoleViewer, tokenRoles, findAppHandler))
+	mux.HandleFunc("/sysinfo", auth.WithAuth(auth.RoleViewer, tokenRoles, systemInfoHandler))
+	mux.HandleFunc("/cpuinfo", auth.WithAuth(auth.RoleViewer, tokenRoles, cpuInfoHandler))
+	mux.HandleFunc("/meminfo", auth.WithAuth(auth.RoleViewer, tokenRoles, memInfoHandler))
+	mux.HandleFunc("/cputemp", auth.WithAuth(auth.RoleViewer, tokenRoles, cpuTemperatureHandler))
+	mux.HandleFunc("/sysload", auth.WithAuth(auth.RoleViewer, tokenRoles, systemLoadHandler))
+
+	mux.HandleFunc("/write", auth.WithAuth(auth.RoleOperator, tokenRoles, writeFileHandler))
+	mux.HandleFunc("/delete", auth.WithAuth(auth.RoleOperator, tokenRoles, deleteFileHandler))
+	mux.HandleFunc("/launchapp", auth.WithAuth(auth.RoleOperator, tokenRoles, launchAppHandler))
+
+	mux.HandleFunc("/ydisk/info", auth.WithAuth(auth.RoleViewer, tokenRoles, ydiskInfoHandler))
+	mux.HandleFunc("/ydisk/list", auth.WithAuth(auth.RoleViewer, tokenRoles, ydiskListHandler))
+	mux.HandleFunc("/ydisk/download", auth.WithAuth(auth.RoleViewer, tokenRoles, ydiskDownloadHandler))
+	mux.HandleFunc("/ydisk/search", auth.WithAuth(auth.RoleViewer, tokenRoles, ydiskSearchHandler))
+
+	mux.HandleFunc("/ydisk/upload", auth.WithAuth(auth.RoleOperator, tokenRoles, ydiskUploadHandler))
+	mux.HandleFunc("/ydisk/mkdir", auth.WithAuth(auth.RoleOperator, tokenRoles, ydiskCreateDirHandler))
+	mux.HandleFunc("/ydisk/delete", auth.WithAuth(auth.RoleOperator, tokenRoles, ydiskDeleteHandler))
+	mux.HandleFunc("/ydisk/move", auth.WithAuth(auth.RoleOperator, tokenRoles, ydiskMoveHandler))
+
+	mux.HandleFunc("/browser/open", auth.WithAuth(auth.RoleOperator, tokenRoles, openURLHandler))
+	mux.HandleFunc("/browser/fetch", auth.WithAuth(auth.RoleViewer, tokenRoles, fetchURLHandler))
+	mux.HandleFunc("/browser/ai-chat", auth.WithAuth(auth.RoleOperator, tokenRoles, sendToAIChatHandler))
 
 	port := os.Getenv("TOOLS_PORT")
 	if port == "" {

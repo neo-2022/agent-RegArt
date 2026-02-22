@@ -26,10 +26,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/neo-2022/openclaw-memory/api-gateway/gates"
+	"github.com/neo-2022/openclaw-memory/api-gateway/internal/middleware"
 )
 
 // parseAllowedOrigins — разбирает переменную окружения CORS_ALLOWED_ORIGINS
@@ -137,6 +139,21 @@ func main() {
 	agentURL := getEnv("AGENT_SERVICE_URL", "http://localhost:8083")
 	port := getEnv("GATEWAY_PORT", "8080")
 
+	// Rate limiter: настраиваемый через переменные окружения
+	rlLimit, _ := strconv.Atoi(getEnv("RATE_LIMIT_RPS", "60"))
+	rlWindow, _ := time.ParseDuration(getEnv("RATE_LIMIT_WINDOW", "1m"))
+	rateLimiter := middleware.NewRateLimiter(rlLimit, rlWindow)
+	rateLimitMW := middleware.RateLimitMiddleware(rateLimiter)
+	log.Printf("[GATEWAY] Rate limiter: %d req / %v", rlLimit, rlWindow)
+
+	// Circuit breakers для каждого бэкенда
+	cbMemory := middleware.NewCircuitBreaker(5, 30*time.Second)
+	cbTools := middleware.NewCircuitBreaker(5, 30*time.Second)
+	cbAgent := middleware.NewCircuitBreaker(10, 30*time.Second)
+
+	// Tracing middleware
+	traceMW := middleware.TracingMiddleware("api-gateway")
+
 	// Парсим URL для создания reverse proxy
 	memoryTarget, _ := url.Parse(memoryURL)
 	toolsTarget, _ := url.Parse(toolsURL)
@@ -200,21 +217,43 @@ func main() {
 			routeTimeout = 300 * time.Second
 		}
 
+		// Выбираем circuit breaker по целевому сервису
+		var cb *middleware.CircuitBreaker
+		var svcName string
+		switch r.Target {
+		case memoryTarget:
+			cb = cbMemory
+			svcName = "memory"
+		case toolsTarget:
+			cb = cbTools
+			svcName = "tools"
+		default:
+			cb = cbAgent
+			svcName = "agent"
+		}
+		cbMW := middleware.CircuitBreakerMiddleware(cb, svcName)
+
 		handler := requestIDMiddleware(
-			panicRecoveryMiddleware(
-				timeoutMiddleware(
-					corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-						log.Printf("[GATEWAY] %s %s → %s (target: %s, rid: %s)", req.Method, req.URL.Path, r.Path, r.Target.Host, req.Header.Get("X-Request-ID"))
-						for _, m := range r.Methods {
-							if m == req.Method {
-								proxy.ServeHTTP(w, req)
-								return
-							}
-						}
-						log.Printf("[GATEWAY] ОТКАЗ: метод %s не разрешён для %s", req.Method, req.URL.Path)
-						http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-					}), r.Methods, allowedOrigins),
-					routeTimeout,
+			traceMW(
+				rateLimitMW(
+					panicRecoveryMiddleware(
+						timeoutMiddleware(
+							cbMW(
+								corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+									log.Printf("[GATEWAY] %s %s → %s (target: %s, rid: %s)", req.Method, req.URL.Path, r.Path, r.Target.Host, req.Header.Get("X-Request-ID"))
+									for _, m := range r.Methods {
+										if m == req.Method {
+											proxy.ServeHTTP(w, req)
+											return
+										}
+									}
+									log.Printf("[GATEWAY] ОТКАЗ: метод %s не разрешён для %s", req.Method, req.URL.Path)
+									http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+								}), r.Methods, allowedOrigins),
+							),
+							routeTimeout,
+						),
+					),
 				),
 			),
 		)

@@ -33,4 +33,12 @@ class Settings:
     # Режим отладки
     DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
+    # TTL для документов (в днях, 0 = без ограничения)
+    FACTS_TTL_DAYS = int(os.getenv("FACTS_TTL_DAYS", "90"))
+    FILES_TTL_DAYS = int(os.getenv("FILES_TTL_DAYS", "30"))
+    LEARNINGS_TTL_DAYS = int(os.getenv("LEARNINGS_TTL_DAYS", "0"))
+
+    # Интервал проверки TTL/переиндексации (в секундах)
+    REINDEX_CHECK_INTERVAL = int(os.getenv("REINDEX_CHECK_INTERVAL", "3600"))
+
 settings = Settings()

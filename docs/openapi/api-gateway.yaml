@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: API Gateway
+  description: |
+    Центральный маршрутизатор — принимает запросы от web-ui и перенаправляет
+    на соответствующие микросервисы. Включает CORS, rate limiting, circuit breaker.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /memory/{path}:
+    get:
+      tags: [Proxy → memory-service]
+      summary: Проксирование на memory-service (с удалением /memory)
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/CircuitOpen'
+
+  /tools/{path}:
+    get:
+      tags: [Proxy → tools-service]
+      summary: Проксирование на tools-service (с удалением /tools)
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/CircuitOpen'
+
+  /agents/{path}:
+    get:
+      tags: [Proxy → agent-service]
+      summary: Проксирование на agent-service (с удалением /agents)
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response
+
+  /chat:
+    post:
+      tags: [Proxy → agent-service]
+      summary: Чат (без удаления префикса)
+      responses:
+        '200':
+          description: SSE stream
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /models:
+    get:
+      tags: [Proxy → agent-service]
+      summary: Список моделей
+      responses:
+        '200':
+          description: Proxied response
+
+  /providers:
+    get:
+      tags: [Proxy → agent-service]
+      summary: Провайдеры LLM
+      responses:
+        '200':
+          description: Proxied response
+
+  /workspaces:
+    get:
+      tags: [Proxy → agent-service]
+      summary: Рабочие пространства
+      responses:
+        '200':
+          description: Proxied response
+
+  /health:
+    get:
+      tags: [Health]
+      summary: Проверка здоровья (проксируется на memory-service)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+
+  /ydisk/{path}:
+    get:
+      tags: [Proxy → tools-service]
+      summary: Яндекс.Диск (без удаления /ydisk)
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response
+
+components:
+  responses:
+    RateLimited:
+      description: Превышен лимит запросов
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: rate limit exceeded
+
+    CircuitOpen:
+      description: Сервис временно недоступен (circuit breaker open)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: service unavailable
+              reason:
+                type: string
+                example: circuit breaker open

@@ -271,6 +271,8 @@ func main() {
 		http.Handle(r.Path, handler)
 	}
 
+	http.HandleFunc("/metrics", middleware.MetricsHandler)
+
 	srv := &http.Server{
 		Addr:         ":" + port,
 		ReadTimeout:  15 * time.Second,

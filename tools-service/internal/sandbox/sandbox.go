@@ -6,10 +6,9 @@ package sandbox
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 )
 
@@ -88,7 +87,7 @@ func Execute(cfg Config, command string) Result {
 
 	args = append(args, cfg.Image, "bash", "-c", command)
 
-	log.Printf("[ПЕСОЧНИЦА] выполняем: docker %s", strings.Join(args, " "))
+	slog.Info("Выполнение команды в песочнице", slog.String("команда", command))
 
 	cmd := exec.Command("docker", args...)
 

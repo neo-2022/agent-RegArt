@@ -1,0 +1,122 @@
+# Kubernetes манифесты для agent-service
+# Включает: Deployment, Service, HPA, PDB
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-service
+  labels:
+    app: agent-service
+    part-of: agent-regart
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-service
+  template:
+    metadata:
+      labels:
+        app: agent-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: agent-service
+          image: agent-regart/agent-service:latest
+          ports:
+            - containerPort: 8083
+              name: http
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: agent-regart-secrets
+                  key: database-url
+            - name: MEMORY_SERVICE_URL
+              value: "http://memory-service:8001"
+            - name: TOOLS_SERVICE_URL
+              value: "http://tools-service:8082"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: uploads
+              mountPath: /app/uploads
+            - name: prompts
+              mountPath: /app/prompts
+      volumes:
+        - name: uploads
+          emptyDir: {}
+        - name: prompts
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-service
+  labels:
+    app: agent-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8083
+      targetPort: 8083
+      protocol: TCP
+      name: http
+  selector:
+    app: agent-service
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent-service
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-service-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent-service

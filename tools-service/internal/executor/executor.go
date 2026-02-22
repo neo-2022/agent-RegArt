@@ -10,7 +10,9 @@
 package executor
 
 import (
+	"log/slog"
 	"os/exec"
+	"regexp"
 	"strings"
 )
 
@@ -106,7 +108,18 @@ var BlockedPatterns = []string{
 	"> /dev/sd",
 	"chmod -R 777 /",
 	"chown -R",
+	"/etc/shadow",
+	"/etc/passwd",
+	"nc -l",
+	"ncat -l",
+	"base64 -d",
+	"python -c",
+	"python3 -c",
+	"perl -e",
+	"ruby -e",
 }
+
+var subshellRe = regexp.MustCompile("(`[^`]+`|\\$\\([^)]+\\))")
 
 // Result — результат выполнения команды.
 //
@@ -135,8 +148,14 @@ type Result struct {
 func ExecuteCommand(command string) Result {
 	cmdLower := strings.ToLower(strings.TrimSpace(command))
 
+	if subshellRe.MatchString(command) {
+		slog.Warn("Заблокирована подстановка команды", slog.String("команда", command))
+		return Result{Error: "подстановка команд (backtick/$()) запрещена"}
+	}
+
 	for _, pattern := range BlockedPatterns {
 		if strings.Contains(cmdLower, pattern) {
+			slog.Warn("Заблокирован опасный паттерн", slog.String("паттерн", pattern), slog.String("команда", command))
 			return Result{Error: "command contains blocked pattern: " + pattern}
 		}
 	}
@@ -147,13 +166,16 @@ func ExecuteCommand(command string) Result {
 	}
 	for _, sub := range subCommands {
 		if !AllowedCommands[sub] {
+			slog.Warn("Команда не в белом списке", slog.String("команда", sub))
 			return Result{Error: "command not allowed: " + sub}
 		}
 		if reason, blocked := DangerousCommands[sub]; blocked {
+			slog.Warn("Опасная команда заблокирована", slog.String("команда", sub), slog.String("причина", reason))
 			return Result{Error: "dangerous command blocked: " + sub + " — " + reason}
 		}
 	}
 
+	slog.Info("Выполнение команды", slog.String("команда", command))
 	cmd := exec.Command("bash", "-c", command)
 
 	stdout, err := cmd.Output()

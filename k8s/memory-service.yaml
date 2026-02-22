@@ -1,0 +1,125 @@
+# Kubernetes манифесты для memory-service
+# Включает: Deployment, Service, HPA, PDB
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-service
+  labels:
+    app: memory-service
+    part-of: agent-regart
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: memory-service
+  template:
+    metadata:
+      labels:
+        app: memory-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: memory-service
+          image: agent-regart/memory-service:latest
+          ports:
+            - containerPort: 8001
+              name: http
+          env:
+            - name: CHROMA_HOST
+              value: "chroma"
+            - name: CHROMA_PORT
+              value: "8000"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: memory-service-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-service
+  labels:
+    app: memory-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: http
+  selector:
+    app: memory-service
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: memory-service-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: memory-service-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: memory-service
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: memory-service-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: memory-service

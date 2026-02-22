@@ -283,6 +283,22 @@
 - Node.js 20+ и npm
 - Ollama (для локальных LLM-моделей)
 
+### Быстрый старт через Docker Compose
+
+```bash
+git clone https://github.com/neo-2022/agent-RegArt.git
+cd agent-RegArt
+cp .env.example .env   # отредактируйте при необходимости
+docker compose up -d   # PostgreSQL + ChromaDB + memory-service
+```
+
+Docker Compose поднимает:
+- **PostgreSQL** (порт 5432) — хранение чатов, агентов, провайдеров
+- **ChromaDB** (порт 8000) — векторное хранилище для RAG
+- **memory-service** (порт 8001) — API памяти и обучения
+
+Остальные сервисы (agent-service, tools-service, api-gateway, web-ui) запускаются локально — см. раздел «Сборка и запуск» ниже.
+
 ### Быстрая установка (install.sh)
 
 ```bash
@@ -451,8 +467,43 @@ agent-RegArt/
 +-- web-ui/                  # Веб-интерфейс (React/Vite)
 |   +-- src/                 # Компоненты, стили
 +-- .github/workflows/       # CI/CD (GitHub Actions)
++-- Makefile                 # Сборка, тесты, линтинг, запуск
++-- .env.example             # Шаблон переменных окружения
++-- ROADMAP.md               # Дорожная карта проекта
++-- CHANGELOG.md             # История изменений
 +-- install.sh               # Установщик для Linux
 +-- README.md                # Этот файл
+```
+
+---
+
+## Сборка и тестирование через Makefile
+
+Проект включает `Makefile` с основными целями:
+
+```bash
+make build        # собрать все Go-сервисы
+make test         # запустить все тесты (Go + Python)
+make test-go      # только Go-тесты
+make test-python  # только Python-тесты (memory-service)
+make lint         # проверка форматирования и линтинг
+make run          # запустить все сервисы локально
+make docker       # запустить через docker compose
+make check-env    # проверить переменные окружения
+make clean        # удалить бинарники
+make help         # справка по всем целям
+```
+
+### Тесты
+
+**Go-тесты** (agent-service):
+```bash
+cd agent-service && go test ./... -v
+```
+
+**Python-тесты** (memory-service):
+```bash
+cd memory-service && python -m pytest tests/ -v
 ```
 
 ---
@@ -460,10 +511,11 @@ agent-RegArt/
 ## CI/CD
 
 GitHub Actions автоматически проверяет при каждом push и PR:
-1. **agent-service** -- `go build`, `gofmt`, `go vet`
+1. **agent-service** -- `go build`, `go test`, `gofmt`, `go vet`
 2. **tools-service** -- `go build`, `gofmt`, `go vet`
 3. **api-gateway** -- `go build`, `gofmt`, `go vet`
 4. **web-ui** -- `tsc --noEmit`, `vite build`
+5. **memory-service** -- `pytest`
 
 ---
 

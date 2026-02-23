@@ -108,10 +108,10 @@ func LimitContext(results []SearchResult, maxTotalLen int) []SearchResult {
 // DBRetriever — основной компонент RAG-системы.
 // Обеспечивает работу с ChromaDB и fallback-поиском документов.
 type DBRetriever struct {
-	config         *Config
-	embedding      embeddings.EmbeddingModel
-	chromaURL      string
-	chromaAPIVer   string
+	config       *Config
+	embedding    embeddings.EmbeddingModel
+	chromaURL    string
+	chromaAPIVer string
 }
 
 // NewDBRetriever — создаёт новый экземпляр DBRetriever с заданной конфигурацией.

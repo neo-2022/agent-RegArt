@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	MaxPayloadSize    = 10 * 1024 * 1024 // 10 МБ
-	MaxURILength      = 2048             // Максимальная длина URI
-	MaxHeaderSize     = 8192             // Максимальный размер одного заголовка (8 КБ)
-	MaxQueryLength    = 4096             // Максимальная длина query string
+	MaxPayloadSize = 10 * 1024 * 1024 // 10 МБ
+	MaxURILength   = 2048             // Максимальная длина URI
+	MaxHeaderSize  = 8192             // Максимальный размер одного заголовка (8 КБ)
+	MaxQueryLength = 4096             // Максимальная длина query string
 )
 
 // ValidationMiddleware — HTTP-мидлварь для валидации входящих запросов.

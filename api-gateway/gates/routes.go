@@ -17,9 +17,9 @@ type Route struct {
 }
 
 var longTransport = &http.Transport{
-	DialContext:         (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+	DialContext:           (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
 	ResponseHeaderTimeout: 300 * time.Second,
-	IdleConnTimeout:     90 * time.Second,
+	IdleConnTimeout:       90 * time.Second,
 }
 
 // NewCustomProxy создает обратный прокси для заданного целевого URL с удалением префикса.

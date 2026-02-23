@@ -16,10 +16,14 @@ type httpMetrics struct {
 	latencySum     uint64
 	latencyCount   uint64
 	activeRequests int64
+	routeCounts    map[string]*uint64
+	routeLatency   map[string]*uint64
 }
 
 var metrics = &httpMetrics{
 	statusCounts: make(map[int]*uint64),
+	routeCounts:  make(map[string]*uint64),
+	routeLatency: make(map[string]*uint64),
 }
 
 type statusCapture struct {
@@ -51,6 +55,8 @@ func MetricsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			atomic.AddUint64(&metrics.totalErrors, 1)
 		}
 
+		route := normalizeRoute(r.URL.Path)
+
 		metrics.mu.Lock()
 		cnt, ok := metrics.statusCounts[sc.code]
 		if !ok {
@@ -59,8 +65,34 @@ func MetricsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			metrics.statusCounts[sc.code] = cnt
 		}
 		atomic.AddUint64(cnt, 1)
+
+		rc, ok := metrics.routeCounts[route]
+		if !ok {
+			var v uint64
+			rc = &v
+			metrics.routeCounts[route] = rc
+		}
+		atomic.AddUint64(rc, 1)
+
+		rl, ok := metrics.routeLatency[route]
+		if !ok {
+			var v uint64
+			rl = &v
+			metrics.routeLatency[route] = rl
+		}
+		atomic.AddUint64(rl, dur)
 		metrics.mu.Unlock()
 	}
+}
+
+func normalizeRoute(path string) string {
+	prefixes := []string{"/memory/", "/tools/", "/agents/", "/ydisk/", "/rag/", "/autoskill/", "/uploads/"}
+	for _, p := range prefixes {
+		if len(path) >= len(p) && path[:len(p)] == p {
+			return p + "*"
+		}
+	}
+	return path
 }
 
 func MetricsHandler(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +129,18 @@ func MetricsHandler(w http.ResponseWriter, r *http.Request) {
 	metrics.mu.RLock()
 	for code, cnt := range metrics.statusCounts {
 		fmt.Fprintf(w, "http_requests_by_status{code=\"%d\"} %d\n", code, atomic.LoadUint64(cnt))
+	}
+
+	fmt.Fprintf(w, "\n# HELP http_requests_by_route Количество запросов по маршруту\n")
+	fmt.Fprintf(w, "# TYPE http_requests_by_route counter\n")
+	for route, cnt := range metrics.routeCounts {
+		fmt.Fprintf(w, "http_requests_by_route{route=\"%s\"} %d\n", route, atomic.LoadUint64(cnt))
+	}
+
+	fmt.Fprintf(w, "\n# HELP http_route_latency_ms_total Суммарная задержка по маршруту (мс)\n")
+	fmt.Fprintf(w, "# TYPE http_route_latency_ms_total counter\n")
+	for route, lat := range metrics.routeLatency {
+		fmt.Fprintf(w, "http_route_latency_ms_total{route=\"%s\"} %d\n", route, atomic.LoadUint64(lat))
 	}
 	metrics.mu.RUnlock()
 }

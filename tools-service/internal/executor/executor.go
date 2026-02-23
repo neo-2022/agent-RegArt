@@ -67,7 +67,7 @@ var AllowedCommands = map[string]bool{
 	"dpkg": true, "rpm": true, "which": true,
 	"gtk-launch": true, "snap": true, "flatpak": true,
 	"head": true, "tail": true, "wc": true, "sort": true, "uniq": true,
-	"date": true, "whoami": true, "hostname": true, "uname": true, "pwd": true,
+	"date": true, "whoami": true, "hostname": true, "uname": true, "pwd": true, "uptime": true,
 	"sed": true, "awk": true, "tee": true, "xargs": true,
 	"docker": true, "docker-compose": true,
 	"go": true, "make": true, "gcc": true, "g++": true,

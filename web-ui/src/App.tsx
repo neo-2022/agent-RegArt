@@ -145,6 +145,50 @@ const DEFAULT_AGENTS: Agent[] = [
   { name: 'admin', model: '', provider: 'ollama', supportsTools: true, avatar: '', prompt: '' },
 ];
 
+// RAG_LANGUAGE_EXTENSIONS — поддерживаемые языки/форматы для загрузки файлов в RAG.
+// Важно: список собран как «язык -> набор расширений», чтобы не было скрытого хардкода в одном длинном массиве.
+// Если нужно добавить новый язык, достаточно добавить ключ и его расширения в эту карту.
+const RAG_LANGUAGE_EXTENSIONS: Record<string, string[]> = {
+  'Python': ['.py', '.pyw', '.pyi'],
+  'C/C++': ['.c', '.h', '.cpp', '.cc', '.cxx', '.hpp', '.hh', '.hxx'],
+  'Java': ['.java'],
+  'R': ['.r', '.rmd'],
+  'JavaScript': ['.js', '.mjs', '.cjs'],
+  'Swift': ['.swift'],
+  'Rust': ['.rs'],
+  'C#': ['.cs', '.csx'],
+  'PHP': ['.php', '.phtml'],
+  'Ada': ['.ada', '.adb', '.ads'],
+  'Objective-C': ['.m', '.mm'],
+  'TypeScript': ['.ts', '.tsx'],
+  'Matlab': ['.m', '.mlx'],
+  'Powershell': ['.ps1', '.psm1', '.psd1'],
+  'Dart': ['.dart'],
+  'Ruby': ['.rb', '.rake', '.gemspec'],
+  'Lua': ['.lua'],
+  'Kotlin': ['.kt', '.kts'],
+  'VBA': ['.vba', '.bas', '.cls'],
+  'Julia': ['.jl'],
+  'Go': ['.go'],
+  'Scala': ['.scala', '.sc'],
+  'Abap': ['.abap'],
+  'Delphi/Pascal': ['.pas', '.dpr', '.pp'],
+  'Zig': ['.zig'],
+  'Haskell': ['.hs', '.lhs'],
+  'Visual Basic': ['.vb'],
+  'Cobol': ['.cob', '.cbl', '.cpy'],
+  'Perl': ['.pl', '.pm', '.t'],
+  'Groovy': ['.groovy', '.gradle'],
+  '1C': ['.bsl', '.os'],
+
+  // Дополнительные текстовые форматы, которые уже использовались в RAG и остаются полезными для базы знаний.
+  'Text/Markup': ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log', '.sh', '.bash', '.zsh'],
+};
+
+const RAG_SUPPORTED_EXTENSIONS = Array.from(
+  new Set(Object.values(RAG_LANGUAGE_EXTENSIONS).flat().map(ext => ext.toLowerCase())),
+);
+
 // CHUNK_SIZE — максимальный размер содержимого файла для отправки в одном сообщении.
 // Файлы больше этого лимита обрезаются с предложением «продолжить чтение».
 // 16000 символов ≈ 4000 токенов — безопасный размер для большинства моделей.
@@ -1497,8 +1541,6 @@ function App() {
                 className="provider-save-btn"
                 disabled={ragUploadStatus === 'uploading'}
                 onClick={() => {
-                  const supportedExtensions = ['.txt', '.md', '.markdown', '.json', '.jsonl', '.csv', '.html', '.htm', '.xml', '.yaml', '.yml', '.go', '.py', '.js', '.ts', '.java', '.c', '.cpp', '.h', '.hpp', '.rs', '.rb', '.php', '.swift', '.kt', '.sh', '.bash', '.zsh', '.sql', '.graphql', '.gql', '.dockerfile', '.toml', '.ini', '.conf', '.log'];
-                  
                   // Сначала пробуем webkitdirectory для выбора папки
                   const folderInput = document.createElement('input');
                   folderInput.type = 'file';
@@ -1520,7 +1562,7 @@ function App() {
                     
                     for (const file of Array.from(files)) {
                       const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
-                      if (!supportedExtensions.includes(ext)) { skippedCount++; continue; }
+                      if (!RAG_SUPPORTED_EXTENSIONS.includes(ext)) { skippedCount++; continue; }
                       try {
                         const content = await file.text();
                         const fileName = (file as any).webkitRelativePath || file.name;

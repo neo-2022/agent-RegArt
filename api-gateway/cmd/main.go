@@ -201,6 +201,11 @@ func main() {
 		{Path: "/ydisk/", Target: toolsTarget, Methods: []string{"GET", "POST", "DELETE"}, Strip: false},
 		// Статика аватаров: без удаления префикса, чтобы /uploads/... шёл как есть
 		{Path: "/uploads/", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
+		// RAG — база знаний (проксируется на agent-service)
+		{Path: "/rag/", Target: agentTarget, Methods: []string{"GET", "POST", "DELETE"}, Strip: false},
+		// Метрики сценариев и auto-skill паттерны (проксируется на agent-service)
+		{Path: "/scenario-metrics", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
+		{Path: "/autoskill/", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
 		// Системные логи (проксируется на agent-service)
 		{Path: "/logs", Target: agentTarget, Methods: []string{"GET", "POST", "PATCH"}, Strip: false},
 		// Проверка здоровья через memory-service
@@ -222,7 +227,7 @@ func main() {
 		}
 		// Оборачиваем proxy в CORS middleware с проверкой допустимых HTTP-методов
 		routeTimeout := 60 * time.Second
-		if r.Path == "/chat" {
+		if r.Path == "/chat" || r.Path == "/agents/" {
 			routeTimeout = 300 * time.Second
 		}
 

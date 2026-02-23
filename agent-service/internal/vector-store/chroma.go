@@ -11,17 +11,23 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 )
 
 // ChromaStore — клиент для взаимодействия с ChromaDB.
 type ChromaStore struct {
 	URL        string
 	Collection string
+	APIVersion string
 }
 
 // NewChromaStore — создаёт новый клиент ChromaDB с указанным URL подключения.
 func NewChromaStore(url string) *ChromaStore {
-	return &ChromaStore{URL: url, Collection: "rag_docs"}
+	ver := os.Getenv("CHROMA_API_VERSION")
+	if ver == "" {
+		ver = "v2"
+	}
+	return &ChromaStore{URL: url, Collection: "rag_docs", APIVersion: ver}
 }
 
 // AddDocuments — добавляет документы в векторное хранилище ChromaDB.
@@ -76,7 +82,7 @@ func (c *ChromaStore) AddDocuments(docs []map[string]interface{}) error {
 		return fmt.Errorf("ошибка сериализации: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/collections/%s/add", c.URL, c.Collection)
+	url := fmt.Sprintf("%s/api/%s/collections/%s/add", c.URL, c.APIVersion, c.Collection)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("ошибка создания запроса: %w", err)
@@ -117,7 +123,7 @@ func (c *ChromaStore) Search(query string, n int) ([]map[string]interface{}, err
 		return nil, fmt.Errorf("ошибка сериализации: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/collections/%s/query", c.URL, c.Collection)
+	url := fmt.Sprintf("%s/api/%s/collections/%s/query", c.URL, c.APIVersion, c.Collection)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("ошибка создания запроса: %w", err)

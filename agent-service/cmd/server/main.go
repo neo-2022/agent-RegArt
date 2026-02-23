@@ -55,6 +55,7 @@ import (
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/llm"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/models"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/repository"
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/skills"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/tools"
 )
 
@@ -554,6 +555,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	// Цикл обрабатывает до 5 раундов tool calls (structured JSON, inline JSON, XML-формат).
 	// После каждого вызова результат добавляется в контекст и отправляется повторный запрос к LLM.
 	// Цикл завершается когда LLM возвращает обычный текст без tool calls.
+	var toolCallCount int
+	var usedTools []string
 	const maxToolRounds = 5
 	for round := 0; round < maxToolRounds; round++ {
 		slog.Info("Ответ провайдера", slog.String("провайдер", providerName), slog.Int("раунд", round), slog.Int("символов", len(chatResp.Content)), slog.Int("инструментов", len(chatResp.ToolCalls)))
@@ -568,6 +571,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 				slog.Info("Инструмент выполнен", slog.String("имя", tc.Function.Name))
 				resultBytes, _ := json.Marshal(result)
 				messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: tc.ID})
+				toolCallCount++
+				usedTools = append(usedTools, tc.Function.Name)
 			}
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
@@ -602,6 +607,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 			slog.Info("JSON инструмент выполнен", slog.String("имя", jsonToolCall.Name))
 			resultBytes, _ := json.Marshal(result)
 			messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: "json-0"})
+			toolCallCount++
+			usedTools = append(usedTools, jsonToolCall.Name)
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
 			if err != nil {
@@ -621,6 +628,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 			slog.Info("XML инструмент выполнен", slog.String("имя", xmlName))
 			resultBytes, _ := json.Marshal(result)
 			messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: "xml-0"})
+			toolCallCount++
+			usedTools = append(usedTools, xmlName)
 			chatReq.Messages = messages
 			chatResp, err = chatWithRetry(provider, chatReq)
 			if err != nil {
@@ -646,6 +655,8 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 				slog.Info("Inline инструмент выполнен", slog.String("имя", inlineName))
 				resultBytes, _ := json.Marshal(result)
 				messages = append(messages, llm.Message{Role: "tool", Content: string(resultBytes), ToolCallID: "inline-0"})
+				toolCallCount++
+				usedTools = append(usedTools, inlineName)
 				chatReq.Messages = messages
 				chatResp, err = chatWithRetry(provider, chatReq)
 				if err != nil {
@@ -663,6 +674,16 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Очищаем финальный ответ от thinking-тегов reasoning-моделей перед отправкой пользователю
 	finalContent := stripThinkingTags(chatResp.Content)
+	if strings.TrimSpace(finalContent) == "" && supportsTools {
+		slog.Warn("LLM вернул пустой ответ с tools — повтор без tools", slog.String("агент", req.Agent), slog.String("модель", agent.LLMModel))
+		chatReq.Tools = nil
+		chatReq.Messages = messages
+		chatReq.Stream = providerName == "ollama"
+		chatResp, err = chatWithRetry(provider, chatReq)
+		if err == nil {
+			finalContent = stripThinkingTags(chatResp.Content)
+		}
+	}
 	if strings.TrimSpace(finalContent) == "" {
 		slog.Warn("LLM вернул пустой ответ", slog.String("агент", req.Agent), slog.String("модель", agent.LLMModel))
 		writeJSON(w, ChatResponse{Error: "Модель вернула пустой ответ. Возможно, исчерпан лимит запросов или модель недоступна. Попробуйте другую модель."})
@@ -672,6 +693,19 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 	saveChatMessages(req.Agent, lastUserMsg, finalContent)
 	go extractAndStoreLearnings(agent.LLMModel, req.Agent, lastUserMsg.Content, finalContent)
 	WriteSystemLog("info", "agent-service", fmt.Sprintf("Чат: агент=%s, модель=%s/%s", req.Agent, providerName, agent.LLMModel), fmt.Sprintf("Вопрос: %s", truncate(lastUserMsg.Content, 200)))
+
+	durationMs := float64(time.Since(startTime).Milliseconds())
+	scenarioName := "chat/" + req.Agent
+	metrics.GetScenarioCollector().Record(scenarioName, durationMs, toolCallCount, true, "")
+
+	if autoSkillPipeline != nil && len(usedTools) > 0 {
+		detectedIntent := lastMsg
+		if intentType != intent.IntentNone {
+			detectedIntent = string(intentType)
+		}
+		autoSkillPipeline.RecordSuccess(detectedIntent, usedTools, durationMs)
+	}
+
 	statusCode = 200
 	defer func() {
 		metrics.RecordHTTPRequest(r.Method, "/chat", statusCode, time.Since(startTime))
@@ -3432,6 +3466,60 @@ func handleInstallPackages(args map[string]interface{}) map[string]interface{} {
 // Для каждого включённого провайдера регистрирует его в глобальном реестре
 // с API-ключом, базовым URL и дополнительными параметрами (folder_id/scope).
 // Это позволяет сохранять настройки провайдеров между перезапусками сервиса.
+func autoskillPatternsHandler(w http.ResponseWriter, r *http.Request) {
+	if autoSkillPipeline == nil {
+		http.Error(w, `{"error":"конвейер не инициализирован"}`, http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(autoSkillPipeline.ListPatterns())
+}
+
+func autoskillCandidatesHandler(w http.ResponseWriter, r *http.Request) {
+	if autoSkillPipeline == nil {
+		http.Error(w, `{"error":"конвейер не инициализирован"}`, http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(autoSkillPipeline.ListCandidates())
+}
+
+func autoskillPromoteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"метод не поддерживается"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	if autoSkillPipeline == nil {
+		http.Error(w, `{"error":"конвейер не инициализирован"}`, http.StatusServiceUnavailable)
+		return
+	}
+	promoted := autoSkillPipeline.PromoteCandidates()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"promoted": promoted, "count": len(promoted)})
+}
+
+func autoskillRollbackHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"метод не поддерживается"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	intentName := r.URL.Query().Get("intent")
+	if intentName == "" {
+		http.Error(w, `{"error":"параметр intent обязателен"}`, http.StatusBadRequest)
+		return
+	}
+	if autoSkillPipeline == nil {
+		http.Error(w, `{"error":"конвейер не инициализирован"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if err := autoSkillPipeline.Rollback(intentName); err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"status":"rolled_back","intent":%q}`, intentName)
+}
+
 func initProvidersFromDB() {
 	var configs []models.ProviderConfig
 	db.DB.Where("enabled = ?", true).Find(&configs)
@@ -3484,6 +3572,8 @@ func validateEnv() {
 	slog.Info("Проверка окружения завершена")
 }
 
+var autoSkillPipeline *skills.AutoSkillPipeline
+
 func main() {
 	validateEnv()
 
@@ -3493,9 +3583,13 @@ func main() {
 	initProvidersFromDB()
 	initRAG()
 
-	// Инициализация метрик Prometheus
 	metrics.Init()
 	slog.Info("Метрики инициализированы")
+
+	skillsDir := filepath.Join(".", "skills")
+	os.MkdirAll(skillsDir, 0755)
+	autoSkillPipeline = skills.NewAutoSkillPipeline(skillsDir, 3)
+	slog.Info("Конвейер auto-skill инициализирован", slog.String("директория", skillsDir))
 
 	if err := repository.CreateDefaultAgents(); err != nil {
 		slog.Error("Не удалось создать агентов по умолчанию", slog.String("ошибка", err.Error()))
@@ -3523,6 +3617,12 @@ func main() {
 	http.HandleFunc("/workspaces", requestIDMiddleware(workspacesHandler))
 	http.HandleFunc("/learning-stats", requestIDMiddleware(learningStatsHandler))
 	http.HandleFunc("/logs", requestIDMiddleware(logsHandler))
+
+	http.HandleFunc("/scenario-metrics", requestIDMiddleware(metrics.ScenarioMetricsHandler))
+	http.HandleFunc("/autoskill/patterns", requestIDMiddleware(autoskillPatternsHandler))
+	http.HandleFunc("/autoskill/candidates", requestIDMiddleware(autoskillCandidatesHandler))
+	http.HandleFunc("/autoskill/promote", requestIDMiddleware(autoskillPromoteHandler))
+	http.HandleFunc("/autoskill/rollback", requestIDMiddleware(autoskillRollbackHandler))
 
 	// RAG эндпоинты
 	http.HandleFunc("/rag/add", requestIDMiddleware(ragAddHandler))
@@ -3554,7 +3654,7 @@ func main() {
 		Addr:         ":" + port,
 		Handler:      nil,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 120 * time.Second,
+		WriteTimeout: 300 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

@@ -108,18 +108,24 @@ func LimitContext(results []SearchResult, maxTotalLen int) []SearchResult {
 // DBRetriever — основной компонент RAG-системы.
 // Обеспечивает работу с ChromaDB и fallback-поиском документов.
 type DBRetriever struct {
-	config    *Config
-	embedding embeddings.EmbeddingModel
-	chromaURL string
+	config         *Config
+	embedding      embeddings.EmbeddingModel
+	chromaURL      string
+	chromaAPIVer   string
 }
 
 // NewDBRetriever — создаёт новый экземпляр DBRetriever с заданной конфигурацией.
 func NewDBRetriever(config *Config) *DBRetriever {
 	emb := embeddings.NewLocalEmbeddingModel()
+	ver := os.Getenv("CHROMA_API_VERSION")
+	if ver == "" {
+		ver = "v2"
+	}
 	return &DBRetriever{
-		config:    config,
-		embedding: emb,
-		chromaURL: config.ChromaURL,
+		config:       config,
+		embedding:    emb,
+		chromaURL:    config.ChromaURL,
+		chromaAPIVer: ver,
 	}
 }
 
@@ -190,7 +196,7 @@ func (d *DBRetriever) AddDocument(doc RagDoc) error {
 		return fmt.Errorf("ошибка вычисления эмбеддинга: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/collections/rag_docs/add", d.chromaURL)
+	url := fmt.Sprintf("%s/api/%s/collections/rag_docs/add", d.chromaURL, d.chromaAPIVer)
 	body, _ := json.Marshal(map[string]interface{}{
 		"ids":        []string{doc.ID},
 		"embeddings": [][]float64{emb},
@@ -375,7 +381,7 @@ func (d *DBRetriever) Search(query string, topK int) ([]SearchResult, error) {
 // searchChroma — выполняет поиск документов через HTTP API ChromaDB.
 // Отправляет эмбеддинг запроса и получает topK ближайших результатов.
 func (d *DBRetriever) searchChroma(query string, queryEmb []float64, topK int) ([]SearchResult, error) {
-	url := fmt.Sprintf("%s/api/v1/collections/rag_docs/query", d.chromaURL)
+	url := fmt.Sprintf("%s/api/%s/collections/rag_docs/query", d.chromaURL, d.chromaAPIVer)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"query_embeddings": [][]float64{queryEmb},

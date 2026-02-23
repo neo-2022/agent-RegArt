@@ -211,14 +211,34 @@ function App() {
   useEffect(() => {
     localStorage.setItem('current_agent', currentAgent);
   }, [currentAgent]);
+
+  let initialChats: Chat[] = [
+    { id: '1', name: 'Основной чат', messages: [], pinned: false },
+    { id: '2', name: 'Второй чат', messages: [], pinned: false }
+  ];
+  let initialChatId = '1';
+  try {
+    const savedChats = localStorage.getItem('chats_data');
+    if (savedChats) { initialChats = JSON.parse(savedChats); }
+    const savedChatId = localStorage.getItem('current_chat_id');
+    if (savedChatId) { initialChatId = savedChatId; }
+  } catch (e) {
+    console.error('Ошибка загрузки чатов из localStorage', e);
+  }
+  const [chats, setChats] = useState<Chat[]>(initialChats);
+  const [currentChatId, setCurrentChatId] = useState(initialChatId);
   const [input, setInput] = useState('');                             // Текст в поле ввода
   const [agents, setAgents] = useState<Agent[]>([]);                  // Список агентов из бэкенда
   const [loading, setLoading] = useState(false);                      // Индикатор загрузки ответа
-  const [chats, setChats] = useState<Chat[]>([
-    { id: '1', name: 'Основной чат', messages: [], pinned: false },
-    { id: '2', name: 'Второй чат', messages: [], pinned: false }
-  ]);
-  const [currentChatId, setCurrentChatId] = useState('1');            // ID активного чата
+
+  // Сохраняем чаты в localStorage
+  useEffect(() => {
+    localStorage.setItem('chats_data', JSON.stringify(chats));
+  }, [chats]);
+
+  useEffect(() => {
+    localStorage.setItem('current_chat_id', currentChatId);
+  }, [currentChatId]);
   const [models, setModels] = useState<ModelInfo[]>([]);              // Локальные модели Ollama
 
   // === UI-состояние ===
@@ -257,9 +277,13 @@ function App() {
   const [refreshingProviders, setRefreshingProviders] = useState(false); // Индикатор обновления провайдеров
   const [ragUploadStatus, setRagUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [ragUploadMessage, setRagUploadMessage] = useState('');
+  const [loadingElapsed, setLoadingElapsed] = useState(0);
+  const RESPONSE_TIMEOUT = 300;
 
   // === Дополнительное состояние для RAG-файлов и просмотра ===
   const [ragFiles, setRagFiles] = useState<{file_name: string; chunks_count: number}[]>([]);
+  const [ragSearch, setRagSearch] = useState('');
+  const [ragSortBy, setRagSortBy] = useState<'name' | 'chunks'>('name');
   const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
   const [promptSaveStatus, setPromptSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [promptSaveError, setPromptSaveError] = useState('');
@@ -301,6 +325,13 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!loading) { setLoadingElapsed(0); return; }
+    setLoadingElapsed(0);
+    const t = setInterval(() => setLoadingElapsed(prev => prev + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1520,10 +1551,27 @@ function App() {
               )}
             </div>
             <div style={{marginTop: '4px'}}>
+              <div style={{display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px'}}>
+                <input
+                  type="text"
+                  placeholder="Поиск файлов..."
+                  value={ragSearch}
+                  onChange={e => setRagSearch(e.target.value)}
+                  style={{flex: 1, padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.8rem'}}
+                />
+                <select
+                  value={ragSortBy}
+                  onChange={e => setRagSortBy(e.target.value as 'name' | 'chunks')}
+                  style={{padding: '4px 6px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.78rem'}}
+                >
+                  <option value="name">По имени</option>
+                  <option value="chunks">По кол-ву</option>
+                </select>
+              </div>
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>
               {ragFiles.length > 0 ? (
                 <div className="rag-file-list">
-                  {ragFiles.map((folder: any, idx: number) => (
+                  {ragFiles.filter((folder: any) => !ragSearch || folder.folder?.toLowerCase().includes(ragSearch.toLowerCase()) || (folder.files || []).some((f: any) => f.file_name?.toLowerCase().includes(ragSearch.toLowerCase()))).sort((a: any, b: any) => ragSortBy === 'chunks' ? (b.total_files || 0) - (a.total_files || 0) : (a.folder || '').localeCompare(b.folder || '')).map((folder: any, idx: number) => (
                     <div key={idx} className="rag-folder-group">
                       <div className="rag-folder-header">
                         <span className="rag-folder-icon">📁</span>
@@ -1671,18 +1719,31 @@ function App() {
               </div>
             </div>
           ))}
-          {loading && !speakingAgent && (
+          {loading && (
             <div className="message assistant">
               <div className="message-avatar">
                 {(() => {
-                  const agent = agents.find(a => a.name === currentAgent);
+                  const agent = agents.find(a => a.name === (speakingAgent || currentAgent));
                   if (agent?.avatar) return <img src={`${AVATAR_BASE}${agent.avatar}`} alt={agent.name} />;
-                  const builtIn = BUILT_IN_AVATARS[currentAgent];
-                  if (builtIn) return <img src={builtIn} alt={currentAgent} />;
-                  return currentAgent.charAt(0).toUpperCase();
+                  const builtIn = BUILT_IN_AVATARS[speakingAgent || currentAgent];
+                  if (builtIn) return <img src={builtIn} alt={speakingAgent || currentAgent} />;
+                  return (speakingAgent || currentAgent).charAt(0).toUpperCase();
                 })()}
               </div>
-              <div className="message-content">...</div>
+              <div className="message-content loading-indicator">
+                <div className="loading-dots"><span /><span /><span /></div>
+                <div className="loading-status">
+                  {loadingElapsed < 5 ? 'Отправка запроса...' : 'Подготовка ответа...'}
+                </div>
+                <div className="loading-timer">
+                  {Math.floor(loadingElapsed / 60)}:{String(loadingElapsed % 60).padStart(2, '0')}
+                  {' / '}
+                  {Math.floor(RESPONSE_TIMEOUT / 60)}:{String(RESPONSE_TIMEOUT % 60).padStart(2, '0')}
+                </div>
+                {loadingElapsed > 30 && (
+                  <div className="loading-hint">Модель обрабатывает запрос. Это может занять несколько минут.</div>
+                )}
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />

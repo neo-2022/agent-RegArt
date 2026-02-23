@@ -13,13 +13,16 @@
 .PHONY: build build-agent build-tools build-gateway build-browser \
         test test-go test-python lint lint-go lint-python \
         run run-memory run-tools run-agent run-gateway run-web \
-        docker docker-down clean help check-env
+        docker docker-down clean help check-env \
+        migrate-up migrate-down migrate-version migrate-create
 
 # --- Переменные ---
-AGENT_BIN  = agent-service/server
-TOOLS_BIN  = tools-service/server
-GATEWAY_BIN = api-gateway/api-gateway
-BROWSER_BIN = browser-service/server
+AGENT_BIN    = agent-service/server
+TOOLS_BIN    = tools-service/server
+GATEWAY_BIN  = api-gateway/api-gateway
+BROWSER_BIN  = browser-service/server
+MIGRATIONS   = migrations
+DB_URL      ?= postgres://agent_user:agent_password@localhost:5432/agent_db?sslmode=disable
 
 # ============================================================================
 # Сборка
@@ -106,6 +109,34 @@ run-gateway: ## Запустить api-gateway
 
 run-web: ## Запустить web-ui (dev mode)
 	cd web-ui && npm run dev
+
+# ============================================================================
+# Миграции БД (golang-migrate)
+# ============================================================================
+# Установка: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+# Или: brew install golang-migrate (macOS)
+#
+# Использование:
+#   make migrate-up              — применить все миграции
+#   make migrate-down            — откатить последнюю миграцию
+#   make migrate-version         — текущая версия схемы
+#   make migrate-create NAME=xxx — создать новую миграцию
+#
+# Переопределение URL базы данных:
+#   make migrate-up DB_URL=postgres://user:pass@host:5432/dbname?sslmode=disable
+
+migrate-up: ## Применить все миграции БД
+	migrate -path $(MIGRATIONS) -database "$(DB_URL)" up
+
+migrate-down: ## Откатить последнюю миграцию БД
+	migrate -path $(MIGRATIONS) -database "$(DB_URL)" down 1
+
+migrate-version: ## Показать текущую версию схемы БД
+	migrate -path $(MIGRATIONS) -database "$(DB_URL)" version
+
+migrate-create: ## Создать новую миграцию (NAME=описание)
+	@test -n "$(NAME)" || (echo "Укажите имя: make migrate-create NAME=add_users_table" && exit 1)
+	migrate create -ext sql -dir $(MIGRATIONS) -seq $(NAME)
 
 # ============================================================================
 # Docker

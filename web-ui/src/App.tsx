@@ -277,6 +277,8 @@ function App() {
   const [refreshingProviders, setRefreshingProviders] = useState(false); // Индикатор обновления провайдеров
   const [ragUploadStatus, setRagUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [ragUploadMessage, setRagUploadMessage] = useState('');
+  const [loadingElapsed, setLoadingElapsed] = useState(0);
+  const RESPONSE_TIMEOUT = 300;
 
   // === Дополнительное состояние для RAG-файлов и просмотра ===
   const [ragFiles, setRagFiles] = useState<{file_name: string; chunks_count: number}[]>([]);
@@ -323,6 +325,13 @@ function App() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (!loading) { setLoadingElapsed(0); return; }
+    setLoadingElapsed(0);
+    const t = setInterval(() => setLoadingElapsed(prev => prev + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1710,18 +1719,31 @@ function App() {
               </div>
             </div>
           ))}
-          {loading && !speakingAgent && (
+          {loading && (
             <div className="message assistant">
               <div className="message-avatar">
                 {(() => {
-                  const agent = agents.find(a => a.name === currentAgent);
+                  const agent = agents.find(a => a.name === (speakingAgent || currentAgent));
                   if (agent?.avatar) return <img src={`${AVATAR_BASE}${agent.avatar}`} alt={agent.name} />;
-                  const builtIn = BUILT_IN_AVATARS[currentAgent];
-                  if (builtIn) return <img src={builtIn} alt={currentAgent} />;
-                  return currentAgent.charAt(0).toUpperCase();
+                  const builtIn = BUILT_IN_AVATARS[speakingAgent || currentAgent];
+                  if (builtIn) return <img src={builtIn} alt={speakingAgent || currentAgent} />;
+                  return (speakingAgent || currentAgent).charAt(0).toUpperCase();
                 })()}
               </div>
-              <div className="message-content">...</div>
+              <div className="message-content loading-indicator">
+                <div className="loading-dots"><span /><span /><span /></div>
+                <div className="loading-status">
+                  {loadingElapsed < 5 ? 'Отправка запроса...' : 'Подготовка ответа...'}
+                </div>
+                <div className="loading-timer">
+                  {Math.floor(loadingElapsed / 60)}:{String(loadingElapsed % 60).padStart(2, '0')}
+                  {' / '}
+                  {Math.floor(RESPONSE_TIMEOUT / 60)}:{String(RESPONSE_TIMEOUT % 60).padStart(2, '0')}
+                </div>
+                {loadingElapsed > 30 && (
+                  <div className="loading-hint">Модель обрабатывает запрос. Это может занять несколько минут.</div>
+                )}
+              </div>
             </div>
           )}
           <div ref={messagesEndRef} />

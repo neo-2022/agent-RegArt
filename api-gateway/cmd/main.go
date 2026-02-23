@@ -248,26 +248,30 @@ func main() {
 		cbMW := middleware.CircuitBreakerMiddleware(cb, svcName)
 
 		handler := requestIDMiddleware(
-			traceMW(
-				rateLimitMW(
-					panicRecoveryMiddleware(
-						timeoutMiddleware(
-							cbMW(
-								corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-									cid := req.Header.Get("X-Request-ID")
-									ctx := logger.WithCorrelationID(req.Context(), cid)
-									logger.С(ctx).Info("Проксирование запроса", slog.String("метод", req.Method), slog.String("путь", req.URL.Path), slog.String("маршрут", r.Path), slog.String("цель", r.Target.Host))
-									for _, m := range r.Methods {
-										if m == req.Method {
-											proxy.ServeHTTP(w, req)
-											return
-										}
-									}
-									logger.С(ctx).Warn("Метод не разрешён", slog.String("метод", req.Method), slog.String("путь", req.URL.Path))
-									apierror.MethodNotAllowed(w, cid)
-								}), r.Methods, allowedOrigins),
+			middleware.SecurityHeadersMiddleware(
+				middleware.ValidationMiddleware(
+					traceMW(
+						rateLimitMW(
+							panicRecoveryMiddleware(
+								timeoutMiddleware(
+									cbMW(
+										corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+											cid := req.Header.Get("X-Request-ID")
+											ctx := logger.WithCorrelationID(req.Context(), cid)
+											logger.С(ctx).Info("Проксирование запроса", slog.String("метод", req.Method), slog.String("путь", req.URL.Path), slog.String("маршрут", r.Path), slog.String("цель", r.Target.Host))
+											for _, m := range r.Methods {
+												if m == req.Method {
+													proxy.ServeHTTP(w, req)
+													return
+												}
+											}
+											logger.С(ctx).Warn("Метод не разрешён", slog.String("метод", req.Method), slog.String("путь", req.URL.Path))
+											apierror.MethodNotAllowed(w, cid)
+										}), r.Methods, allowedOrigins),
+									),
+									routeTimeout,
+								),
 							),
-							routeTimeout,
 						),
 					),
 				),

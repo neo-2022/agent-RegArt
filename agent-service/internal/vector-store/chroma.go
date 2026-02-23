@@ -10,8 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/retry"
 )
 
 // ChromaStore — клиент для взаимодействия с ChromaDB.
@@ -82,25 +86,36 @@ func (c *ChromaStore) AddDocuments(docs []map[string]interface{}) error {
 		return fmt.Errorf("ошибка сериализации: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/%s/collections/%s/add", c.URL, c.APIVersion, c.Collection)
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	chromaURL := fmt.Sprintf("%s/api/%s/collections/%s/add", c.URL, c.APIVersion, c.Collection)
+
+	err = retry.Do(retry.ChromaDBConfig, func() error {
+		req, reqErr := http.NewRequest("POST", chromaURL, bytes.NewReader(body))
+		if reqErr != nil {
+			return fmt.Errorf("ошибка создания запроса: %w", reqErr)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, httpErr := client.Do(req)
+		if httpErr != nil {
+			return fmt.Errorf("ошибка HTTP-запроса к ChromaDB: %w", httpErr)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			respBody, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("ChromaDB вернул %d: %s", resp.StatusCode, string(respBody))
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			respBody, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("ChromaDB ошибка %d: %s", resp.StatusCode, string(respBody))
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("ошибка создания запроса: %w", err)
+		slog.Error("[CHROMA] ошибка добавления документов (все попытки исчерпаны)", slog.String("ошибка", err.Error()))
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("ошибка HTTP-запроса к ChromaDB: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ChromaDB вернул %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
+	return err
 }
 
 // Search — выполняет семантический поиск по векторному хранилищу.
@@ -123,27 +138,40 @@ func (c *ChromaStore) Search(query string, n int) ([]map[string]interface{}, err
 		return nil, fmt.Errorf("ошибка сериализации: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/%s/collections/%s/query", c.URL, c.APIVersion, c.Collection)
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("ошибка создания запроса: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("ошибка HTTP-запроса к ChromaDB: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ChromaDB вернул %d: %s", resp.StatusCode, string(respBody))
-	}
+	chromaURL := fmt.Sprintf("%s/api/%s/collections/%s/query", c.URL, c.APIVersion, c.Collection)
 
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("ошибка декодирования ответа: %w", err)
+	_, retryErr := retry.DoWithResult(retry.ChromaDBConfig, func() (struct{}, error) {
+		req, reqErr := http.NewRequest("POST", chromaURL, bytes.NewReader(body))
+		if reqErr != nil {
+			return struct{}{}, fmt.Errorf("ошибка создания запроса: %w", reqErr)
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, httpErr := client.Do(req)
+		if httpErr != nil {
+			return struct{}{}, fmt.Errorf("ошибка HTTP-запроса к ChromaDB: %w", httpErr)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode >= 500 {
+			respBody, _ := io.ReadAll(resp.Body)
+			return struct{}{}, fmt.Errorf("ChromaDB вернул %d: %s", resp.StatusCode, string(respBody))
+		}
+		if resp.StatusCode != 200 {
+			respBody, _ := io.ReadAll(resp.Body)
+			return struct{}{}, fmt.Errorf("ChromaDB ошибка %d: %s", resp.StatusCode, string(respBody))
+		}
+
+		if decErr := json.NewDecoder(resp.Body).Decode(&result); decErr != nil {
+			return struct{}{}, fmt.Errorf("ошибка декодирования ответа: %w", decErr)
+		}
+		return struct{}{}, nil
+	})
+	if retryErr != nil {
+		slog.Error("[CHROMA] ошибка поиска (все попытки исчерпаны)", slog.String("ошибка", retryErr.Error()))
+		return nil, retryErr
 	}
 
 	rawIDs, _ := result["ids"].([]interface{})

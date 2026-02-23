@@ -75,3 +75,21 @@ func MethodNotAllowed(w http.ResponseWriter, requestID string) {
 		Retryable: false,
 	})
 }
+
+func BadRequest(w http.ResponseWriter, requestID, message string) {
+	Write(w, http.StatusBadRequest, Response{
+		Code:      "BAD_REQUEST",
+		Message:   message,
+		RequestID: requestID,
+		Retryable: false,
+	})
+}
+
+func PayloadTooLarge(w http.ResponseWriter, requestID, message string) {
+	Write(w, http.StatusRequestEntityTooLarge, Response{
+		Code:      "PAYLOAD_TOO_LARGE",
+		Message:   message,
+		RequestID: requestID,
+		Retryable: false,
+	})
+}

@@ -12,6 +12,7 @@ package db
 import (
 	"log"
 	"os"
+	"time"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -67,8 +68,24 @@ func InitDB() {
 		log.Fatal("Ошибка подключения к базе данных:", err)
 	}
 
+	// Настройка пула соединений для production-нагрузки
+	sqlDB, err := DB.DB()
+	if err != nil {
+		log.Fatal("Ошибка получения sql.DB:", err)
+	}
+	sqlDB.SetMaxOpenConns(25)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(5 * time.Minute)
+	sqlDB.SetConnMaxIdleTime(1 * time.Minute)
+	log.Println("Пул соединений настроен: MaxOpen=25, MaxIdle=5, MaxLifetime=5m")
+
 	// Включаем расширение uuid-ossp для генерации UUID в PostgreSQL
 	DB.Exec("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";")
+
+	// Проверяем соединение
+	if err := sqlDB.Ping(); err != nil {
+		log.Fatal("Ошибка проверки соединения с БД:", err)
+	}
 
 	// Автоматические миграции в правильном порядке (учёт внешних ключей):
 	// 1. Chat — базовая сущность, на которую ссылаются Message и Workspace

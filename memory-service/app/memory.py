@@ -85,6 +85,12 @@ class MemoryStore:
             logger.warning("Попытка добавить пустой факт")
             return ""
         
+        if len(fact_text) > 10 * 1024 * 1024:
+            logger.warning(f"Факт превышает лимит 10 МБ: {len(fact_text)} байт")
+            return ""
+        
+        fact_text = fact_text.replace("\x00", "")
+        
         fact_id = str(uuid.uuid4())
         embedding = self.encoder.encode(fact_text).tolist()
         
@@ -287,6 +293,17 @@ class MemoryStore:
         if not text or not text.strip():
             logger.warning("Попытка добавить пустое знание")
             return ""
+        
+        if len(text) > 10 * 1024 * 1024:
+            logger.warning(f"Знание превышает лимит 10 МБ: {len(text)} байт")
+            return ""
+        
+        text = text.replace("\x00", "")
+        
+        allowed_categories = {"general", "preference", "fact", "skill", "correction"}
+        if category not in allowed_categories:
+            logger.warning(f"Недопустимая категория '{category}', используется 'general'")
+            category = "general"
         
         learning_id = str(uuid.uuid4())
         embedding = self.encoder.encode(text).tolist()

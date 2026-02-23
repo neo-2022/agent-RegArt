@@ -47,6 +47,7 @@ import (
 
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/metrics"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/rag"
+	"github.com/neo-2022/openclaw-memory/agent-service/internal/retry"
 
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/apierror"
 	"github.com/neo-2022/openclaw-memory/agent-service/internal/db"
@@ -293,58 +294,66 @@ func callTool(toolName string, args map[string]interface{}) (map[string]interfac
 		slog.Error("[TOOL-CALL] ошибка маршалинга", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
 		return nil, err
 	}
-	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(data))
-	if err != nil {
-		slog.Error("[TOOL-CALL] ошибка HTTP", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
-		return nil, err
-	}
-	defer resp.Body.Close()
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		slog.Error("[TOOL-CALL] ошибка чтения", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
-		return nil, fmt.Errorf("ошибка чтения ответа: %v", err)
-	}
+	result, err := retry.DoWithResult(retry.ToolCallConfig, func() (map[string]interface{}, error) {
+		resp, err := http.Post(fullURL, "application/json", bytes.NewReader(data))
+		if err != nil {
+			return nil, fmt.Errorf("ошибка HTTP-запроса к %s: %w", fullURL, err)
+		}
+		defer resp.Body.Close()
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("ошибка чтения ответа: %w", err)
+		}
+
+		if resp.StatusCode >= 500 {
+			return nil, fmt.Errorf("HTTP %d от %s: %s", resp.StatusCode, fullURL, string(bodyBytes))
+		}
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return map[string]interface{}{
+				"error":       fmt.Sprintf("HTTP %d от %s", resp.StatusCode, fullURL),
+				"status_code": resp.StatusCode,
+				"body":        string(bodyBytes),
+			}, nil
+		}
+
+		var mapResult map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &mapResult); err == nil {
+			return mapResult, nil
+		}
+
+		var arrResult []interface{}
+		if err := json.Unmarshal(bodyBytes, &arrResult); err == nil {
+			return map[string]interface{}{"result": arrResult}, nil
+		}
+
+		var anyResult interface{}
+		if err := json.Unmarshal(bodyBytes, &anyResult); err == nil {
+			return map[string]interface{}{"result": anyResult}, nil
+		}
+
+		return map[string]interface{}{"result": string(bodyBytes)}, nil
+	})
 
 	duration := time.Since(callStart)
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		slog.Warn("[TOOL-CALL] HTTP ошибка",
+	if err != nil {
+		slog.Error("[TOOL-CALL] ошибка (все попытки исчерпаны)",
 			slog.String("инструмент", toolName),
-			slog.Int("статус", resp.StatusCode),
+			slog.String("ошибка", err.Error()),
 			slog.Duration("длительность", duration),
-			slog.String("outcome", "error"),
 		)
-		return map[string]interface{}{
-			"error":       fmt.Sprintf("HTTP %d от %s", resp.StatusCode, fullURL),
-			"status_code": resp.StatusCode,
-			"body":        string(bodyBytes),
-		}, nil
+		return nil, err
 	}
 
 	slog.Info("[TOOL-CALL] завершён",
 		slog.String("инструмент", toolName),
-		slog.Int("статус", resp.StatusCode),
 		slog.Duration("длительность", duration),
-		slog.Int("байт_ответа", len(bodyBytes)),
 		slog.String("outcome", "success"),
 	)
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &result); err == nil {
-		return result, nil
-	}
-
-	var arrResult []interface{}
-	if err := json.Unmarshal(bodyBytes, &arrResult); err == nil {
-		return map[string]interface{}{"result": arrResult}, nil
-	}
-
-	var anyResult interface{}
-	if err := json.Unmarshal(bodyBytes, &anyResult); err == nil {
-		return map[string]interface{}{"result": anyResult}, nil
-	}
-
-	return map[string]interface{}{"result": string(bodyBytes)}, nil
+	return result, nil
 }
 
 // chatHandler— основной обработчик чат-запросов (POST /chat).

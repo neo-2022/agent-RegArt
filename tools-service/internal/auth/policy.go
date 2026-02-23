@@ -20,7 +20,7 @@ var ViewerCommands = map[string]bool{
 	"ps": true, "top": true, "free": true, "df": true, "du": true,
 	"echo": true, "head": true, "tail": true, "wc": true,
 	"sort": true, "uniq": true, "date": true, "whoami": true,
-	"hostname": true, "uname": true, "env": true, "true": true,
+	"hostname": true, "uname": true, "env": true, "true": true, "pwd": true,
 	"lscpu": true, "lsusb": true, "lspci": true, "lsblk": true,
 	"sensors": true, "nvidia-smi": true, "which": true,
 	"diff": true, "ip": true, "ifconfig": true, "netstat": true,

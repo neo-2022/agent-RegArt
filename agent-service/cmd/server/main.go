@@ -674,6 +674,16 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Очищаем финальный ответ от thinking-тегов reasoning-моделей перед отправкой пользователю
 	finalContent := stripThinkingTags(chatResp.Content)
+	if strings.TrimSpace(finalContent) == "" && supportsTools {
+		slog.Warn("LLM вернул пустой ответ с tools — повтор без tools", slog.String("агент", req.Agent), slog.String("модель", agent.LLMModel))
+		chatReq.Tools = nil
+		chatReq.Messages = messages
+		chatReq.Stream = providerName == "ollama"
+		chatResp, err = chatWithRetry(provider, chatReq)
+		if err == nil {
+			finalContent = stripThinkingTags(chatResp.Content)
+		}
+	}
 	if strings.TrimSpace(finalContent) == "" {
 		slog.Warn("LLM вернул пустой ответ", slog.String("агент", req.Agent), slog.String("модель", agent.LLMModel))
 		writeJSON(w, ChatResponse{Error: "Модель вернула пустой ответ. Возможно, исчерпан лимит запросов или модель недоступна. Попробуйте другую модель."})

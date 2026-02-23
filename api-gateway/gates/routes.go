@@ -1,10 +1,12 @@
 package gates
 
 import (
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // Route определяет одно прокси-правило.
@@ -14,20 +16,23 @@ type Route struct {
 	Methods []string // разрешённые HTTP-методы
 }
 
+var longTransport = &http.Transport{
+	DialContext:         (&net.Dialer{Timeout: 30 * time.Second}).DialContext,
+	ResponseHeaderTimeout: 300 * time.Second,
+	IdleConnTimeout:     90 * time.Second,
+}
+
 // NewCustomProxy создает обратный прокси для заданного целевого URL с удалением префикса.
 func NewCustomProxy(target *url.URL, prefix string) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
+		Transport: longTransport,
 		Director: func(req *http.Request) {
-			// Заменяем схему и хост
 			req.URL.Scheme = target.Scheme
 			req.URL.Host = target.Host
-			// Удаляем префикс из пути
 			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
-			// Убеждаемся, что путь начинается с "/"
 			if !strings.HasPrefix(req.URL.Path, "/") {
 				req.URL.Path = "/" + req.URL.Path
 			}
-			// Также меняем заголовок Host
 			req.Host = target.Host
 		},
 	}
@@ -36,6 +41,7 @@ func NewCustomProxy(target *url.URL, prefix string) *httputil.ReverseProxy {
 // NewProxyWithoutStrip создает обратный прокси, который не изменяет путь запроса.
 func NewProxyWithoutStrip(target *url.URL) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
+		Transport: longTransport,
 		Director: func(req *http.Request) {
 			req.URL.Scheme = target.Scheme
 			req.URL.Host = target.Host

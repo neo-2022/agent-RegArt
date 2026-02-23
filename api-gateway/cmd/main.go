@@ -227,7 +227,7 @@ func main() {
 		}
 		// Оборачиваем proxy в CORS middleware с проверкой допустимых HTTP-методов
 		routeTimeout := 60 * time.Second
-		if r.Path == "/chat" {
+		if r.Path == "/chat" || r.Path == "/agents/" {
 			routeTimeout = 300 * time.Second
 		}
 

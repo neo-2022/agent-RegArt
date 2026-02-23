@@ -211,14 +211,34 @@ function App() {
   useEffect(() => {
     localStorage.setItem('current_agent', currentAgent);
   }, [currentAgent]);
+
+  let initialChats: Chat[] = [
+    { id: '1', name: 'Основной чат', messages: [], pinned: false },
+    { id: '2', name: 'Второй чат', messages: [], pinned: false }
+  ];
+  let initialChatId = '1';
+  try {
+    const savedChats = localStorage.getItem('chats_data');
+    if (savedChats) { initialChats = JSON.parse(savedChats); }
+    const savedChatId = localStorage.getItem('current_chat_id');
+    if (savedChatId) { initialChatId = savedChatId; }
+  } catch (e) {
+    console.error('Ошибка загрузки чатов из localStorage', e);
+  }
+  const [chats, setChats] = useState<Chat[]>(initialChats);
+  const [currentChatId, setCurrentChatId] = useState(initialChatId);
   const [input, setInput] = useState('');                             // Текст в поле ввода
   const [agents, setAgents] = useState<Agent[]>([]);                  // Список агентов из бэкенда
   const [loading, setLoading] = useState(false);                      // Индикатор загрузки ответа
-  const [chats, setChats] = useState<Chat[]>([
-    { id: '1', name: 'Основной чат', messages: [], pinned: false },
-    { id: '2', name: 'Второй чат', messages: [], pinned: false }
-  ]);
-  const [currentChatId, setCurrentChatId] = useState('1');            // ID активного чата
+
+  // Сохраняем чаты в localStorage
+  useEffect(() => {
+    localStorage.setItem('chats_data', JSON.stringify(chats));
+  }, [chats]);
+
+  useEffect(() => {
+    localStorage.setItem('current_chat_id', currentChatId);
+  }, [currentChatId]);
   const [models, setModels] = useState<ModelInfo[]>([]);              // Локальные модели Ollama
 
   // === UI-состояние ===
@@ -260,6 +280,8 @@ function App() {
 
   // === Дополнительное состояние для RAG-файлов и просмотра ===
   const [ragFiles, setRagFiles] = useState<{file_name: string; chunks_count: number}[]>([]);
+  const [ragSearch, setRagSearch] = useState('');
+  const [ragSortBy, setRagSortBy] = useState<'name' | 'chunks'>('name');
   const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
   const [promptSaveStatus, setPromptSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [promptSaveError, setPromptSaveError] = useState('');
@@ -1520,10 +1542,27 @@ function App() {
               )}
             </div>
             <div style={{marginTop: '4px'}}>
+              <div style={{display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px'}}>
+                <input
+                  type="text"
+                  placeholder="Поиск файлов..."
+                  value={ragSearch}
+                  onChange={e => setRagSearch(e.target.value)}
+                  style={{flex: 1, padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.8rem'}}
+                />
+                <select
+                  value={ragSortBy}
+                  onChange={e => setRagSortBy(e.target.value as 'name' | 'chunks')}
+                  style={{padding: '4px 6px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.78rem'}}
+                >
+                  <option value="name">По имени</option>
+                  <option value="chunks">По кол-ву</option>
+                </select>
+              </div>
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>
               {ragFiles.length > 0 ? (
                 <div className="rag-file-list">
-                  {ragFiles.map((folder: any, idx: number) => (
+                  {ragFiles.filter((folder: any) => !ragSearch || folder.folder?.toLowerCase().includes(ragSearch.toLowerCase()) || (folder.files || []).some((f: any) => f.file_name?.toLowerCase().includes(ragSearch.toLowerCase()))).sort((a: any, b: any) => ragSortBy === 'chunks' ? (b.total_files || 0) - (a.total_files || 0) : (a.folder || '').localeCompare(b.folder || '')).map((folder: any, idx: number) => (
                     <div key={idx} className="rag-folder-group">
                       <div className="rag-folder-header">
                         <span className="rag-folder-icon">📁</span>

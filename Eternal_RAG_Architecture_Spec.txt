@@ -1,0 +1,380 @@
+ETERNAL RAG MASTER IMPLEMENTATION PLAN
+Полный технический план архитектуры памяти агента (без дизайна)
+
+============================================================
+
+1. ЦЕЛЬ СИСТЕМЫ
+   ============================================================
+
+Создать Eternal RAG — долговременную память AI-агента, которая:
+
+• хранит знания десятилетиями
+• автоматически использует память в ответах
+• обучается новым навыкам
+• обнаруживает противоречия
+• масштабируется до миллионов документов
+• полностью бесплатна и self-hosted
+• переживает смену моделей и технологий
+
+RAG становится настоящей памятью агента.
+
+============================================================
+2. АППАРАТНАЯ ОСНОВА
+====================
+
+Целевая машина:
+
+CPU: Ryzen 9 7900X
+RAM: 64 GB
+GPU: RTX 4070 Ti SUPER
+Disk: NVMe 2 TB
+
+Это позволяет:
+
+• миллионы документов
+• локальные embeddings
+• локальные Llama модели
+• быстрый reindex
+• knowledge graph
+
+============================================================
+3. БЕСПЛАТНЫЙ ТЕХНОЛОГИЧЕСКИЙ СТЕК
+==================================
+
+Object Storage → MinIO
+Metadata DB → PostgreSQL
+Vector DB → Qdrant
+Knowledge Graph → Neo4j Community / Memgraph
+Cache / Queue → Redis
+Backup → restic + snapshots
+
+Все сервисы запускаются через docker-compose.
+
+============================================================
+4. ОБЩАЯ АРХИТЕКТУРА СИСТЕМЫ
+============================
+
+Слои системы:
+
+1. UI
+2. Agent Core
+3. Memory-Service 2.0
+4. Storage Layer
+
+Memory-Service — центральный Brain Engine.
+
+============================================================
+5. MEMORY-SERVICE 2.0
+=====================
+
+memory-service управляет:
+
+• ingestion pipeline
+• retrieval pipeline
+• skill engine
+• knowledge graph
+• versioning
+• memory priority
+• auto-learning
+• API
+
+---
+
+5.1 Ingestion Engine
+
+Обрабатывает документы:
+
+• файл → MinIO
+• метаданные → Postgres
+• нормализация текста
+• chunking
+• embeddings → Qdrant
+• связи → Neo4j
+
+Асинхронно через очередь.
+
+---
+
+5.2 Retrieval Engine
+
+Выбирает память для ответа.
+
+Использует:
+
+• vector search
+• keyword search
+• graph traversal
+• skill search
+• priority filtering
+• context packing
+
+---
+
+5.3 Skill Engine
+
+Навыки агента.
+
+Skill хранит:
+
+• цель
+• шаги
+• примеры
+• ограничения
+• источники
+• confidence
+• version
+
+Skills индексируются в RAG.
+
+---
+
+5.4 Graph Engine
+
+Knowledge graph:
+
+• связи документов
+• обновления
+• зависимости
+• противоречия
+
+---
+
+5.5 Versioning Engine
+
+Каждый документ имеет:
+
+canonical_id
+version_id
+content_hash
+valid_from / valid_until
+
+Старые версии сохраняются.
+
+---
+
+5.6 Memory Priority Engine
+
+Типы приоритета:
+
+Critical
+Pinned
+Reinforced
+Normal
+Archived
+
+Это имитирует человеческую память.
+
+---
+
+5.7 Learning Engine
+
+Агент учится из диалогов:
+
+• создаёт Skills
+• создаёт Memory Items
+• создаёт Relationships
+• обновляет confidence
+
+---
+
+5.8 Monitoring Engine
+
+Логирует:
+
+• retrieval sources
+• scores
+• latency
+• embedding errors
+
+Метрики:
+
+precision@k
+recall@k
+skill usage
+
+============================================================
+6. АЛГОРИТМ ВЫБОРА ПАМЯТИ
+=========================
+
+Шаги:
+
+1. Анализ запроса
+   язык, тема, сущности, тип задачи
+
+2. Сбор кандидатов
+   pinned
+   reinforced
+   vector search
+   keyword search
+   skills
+   graph
+
+3. Оценка кандидатов
+   relevance
+   importance
+   recency
+   reliability
+   frequency
+   project context
+   graph distance
+
+4. Отбор top-K
+
+5. Context packing
+   убрать дубли
+   summary
+
+6. Добавление skills и memory items
+
+7. Передача контекста модели
+
+============================================================
+7. ОБУЧЕНИЕ НАВЫКАМ
+===================
+
+Skill создаётся если:
+
+• пользователь объяснил процедуру
+• найден повторяющийся pattern
+• импортирована инструкция
+
+Skill хранит:
+
+цель
+шаги
+примеры
+ограничения
+источники
+confidence
+version
+
+============================================================
+8. ОБНАРУЖЕНИЕ ПРОТИВОРЕЧИЙ
+===========================
+
+При загрузке документа:
+
+• сравнить embeddings
+• сравнить факты
+• если конфликт → relationship “contradicts”
+
+Агент сообщает о конфликте.
+
+============================================================
+9. СХЕМА БАЗЫ ДАННЫХ
+====================
+
+Основные таблицы:
+
+Workspaces
+KnowledgeBases
+Folders
+Documents
+DocumentVersions
+Chunks
+EmbeddingModels
+Skills
+SkillExamples
+MemoryItems
+Relationships
+MemoryPriority
+RetrievalLogs
+AccessControl
+
+Chunks хранятся в Vector DB, metadata в Postgres.
+
+============================================================
+10. STORAGE ПРАВИЛА
+===================
+
+MinIO хранит оригиналы документов.
+Postgres хранит metadata и версии.
+Qdrant хранит embeddings.
+Neo4j хранит связи знаний.
+
+============================================================
+11. МАСШТАБИРОВАНИЕ
+===================
+
+Для миллионов документов:
+
+• hybrid search
+• hierarchical indexing
+• lazy loading
+• Redis cache
+• batched embeddings
+• background jobs
+
+Retrieval должен быть <200ms.
+
+============================================================
+12. BACKUP СТРАТЕГИЯ
+====================
+
+Ежедневно:
+
+pg_dump
+qdrant snapshot
+neo4j backup
+minio backup
+
+Раз в месяц тест восстановления.
+
+============================================================
+13. ВЕЧНОСТЬ ПАМЯТИ
+===================
+
+Чтобы память жила десятилетиями:
+
+• хранить оригиналы
+• хранить версии
+• хранить embedding model id
+• поддерживать reindex
+• регулярные backups
+
+============================================================
+14. ИНТЕГРАЦИЯ С ПРОЕКТОМ agent-RegArt
+======================================
+
+Нужно:
+
+• заменить Chroma → Qdrant
+• skills YAML → Postgres
+• документы → MinIO
+• relationships → Neo4j
+• добавить versioning
+
+memory-service становится Brain Engine.
+
+============================================================
+15. ПЛАН ВНЕДРЕНИЯ
+==================
+
+Этап 1 — docker-compose стек
+Этап 2 — MinIO storage
+Этап 3 — миграция embeddings
+Этап 4 — versioning
+Этап 5 — Skill Engine
+Этап 6 — Knowledge Graph
+Этап 7 — Memory Priority
+Этап 8 — Learning Engine
+Этап 9 — Monitoring
+
+============================================================
+16. РЕЗУЛЬТАТ
+=============
+
+После реализации агент:
+
+• помнит знания десятилетиями
+• автоматически применяет навыки
+• учится новым знаниям
+• обнаруживает противоречия
+• масштабируется бесплатно
+
+RAG становится настоящей долговременной памятью агента.
+
+============================================================
+КОНЕЦ ДОКУМЕНТА
+===============
+

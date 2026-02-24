@@ -1,0 +1,147 @@
+AI CHAT — PREMIUM UI/UX DESIGN SPECIFICATION
+
+GOAL
+Create a premium-level AI chat interface that feels calm, minimalistic, modern, and elegant.
+No visual noise. No admin-panel feeling. Everything must look like a real polished product.
+
+CORE PRINCIPLES
+• Minimalism
+• Soft depth (not flat, not textured)
+• Fully adaptive layout
+• Smooth motion
+• No overlay popups blocking content
+
+SCREEN STRUCTURE
+The interface has 3 zones:
+
+1. Left panel – chats and spaces
+2. Center – chat conversation
+3. Right panel – system panel (RAG / Logs / Settings)
+
+Panels are part of layout. They shift content, never cover it.
+
+ADAPTIVE LAYOUT
+All sizes must be relative:
+• Percent-based layout
+• Relative spacing
+• Min/max constraints
+
+Interface must look correct on small laptop, large monitor, ultrawide, split screen.
+
+SOFT DEPTH STYLE
+No textures, no grain.
+
+Depth created by:
+• subtle inner borders
+• soft wide shadows
+• slight gradients
+• subtle glow for active items
+
+Four depth levels:
+Background → Chat → Panels → Active elements.
+
+COLOR STYLE
+• Dark graphite background
+• Slightly lighter panels
+• Soft blue/violet accent
+• No neon colors
+
+PANELS BEHAVIOR
+Left panel:
+• Slides left when closed
+• Center expands smoothly
+
+Right panel:
+• Slides right
+• Right-side buttons move with it
+• Panel never overlaps buttons or chat
+
+Panel modes switch inside container:
+RAG / Logs / Settings.
+
+AVATAR AND MODEL SELECTOR
+One agent avatar at top-left of chat.
+
+Model selector opens as a premium popover under avatar.
+
+Model dropdown must include:
+• search field
+• model cards with description
+• soft hover highlight
+• subtle animation
+
+No standard dropdown UI.
+
+RAG PANEL — UI REQUIREMENTS
+RAG looks like a real file explorer.
+
+Structure:
+• Header with knowledge base name
+• Action buttons
+• Search
+• Folder tree
+• File metadata preview
+• Footer stats
+
+File system behavior:
+• Drag & drop
+• Rename
+• Move
+• Delete (soft delete)
+• Multi-select
+• Pinned files
+• Highlight active file
+
+Search must support:
+• filename
+• content
+• semantic search
+
+UI STATES
+The panel must support states:
+• Empty
+• Processing
+• Ready
+• Error
+• Outdated
+• Conflict
+
+MICRO-ANIMATIONS
+• Hover slight scale
+• Active glow
+• Smooth panel slide
+• Smooth folder expand
+
+No harsh motion.
+
+TYPOGRAPHY
+Use clean sans-serif font.
+Clear hierarchy.
+Readable on small screens.
+
+ICONS
+Minimal line icons.
+Consistent stroke width.
+No gradients.
+
+MOBILE / SMALL SCREEN
+• Left panel collapsible
+• Right panel may become full screen sheet
+• Model dropdown centered
+
+DO NOT DO
+• Overlay modals
+• Bootstrap look
+• Grain textures
+• Bright neon colors
+• Flat UI without depth
+• Fixed pixel sizes
+
+QUALITY CHECK
+Design is ready if:
+• Looks good on any screen
+• Panels never block content
+• Model dropdown feels premium
+• RAG looks like real file system
+• Interface feels calm and polished.
+

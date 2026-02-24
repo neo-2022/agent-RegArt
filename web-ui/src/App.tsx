@@ -16,6 +16,9 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './styles/App.css';
+import { SYSTEM_PANEL_MODES, type SystemPanelMode, toggleSystemPanelMode, UI_LAYOUT } from './config/uiLayout';
+import { deriveRagPanelState, RAG_PANEL_STATE_LABELS } from './config/ragPanelState';
+import { DEFAULT_UI_PREFERENCES, parseUiPreferences, UI_PREFERENCES_STORAGE_KEY } from './config/uiPreferences';
 
 // AttachedFile — интерфейс прикреплённого файла.
 // Содержит имя файла и его текстовое содержимое (прочитанное через FileReader).
@@ -100,6 +103,28 @@ interface SystemLog {
   Details: string;
   Resolved: boolean;
   CreatedAt: string;
+}
+
+interface RagFileEntry {
+  file_name: string;
+  chunks_count: number;
+}
+
+interface RagFolderEntry {
+  folder: string;
+  total_files: number;
+  files: RagFileEntry[];
+}
+
+interface RagApiResponseItem {
+  folder?: string;
+  total_files?: number;
+  files?: Array<{ file_name?: string; chunks_count?: number }>;
+}
+
+interface BrowserSpeechWindow extends Window {
+  SpeechRecognition?: new () => SpeechRecognition;
+  webkitSpeechRecognition?: new () => SpeechRecognition;
 }
 
 // ProviderGuideInfo — подробное руководство по провайдеру.
@@ -299,7 +324,7 @@ function App() {
   const [agentsPanelOpen, setAgentsPanelOpen] = useState(true);       // Панель моделей открыта/закрыта
   const [speakingAgent, setSpeakingAgent] = useState<string | null>(null); // Говорящий агент (пульсация)
   const [ragEnabled, setRagEnabled] = useState(false);                // RAG-режим вкл/выкл
-  const [showRagPanel, setShowRagPanel] = useState(false);            // RAG-панель открыта/закрыта
+  const [systemPanelMode, setSystemPanelMode] = useState<SystemPanelMode | null>(null); // Режим правой системной панели
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]); // Прикреплённые файлы
   const [isListening, setIsListening] = useState(false);              // Голосовой ввод активен
 
@@ -321,22 +346,75 @@ function App() {
   const [refreshingProviders, setRefreshingProviders] = useState(false); // Индикатор обновления провайдеров
   const [ragUploadStatus, setRagUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [ragUploadMessage, setRagUploadMessage] = useState('');
+  const [ragPanelFetchError, setRagPanelFetchError] = useState(false);
   const [loadingElapsed, setLoadingElapsed] = useState(0);
   const RESPONSE_TIMEOUT = 300;
 
   // === Дополнительное состояние для RAG-файлов и просмотра ===
-  const [ragFiles, setRagFiles] = useState<{file_name: string; chunks_count: number}[]>([]);
+  const [ragFiles, setRagFiles] = useState<RagFolderEntry[]>([]);
   const [ragSearch, setRagSearch] = useState('');
   const [ragSortBy, setRagSortBy] = useState<'name' | 'chunks'>('name');
   const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
   const [promptSaveStatus, setPromptSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [promptSaveError, setPromptSaveError] = useState('');
 
-  const [showLogsPanel, setShowLogsPanel] = useState(false);
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
   const [logLevelFilter, setLogLevelFilter] = useState<string>('all');
   const [logServiceFilter, setLogServiceFilter] = useState<string>('all');
   const [logsLoading, setLogsLoading] = useState(false);
+  const [uiPreferences, setUiPreferences] = useState(() => parseUiPreferences(localStorage.getItem(UI_PREFERENCES_STORAGE_KEY)));
+
+  const normalizeRagFolders = (raw: unknown): RagFolderEntry[] => {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+
+    return raw
+      .map((item) => {
+        const typed = item as RagApiResponseItem;
+        const files = Array.isArray(typed.files)
+          ? typed.files
+              .filter((f) => typeof f?.file_name === 'string')
+              .map((f) => ({
+                file_name: String(f.file_name),
+                chunks_count: Number.isFinite(f.chunks_count) ? Number(f.chunks_count) : 0,
+              }))
+          : [];
+
+        return {
+          folder: typeof typed.folder === 'string' ? typed.folder : 'root',
+          total_files: Number.isFinite(typed.total_files) ? Number(typed.total_files) : files.length,
+          files,
+        };
+      })
+      .filter((entry) => entry.files.length > 0 || entry.total_files > 0);
+  };
+
+
+  const showRagPanel = systemPanelMode === SYSTEM_PANEL_MODES.rag;
+  const showLogsPanel = systemPanelMode === SYSTEM_PANEL_MODES.logs;
+  const showSettingsPanel = systemPanelMode === SYSTEM_PANEL_MODES.settings;
+
+  useEffect(() => {
+    localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify(uiPreferences));
+  }, [uiPreferences]);
+
+  const resolvedSystemPanelTransitionMs = uiPreferences.reducedMotion ? 0 : UI_LAYOUT.systemPanel.transitionMs;
+
+  const handleSystemPanelToggle = (mode: SystemPanelMode) => {
+    const nextMode = toggleSystemPanelMode(systemPanelMode, mode);
+    setSystemPanelMode(nextMode);
+
+    // Загружаем данные лениво: только когда режим реально активируется.
+    // Это уменьшает шум запросов и делает переключение вкладок предсказуемым.
+    if (nextMode === SYSTEM_PANEL_MODES.rag) {
+      fetchRagStats();
+      fetchRagFiles();
+    }
+    if (nextMode === SYSTEM_PANEL_MODES.logs) {
+      fetchLogs();
+    }
+  };
 
   // === Рефы для DOM-элементов ===
   const recognitionRef = useRef<SpeechRecognition | null>(null);      // Web Speech API экземпляр
@@ -609,18 +687,22 @@ function App() {
     try {
       const res = await axios.get(`${RAG_API}/stats`);
       setRagStats(res.data);
+      setRagPanelFetchError(false);
     } catch (err) {
       console.error('Failed to fetch RAG stats', err);
+      setRagPanelFetchError(true);
     }
   };
 
   const fetchRagFiles = async () => {
     try {
       const res = await axios.get(`${RAG_API}/files`);
-      setRagFiles(Array.isArray(res.data) ? res.data.filter(Boolean) : []);
+      setRagFiles(normalizeRagFolders(res.data));
+      setRagPanelFetchError(false);
     } catch (err) {
       console.error('Failed to fetch RAG files', err);
       setRagFiles([]);
+      setRagPanelFetchError(true);
     }
   };
 
@@ -632,15 +714,6 @@ function App() {
     } catch (err) {
       console.error('Failed to delete RAG file', err);
     }
-  };
-
-  // Добавляем защитные проверки для методов map и find
-  const safeMap = (array: any[] | undefined | null, callback: (item: any, index: number) => any) => {
-    return Array.isArray(array) ? array.map(callback) : [];
-  };
-
-  const safeFind = (array: any[] | undefined | null, predicate: (item: any) => boolean) => {
-    return Array.isArray(array) ? array.find(predicate) : undefined;
   };
 
   const fetchLogs = async () => {
@@ -769,7 +842,8 @@ function App() {
   // Использует SpeechRecognition с языком ru-RU, непрерывное распознавание.
   // При распознавании текст добавляется в поле ввода.
   const toggleVoiceInput = () => {
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as BrowserSpeechWindow;
+    const SpeechRecognitionAPI = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       alert('Ваш браузер не поддерживает голосовой ввод');
       return;
@@ -930,7 +1004,7 @@ function App() {
 
     // Закрываем панели при отправке сообщения, чтобы пользователь видел чат
     setAgentsPanelOpen(false);
-    setShowRagPanel(false);
+    setSystemPanelMode(null);
 
     let context = '';
     if (ragEnabled) {
@@ -1127,8 +1201,43 @@ function App() {
     return null;
   };
 
+  const ragLoadedFilesCount = ragFiles.reduce((sum, folder) => sum + folder.files.length, 0);
+  const ragHasNameConflict = (() => {
+    const fileNameToFolders = new Map<string, Set<string>>();
+    for (const folder of ragFiles) {
+      for (const file of folder.files) {
+        const normalizedName = file.file_name.trim().toLowerCase();
+        const folders = fileNameToFolders.get(normalizedName) ?? new Set<string>();
+        folders.add(folder.folder);
+        fileNameToFolders.set(normalizedName, folders);
+      }
+    }
+    for (const folders of fileNameToFolders.values()) {
+      if (folders.size > 1) {
+        return true;
+      }
+    }
+    return false;
+  })();
+  const ragPanelState = deriveRagPanelState({
+    isUploading: ragUploadStatus === 'uploading',
+    hasError: ragPanelFetchError || ragUploadStatus === 'error',
+    hasAnyFiles: ragLoadedFilesCount > 0,
+    statsFilesCount: ragStats?.files_count ?? 0,
+    loadedFilesCount: ragLoadedFilesCount,
+    hasNameConflict: ragHasNameConflict,
+  });
+
   return (
-    <div className="container">
+    <div
+      className="container"
+      style={{
+        '--left-panel-width': UI_LAYOUT.sidebar.width,
+        '--left-panel-width-compact': uiPreferences.compactSidebar ? UI_LAYOUT.sidebar.compactWidth : UI_LAYOUT.sidebar.width,
+        '--system-panel-width': UI_LAYOUT.systemPanel.width,
+        '--system-panel-transition': `${resolvedSystemPanelTransitionMs}ms`,
+      } as React.CSSProperties}
+    >
       <aside className="chats-sidebar">
         <div className="workspaces-section">
           <div className="workspaces-header">
@@ -1218,15 +1327,21 @@ function App() {
             </button>
             <button
               className={`agents-toggle ${showRagPanel ? 'open' : ''}`}
-              onClick={() => { const next = !showRagPanel; setShowRagPanel(next); if (next) { fetchRagStats(); fetchRagFiles(); } }}
+              onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.rag)}
             >
               RAG
             </button>
             <button
               className={`agents-toggle ${showLogsPanel ? 'open' : ''}`}
-              onClick={() => { const next = !showLogsPanel; setShowLogsPanel(next); if (next) fetchLogs(); }}
+              onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.logs)}
             >
               Логи
+            </button>
+            <button
+              className={`agents-toggle ${showSettingsPanel ? 'open' : ''}`}
+              onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.settings)}
+            >
+              Настройки
             </button>
           </div>
         </div>
@@ -1540,6 +1655,9 @@ function App() {
             <p className="rag-description">
               Когда RAG включён, агент ищет релевантную информацию в базе знаний перед ответом.
             </p>
+            <div className={`rag-state-banner rag-state-${ragPanelState}`} role="status">
+              {RAG_PANEL_STATE_LABELS[ragPanelState]}
+            </div>
             {ragStats && (
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '8px'}}>
                 Фактов: {ragStats.facts_count} | Файлов: {ragStats.files_count}
@@ -1554,8 +1672,7 @@ function App() {
                   const folderInput = document.createElement('input');
                   folderInput.type = 'file';
                   folderInput.multiple = true;
-                  // @ts-ignore
-                  folderInput.webkitdirectory = true;
+                  (folderInput as HTMLInputElement & { webkitdirectory: boolean }).webkitdirectory = true;
                   folderInput.style.display = 'none';
                   
                   folderInput.onchange = async () => {
@@ -1574,7 +1691,7 @@ function App() {
                       if (!RAG_SUPPORTED_EXTENSIONS.includes(ext)) { skippedCount++; continue; }
                       try {
                         const content = await file.text();
-                        const fileName = (file as any).webkitRelativePath || file.name;
+                        const fileName = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
                         await addRagFileChunks(fileName, content);
                         successCount++;
                       } catch (err) { console.error('Error:', file.name, err); }
@@ -1622,7 +1739,10 @@ function App() {
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>
               {ragFiles.length > 0 ? (
                 <div className="rag-file-list">
-                  {ragFiles.filter((folder: any) => !ragSearch || folder.folder?.toLowerCase().includes(ragSearch.toLowerCase()) || (folder.files || []).some((f: any) => f.file_name?.toLowerCase().includes(ragSearch.toLowerCase()))).sort((a: any, b: any) => ragSortBy === 'chunks' ? (b.total_files || 0) - (a.total_files || 0) : (a.folder || '').localeCompare(b.folder || '')).map((folder: any, idx: number) => (
+                  {ragFiles
+                    .filter((folder) => !ragSearch || folder.folder.toLowerCase().includes(ragSearch.toLowerCase()) || folder.files.some((f) => f.file_name.toLowerCase().includes(ragSearch.toLowerCase())))
+                    .sort((a, b) => ragSortBy === 'chunks' ? b.total_files - a.total_files : a.folder.localeCompare(b.folder))
+                    .map((folder, idx: number) => (
                     <div key={idx} className="rag-folder-group">
                       <div className="rag-folder-header">
                         <span className="rag-folder-icon">📁</span>
@@ -1630,15 +1750,15 @@ function App() {
                         <span className="rag-folder-count">({folder.total_files} файлов)</span>
                         <button className="rag-folder-delete" onClick={() => {
                           // Удаляем все файлы из папки
-                          if (folder.files && folder.files.length > 0) {
-                            folder.files.forEach((f: any) => deleteRagFile(folder.folder + '/' + f.file_name));
+                          if (folder.files.length > 0) {
+                            folder.files.forEach((f) => deleteRagFile(folder.folder + '/' + f.file_name));
                             fetchRagFiles();
                             fetchRagStats();
                           }
                         }} title="Удалить папку">✕</button>
                       </div>
                       <div className="rag-folder-files">
-                        {(folder.files || []).slice(0, 10).map((rf: any, fileIdx: number) => (
+                        {folder.files.slice(0, 10).map((rf, fileIdx: number) => (
                           <div key={fileIdx} className="rag-file-item">
                             <span className="rag-file-icon">📄</span>
                             <span className="rag-file-name">{rf.file_name}</span>
@@ -1646,8 +1766,8 @@ function App() {
                             <button className="rag-file-delete" onClick={() => deleteRagFile(folder.folder + '/' + rf.file_name)} title="Удалить">✕</button>
                           </div>
                         ))}
-                        {(folder.files || []).length > 10 && (
-                          <div className="rag-more-files">... и ещё {(folder.files || []).length - 10} файлов</div>
+                        {folder.files.length > 10 && (
+                          <div className="rag-more-files">... и ещё {folder.files.length - 10} файлов</div>
                         )}
                       </div>
                     </div>
@@ -1660,10 +1780,10 @@ function App() {
           </div>
         )}
 
-        <div className={`logs-slide-panel ${showLogsPanel ? 'open' : ''}`}>
+        <section className={`system-panel system-panel-logs ${showLogsPanel ? 'open' : ''}`}>
           <div className="logs-slide-header">
             <h4 style={{margin: 0}}>Логи системы</h4>
-            <button className="logs-close-btn" onClick={() => setShowLogsPanel(false)} title="Закрыть">&times;</button>
+            <button className="logs-close-btn" onClick={() => setSystemPanelMode(null)} title="Закрыть">&times;</button>
           </div>
           <div className="logs-toolbar">
             <select value={logLevelFilter} onChange={(e) => { setLogLevelFilter(e.target.value); }}>
@@ -1706,7 +1826,40 @@ function App() {
               ))
             )}
           </div>
-        </div>
+        </section>
+
+        <section className={`system-panel system-panel-settings ${showSettingsPanel ? 'open' : ''}`}>
+          <div className="logs-slide-header">
+            <h4 style={{ margin: 0 }}>Настройки интерфейса</h4>
+            <button className="logs-close-btn" onClick={() => setSystemPanelMode(null)} title="Закрыть">&times;</button>
+          </div>
+          <div className="settings-panel-content">
+            <label className="settings-item">
+              <span>Компактный левый сайдбар</span>
+              <input
+                type="checkbox"
+                checked={uiPreferences.compactSidebar}
+                onChange={() => setUiPreferences(prev => ({ ...prev, compactSidebar: !prev.compactSidebar }))}
+              />
+            </label>
+
+            <label className="settings-item">
+              <span>Отключить анимации панелей</span>
+              <input
+                type="checkbox"
+                checked={uiPreferences.reducedMotion}
+                onChange={() => setUiPreferences(prev => ({ ...prev, reducedMotion: !prev.reducedMotion }))}
+              />
+            </label>
+
+            <button
+              className="provider-save-btn"
+              onClick={() => setUiPreferences(DEFAULT_UI_PREFERENCES)}
+            >
+              Сбросить настройки
+            </button>
+          </div>
+        </section>
 
         <div className="chat-messages">
           {messages.map((msg, idx) => (

@@ -568,3 +568,44 @@ MIT License
 
 ## Модели
 Система автоматически загружает модели из `agent-service/models`. Подробнее в [документации](docs/ru/models-setup.md).
+
+## Strict engineering execution по UI/UX и Eternal RAG
+
+Для поэтапной отработки требований из спецификаций UI/UX и Eternal RAG добавлен отдельный baseline-документ:
+
+- `docs/strict-engineering-execution-plan.md`
+
+Документ фиксирует карту соответствия требований текущим подсистемам, приоритетный backlog, quality gates и критерии готовности программы работ.
+
+## Memory-service: versioning, soft delete и conflict detection
+
+В блоке обучения (`/learnings`) реализован baseline долговременной устойчивости памяти:
+
+- каждое знание хранится с `learning_key` и `version`;
+- при обновлении создаётся новая версия, предыдущая переводится в `superseded`;
+- удаление знаний выполняется как soft delete (`status=deleted`), без hard delete;
+- поиск возвращает только активные версии знаний.
+
+## Workspace isolation (memory-service)
+
+Для retrieval и learnings добавлена фильтрация `workspace_id`:
+
+- `POST /search` поддерживает `workspace_id` и ограничивает выборку фактами/файлами только этого workspace;
+- `POST /learnings` сохраняет `workspace_id` в метаданных знания;
+- `POST /learnings/search` и `DELETE /learnings/{model_name}` поддерживают `workspace_id` и работают в границах workspace.
+
+## Learning version history API
+
+Для аудита эволюции знаний добавлен эндпоинт:
+
+- `GET /learnings/versions/{model_name}`
+  - опциональные фильтры: `category`, `workspace_id`;
+  - возвращает список версий (`version`, `status`, `text`, `metadata`) в порядке убывания версии.
+
+## Audit logs API (memory-service)
+
+Для контроля и расследования изменений памяти добавлен API аудита:
+
+- `GET /audit/logs`
+  - параметры: `top_k`, `workspace_id`, `model_name`;
+  - возвращает события (`event_type`, `model_name`, `workspace_id`, `learning_id`, `created_at`, `details`).

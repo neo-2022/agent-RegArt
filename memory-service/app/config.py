@@ -25,6 +25,19 @@ class Settings:
     
     # Количество результатов при поиске
     TOP_K = int(os.getenv("TOP_K", "5"))
+
+    # === Весовые коэффициенты ранжирования памяти ===
+    # Значения управляют итоговым score в retrieval:
+    # final = relevance*w_rel + importance*w_imp + reliability*w_relb + recency*w_rec + frequency*w_freq
+    # Все коэффициенты вынесены в env, чтобы исключить hardcode в логике и дать гибкую калибровку.
+    RANK_WEIGHT_RELEVANCE = float(os.getenv("RANK_WEIGHT_RELEVANCE", "0.55"))
+    RANK_WEIGHT_IMPORTANCE = float(os.getenv("RANK_WEIGHT_IMPORTANCE", "0.15"))
+    RANK_WEIGHT_RELIABILITY = float(os.getenv("RANK_WEIGHT_RELIABILITY", "0.15"))
+    RANK_WEIGHT_RECENCY = float(os.getenv("RANK_WEIGHT_RECENCY", "0.10"))
+    RANK_WEIGHT_FREQUENCY = float(os.getenv("RANK_WEIGHT_FREQUENCY", "0.05"))
+
+    # Горизонт «свежести» (в днях): старше этого окна recency стремится к 0.
+    RECENCY_WINDOW_DAYS = int(os.getenv("RECENCY_WINDOW_DAYS", "30"))
     
     # Хост и порт для FastAPI
     HOST = os.getenv("HOST", "0.0.0.0")

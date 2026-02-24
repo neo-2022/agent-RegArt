@@ -71,3 +71,18 @@ export default defineConfig([
   },
 ])
 ```
+
+## Design baseline (UI/UX spec)
+
+В текущей итерации добавлен baseline для трёхзонного layout без overlay-перекрытий контента:
+
+- токены ширины панелей и анимаций вынесены в `src/config/uiLayout.ts`;
+- правая системная панель (RAG/Логи) переключает режимы внутри одного контейнера;
+- добавлены unit-тесты переключения режимов в `src/config/uiLayout.test.ts`.
+
+### RAG panel states
+
+RAG-панель теперь явно поддерживает состояния из спецификации: `empty`, `processing`, `ready`, `error`, `outdated`, `conflict`.
+
+- Логика вычисления состояния: `src/config/ragPanelState.ts`
+- Unit-тесты состояний: `src/config/ragPanelState.test.ts`

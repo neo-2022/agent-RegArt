@@ -25,6 +25,7 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="Поисковый запрос", min_length=1, max_length=MAX_QUERY_LENGTH)
     top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=50)
     agent_name: Optional[str] = Field(None, description="Фильтр по имени агента")
+    workspace_id: Optional[str] = Field(None, description="Фильтр по workspace (изоляция контекста)")
     include_files: bool = Field(False, description="Включать ли фрагменты файлов")
 
 
@@ -93,6 +94,7 @@ class LearningAddRequest(BaseModel):
     text: str = Field(..., description="Текст знания (факт, правило, предпочтение пользователя)", min_length=1, max_length=MAX_TEXT_LENGTH)
     model_name: str = Field(..., description="Имя модели LLM, которая получила это знание", min_length=1)
     agent_name: str = Field(..., description="Имя агента, в контексте которого получено знание", min_length=1)
+    workspace_id: Optional[str] = Field(None, description="Идентификатор workspace для изоляции памяти", min_length=1)
     category: str = Field("general", description="Категория знания: general, preference, fact, skill, correction")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Дополнительные метаданные")
 
@@ -100,6 +102,10 @@ class LearningAddRequest(BaseModel):
 class LearningAddResponse(BaseModel):
     """Ответ на добавление знания."""
     id: str
+    version: int = 1
+    learning_key: str
+    conflict_detected: bool = False
+    previous_version_id: Optional[str] = None
     status: str = "ok"
     message: str = "Learning added"
 
@@ -112,6 +118,7 @@ class LearningSearchRequest(BaseModel):
     """
     query: str = Field(..., description="Поисковый запрос (контекст текущего диалога)", min_length=1, max_length=MAX_QUERY_LENGTH)
     model_name: str = Field(..., description="Имя модели, для которой ищем знания", min_length=1)
+    workspace_id: Optional[str] = Field(None, description="Идентификатор workspace для изоляции памяти", min_length=1)
     top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=20)
     category: Optional[str] = Field(None, description="Фильтр по категории знания")
 
@@ -134,3 +141,38 @@ class LearningDeleteRequest(BaseModel):
     """Запрос на удаление знаний модели."""
     model_name: str = Field(..., description="Имя модели, знания которой удалить")
     category: Optional[str] = Field(None, description="Удалить только определённую категорию (опционально)")
+
+
+class LearningVersionItem(BaseModel):
+    """Элемент истории версий знания."""
+    id: str
+    version: int
+    status: str
+    text: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class LearningVersionsResponse(BaseModel):
+    """Ответ со списком версий знания по модели/категории/workspace."""
+    model_name: str
+    category: Optional[str] = None
+    workspace_id: Optional[str] = None
+    versions: List[LearningVersionItem] = Field(default_factory=list)
+    count: int
+
+
+class AuditLogItem(BaseModel):
+    """Запись аудита операций памяти."""
+    id: str
+    event_type: str
+    model_name: Optional[str] = None
+    workspace_id: Optional[str] = None
+    learning_id: Optional[str] = None
+    created_at: str
+    details: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AuditLogsResponse(BaseModel):
+    """Ответ со списком событий аудита."""
+    logs: List[AuditLogItem] = Field(default_factory=list)
+    count: int

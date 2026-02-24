@@ -18,6 +18,7 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import './styles/App.css';
 import { SYSTEM_PANEL_MODES, type SystemPanelMode, toggleSystemPanelMode, UI_LAYOUT } from './config/uiLayout';
 import { deriveRagPanelState, RAG_PANEL_STATE_LABELS } from './config/ragPanelState';
+import { DEFAULT_UI_PREFERENCES, parseUiPreferences, UI_PREFERENCES_STORAGE_KEY } from './config/uiPreferences';
 
 // AttachedFile — интерфейс прикреплённого файла.
 // Содержит имя файла и его текстовое содержимое (прочитанное через FileReader).
@@ -361,6 +362,7 @@ function App() {
   const [logLevelFilter, setLogLevelFilter] = useState<string>('all');
   const [logServiceFilter, setLogServiceFilter] = useState<string>('all');
   const [logsLoading, setLogsLoading] = useState(false);
+  const [uiPreferences, setUiPreferences] = useState(() => parseUiPreferences(localStorage.getItem(UI_PREFERENCES_STORAGE_KEY)));
 
   const normalizeRagFolders = (raw: unknown): RagFolderEntry[] => {
     if (!Array.isArray(raw)) {
@@ -391,6 +393,13 @@ function App() {
 
   const showRagPanel = systemPanelMode === SYSTEM_PANEL_MODES.rag;
   const showLogsPanel = systemPanelMode === SYSTEM_PANEL_MODES.logs;
+  const showSettingsPanel = systemPanelMode === SYSTEM_PANEL_MODES.settings;
+
+  useEffect(() => {
+    localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify(uiPreferences));
+  }, [uiPreferences]);
+
+  const resolvedSystemPanelTransitionMs = uiPreferences.reducedMotion ? 0 : UI_LAYOUT.systemPanel.transitionMs;
 
   const handleSystemPanelToggle = (mode: SystemPanelMode) => {
     const nextMode = toggleSystemPanelMode(systemPanelMode, mode);
@@ -1224,9 +1233,9 @@ function App() {
       className="container"
       style={{
         '--left-panel-width': UI_LAYOUT.sidebar.width,
-        '--left-panel-width-compact': UI_LAYOUT.sidebar.compactWidth,
+        '--left-panel-width-compact': uiPreferences.compactSidebar ? UI_LAYOUT.sidebar.compactWidth : UI_LAYOUT.sidebar.width,
         '--system-panel-width': UI_LAYOUT.systemPanel.width,
-        '--system-panel-transition': `${UI_LAYOUT.systemPanel.transitionMs}ms`,
+        '--system-panel-transition': `${resolvedSystemPanelTransitionMs}ms`,
       } as React.CSSProperties}
     >
       <aside className="chats-sidebar">
@@ -1327,6 +1336,12 @@ function App() {
               onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.logs)}
             >
               Логи
+            </button>
+            <button
+              className={`agents-toggle ${showSettingsPanel ? 'open' : ''}`}
+              onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.settings)}
+            >
+              Настройки
             </button>
           </div>
         </div>
@@ -1810,6 +1825,39 @@ function App() {
                 </div>
               ))
             )}
+          </div>
+        </section>
+
+        <section className={`system-panel system-panel-settings ${showSettingsPanel ? 'open' : ''}`}>
+          <div className="logs-slide-header">
+            <h4 style={{ margin: 0 }}>Настройки интерфейса</h4>
+            <button className="logs-close-btn" onClick={() => setSystemPanelMode(null)} title="Закрыть">&times;</button>
+          </div>
+          <div className="settings-panel-content">
+            <label className="settings-item">
+              <span>Компактный левый сайдбар</span>
+              <input
+                type="checkbox"
+                checked={uiPreferences.compactSidebar}
+                onChange={() => setUiPreferences(prev => ({ ...prev, compactSidebar: !prev.compactSidebar }))}
+              />
+            </label>
+
+            <label className="settings-item">
+              <span>Отключить анимации панелей</span>
+              <input
+                type="checkbox"
+                checked={uiPreferences.reducedMotion}
+                onChange={() => setUiPreferences(prev => ({ ...prev, reducedMotion: !prev.reducedMotion }))}
+              />
+            </label>
+
+            <button
+              className="provider-save-btn"
+              onClick={() => setUiPreferences(DEFAULT_UI_PREFERENCES)}
+            >
+              Сбросить настройки
+            </button>
           </div>
         </section>
 

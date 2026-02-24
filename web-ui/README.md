@@ -86,3 +86,12 @@ RAG-панель теперь явно поддерживает состояни
 
 - Логика вычисления состояния: `src/config/ragPanelState.ts`
 - Unit-тесты состояний: `src/config/ragPanelState.test.ts`
+
+### System panel: Settings mode
+
+Добавлен третий режим правой системной панели — `Settings` (вместе с `RAG` и `Логи`):
+
+- переключение без overlay, внутри общего контейнера panel mode;
+- сохраняемые UI-предпочтения в localStorage (`src/config/uiPreferences.ts`):
+  - `compactSidebar`
+  - `reducedMotion`.

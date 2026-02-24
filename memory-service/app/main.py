@@ -311,6 +311,17 @@ async def get_audit_logs(top_k: int = 100, workspace_id: str = None, model_name:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/metrics/retrieval", response_model=models.RetrievalMetricsResponse, tags=["Maintenance"])
+async def get_retrieval_metrics():
+    """Получить агрегированные метрики retrieval (latency/errors/объём выдачи)."""
+    try:
+        metrics = memory_store.get_retrieval_metrics()
+        return models.RetrievalMetricsResponse(**metrics)
+    except Exception as e:
+        logger.exception("Ошибка получения retrieval metrics")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/reindex", tags=["Maintenance"])
 async def reindex(collection: str = "all", force: bool = False):
     """Запустить переиндексацию документов."""

@@ -315,3 +315,22 @@ def test_audit_logs_endpoint(client):
     assert data["count"] >= 1
     assert any(item["event_type"] == "learning_added" for item in data["logs"])
     assert all(item.get("workspace_id") == workspace_id for item in data["logs"])
+
+
+def test_retrieval_metrics_endpoint(client):
+    """Проверяет endpoint агрегированных retrieval-метрик."""
+    client.post("/facts", json={
+        "text": "metrics fact",
+        "metadata": {"workspace_id": "metrics-ws", "source": "test"},
+    })
+    client.post("/search", json={
+        "query": "metrics",
+        "workspace_id": "metrics-ws",
+        "top_k": 5,
+    })
+
+    metrics = client.get("/metrics/retrieval")
+    assert metrics.status_code == 200
+    data = metrics.json()
+    assert data["search_requests_total"] >= 1
+    assert data["search_latency_ms_avg"] >= 0

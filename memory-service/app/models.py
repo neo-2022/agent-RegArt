@@ -176,3 +176,11 @@ class AuditLogsResponse(BaseModel):
     """Ответ со списком событий аудита."""
     logs: List[AuditLogItem] = Field(default_factory=list)
     count: int
+
+
+class RetrievalMetricsResponse(BaseModel):
+    """Агрегированные метрики retrieval для мониторинга производительности."""
+    search_requests_total: int
+    search_errors_total: int
+    search_results_total: int
+    search_latency_ms_avg: float

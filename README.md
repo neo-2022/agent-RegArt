@@ -609,3 +609,13 @@ MIT License
 - `GET /audit/logs`
   - параметры: `top_k`, `workspace_id`, `model_name`;
   - возвращает события (`event_type`, `model_name`, `workspace_id`, `learning_id`, `created_at`, `details`).
+
+## Retrieval metrics API (memory-service)
+
+Для мониторинга производительности retrieval добавлен endpoint:
+
+- `GET /metrics/retrieval`
+  - `search_requests_total`
+  - `search_errors_total`
+  - `search_results_total`
+  - `search_latency_ms_avg`

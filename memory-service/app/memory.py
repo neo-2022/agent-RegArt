@@ -2,7 +2,9 @@ import os
 import uuid
 import logging
 import json
+import time
 from datetime import datetime, timezone
+from threading import Lock
 from typing import List, Dict, Optional, Any
 
 import chromadb
@@ -48,6 +50,13 @@ class MemoryStore:
         # Это позволяет каждой модели накапливать свою уникальную базу знаний.
         self.learnings_collection = self._get_or_create_collection("agent_learnings")
         self.audit_collection = self._get_or_create_collection("agent_memory_audit")
+        self._metrics_lock = Lock()
+        self._retrieval_metrics: Dict[str, float] = {
+            "search_requests_total": 0,
+            "search_errors_total": 0,
+            "search_latency_ms_total": 0.0,
+            "search_results_total": 0,
+        }
         
         # Загружаем модель эмбеддингов
         logger.info(f"Загрузка модели эмбеддингов: {settings.EMBEDDING_MODEL}")
@@ -226,10 +235,12 @@ class MemoryStore:
         Поиск релевантных фактов и/или фрагментов файлов.
         Возвращает структурированные результаты: text, score, source, metadata.
         """
+        start_ts = time.perf_counter()
         if top_k is None:
             top_k = settings.TOP_K
         
         if self.facts_collection.count() == 0 and (not include_files or self.files_collection.count() == 0):
+            self._record_search_metrics(start_ts=start_ts, results_count=0, is_error=False)
             return []
         
         query_embedding = self.encoder.encode(query).tolist()
@@ -291,6 +302,7 @@ class MemoryStore:
                 unique.append(r)
         
         unique.sort(key=lambda x: x["score"], reverse=True)
+        self._record_search_metrics(start_ts=start_ts, results_count=len(unique), is_error=False)
         return unique
     
     def add_file_chunk(self, chunk_text: str, metadata: Dict[str, Any]) -> str:
@@ -512,7 +524,9 @@ class MemoryStore:
         Поиск релевантных знаний для конкретной модели LLM.
         Возвращает структурированные результаты: text, score, source, metadata.
         """
+        start_ts = time.perf_counter()
         if self.learnings_collection.count() == 0:
+            self._record_search_metrics(start_ts=start_ts, results_count=0, is_error=False)
             return []
         
         query_embedding = self.encoder.encode(query).tolist()
@@ -545,11 +559,36 @@ class MemoryStore:
                         score = build_rank_score(relevance, meta)
                         items.append({"text": doc, "score": score, "source": "learnings", "metadata": meta})
                 items.sort(key=lambda x: x["score"], reverse=True)
+                self._record_search_metrics(start_ts=start_ts, results_count=len(items), is_error=False)
                 return items
         except Exception as e:
             logger.error(f"Ошибка поиска знаний для модели {model_name}: {e}")
+            self._record_search_metrics(start_ts=start_ts, results_count=0, is_error=True)
         
         return []
+
+    def _record_search_metrics(self, start_ts: float, results_count: int, is_error: bool) -> None:
+        """Атомарно обновляет метрики retrieval для мониторинга."""
+        latency_ms = (time.perf_counter() - start_ts) * 1000.0
+        with self._metrics_lock:
+            self._retrieval_metrics["search_requests_total"] += 1
+            self._retrieval_metrics["search_latency_ms_total"] += latency_ms
+            self._retrieval_metrics["search_results_total"] += max(results_count, 0)
+            if is_error:
+                self._retrieval_metrics["search_errors_total"] += 1
+
+    def get_retrieval_metrics(self) -> Dict[str, float]:
+        """Возвращает срез retrieval-метрик с вычисленным средним временем ответа."""
+        with self._metrics_lock:
+            requests_total = self._retrieval_metrics["search_requests_total"]
+            latency_total = self._retrieval_metrics["search_latency_ms_total"]
+            avg_latency = latency_total / requests_total if requests_total > 0 else 0.0
+            return {
+                "search_requests_total": int(requests_total),
+                "search_errors_total": int(self._retrieval_metrics["search_errors_total"]),
+                "search_results_total": int(self._retrieval_metrics["search_results_total"]),
+                "search_latency_ms_avg": round(avg_latency, 3),
+            }
     
     def get_learning_stats(self) -> Dict[str, Any]:
         """

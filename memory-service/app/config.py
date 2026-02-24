@@ -38,6 +38,12 @@ class Settings:
 
     # Горизонт «свежести» (в днях): старше этого окна recency стремится к 0.
     RECENCY_WINDOW_DAYS = int(os.getenv("RECENCY_WINDOW_DAYS", "30"))
+
+    # === Backup checks / readiness flags ===
+    QDRANT_SNAPSHOT_ENABLED = os.getenv("QDRANT_SNAPSHOT_ENABLED", "false").lower() == "true"
+    NEO4J_BACKUP_ENABLED = os.getenv("NEO4J_BACKUP_ENABLED", "false").lower() == "true"
+    MINIO_VERSIONING_ENABLED = os.getenv("MINIO_VERSIONING_ENABLED", "false").lower() == "true"
+    RESTORE_TEST_ENABLED = os.getenv("RESTORE_TEST_ENABLED", "false").lower() == "true"
     
     # Хост и порт для FastAPI
     HOST = os.getenv("HOST", "0.0.0.0")

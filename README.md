@@ -619,3 +619,16 @@ MIT License
   - `search_errors_total`
   - `search_results_total`
   - `search_latency_ms_avg`
+
+## Backup checks API (memory-service)
+
+Для операционной готовности добавлен endpoint:
+
+- `GET /backup/checks`
+  - `pg_dump_available`
+  - `qdrant_snapshot_enabled`
+  - `neo4j_backup_enabled`
+  - `minio_versioning_enabled`
+  - `restore_test_enabled`
+
+Флаги (`*_enabled`) управляются через env в `memory-service/app/config.py`.

@@ -184,3 +184,12 @@ class RetrievalMetricsResponse(BaseModel):
     search_errors_total: int
     search_results_total: int
     search_latency_ms_avg: float
+
+
+class BackupChecksResponse(BaseModel):
+    """Результат инфраструктурных backup-checks (наличие инструментов и флагов)."""
+    pg_dump_available: bool
+    qdrant_snapshot_enabled: bool
+    neo4j_backup_enabled: bool
+    minio_versioning_enabled: bool
+    restore_test_enabled: bool

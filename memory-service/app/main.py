@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+import shutil
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -319,6 +320,22 @@ async def get_retrieval_metrics():
         return models.RetrievalMetricsResponse(**metrics)
     except Exception as e:
         logger.exception("Ошибка получения retrieval metrics")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/backup/checks", response_model=models.BackupChecksResponse, tags=["Maintenance"])
+async def get_backup_checks():
+    """Проверка базовой готовности backup/recovery по чек-листу Eternal RAG."""
+    try:
+        return models.BackupChecksResponse(
+            pg_dump_available=shutil.which("pg_dump") is not None,
+            qdrant_snapshot_enabled=settings.QDRANT_SNAPSHOT_ENABLED,
+            neo4j_backup_enabled=settings.NEO4J_BACKUP_ENABLED,
+            minio_versioning_enabled=settings.MINIO_VERSIONING_ENABLED,
+            restore_test_enabled=settings.RESTORE_TEST_ENABLED,
+        )
+    except Exception as e:
+        logger.exception("Ошибка проверки backup checks")
         raise HTTPException(status_code=500, detail=str(e))
 
 

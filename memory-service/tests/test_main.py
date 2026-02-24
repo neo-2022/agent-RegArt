@@ -334,3 +334,15 @@ def test_retrieval_metrics_endpoint(client):
     data = metrics.json()
     assert data["search_requests_total"] >= 1
     assert data["search_latency_ms_avg"] >= 0
+
+
+def test_backup_checks_endpoint(client):
+    """Проверяет endpoint готовности backup/recovery."""
+    resp = client.get("/backup/checks")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "pg_dump_available" in data
+    assert "qdrant_snapshot_enabled" in data
+    assert "neo4j_backup_enabled" in data
+    assert "minio_versioning_enabled" in data
+    assert "restore_test_enabled" in data

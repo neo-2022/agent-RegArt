@@ -1,0 +1,8 @@
+{
+  "default_language": "ru",
+  "force_russian": true,
+  "translation_settings": {
+    "use_system_translation": false,
+    "fallback_language": "ru"
+  }
+}

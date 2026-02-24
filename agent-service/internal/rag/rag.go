@@ -293,8 +293,8 @@ func (d *DBRetriever) seedFromPath(path string) error {
 
 	// Проверяем существующие директории
 	dirs := []string{
-		"agent-service/prompts",
-		"agent-service/uploads",
+		"prompts",
+		"uploads",
 	}
 
 	for _, dir := range dirs {

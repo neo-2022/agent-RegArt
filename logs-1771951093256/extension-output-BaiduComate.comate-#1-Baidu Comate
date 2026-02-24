@@ -1,0 +1,21 @@
+[2026-02-24 19:10:58][ERROR] translation not initialized, failed to translate: autoWork.task.thought
+[2026-02-24 19:10:58][ERROR] translation not initialized, failed to translate: autoWork.task.answer
+[2026-02-24 19:10:58][INFO] Main api baseURL: https://comate.baidu.com/api
+[2026-02-24 19:10:58][INFO] CodeSearch api baseURL: https://comate.baidu.com/api/autowork
+[2026-02-24 19:10:58][INFO] User api baseURL: undefined
+[2026-02-24 19:10:58][INFO] SmartAPI bapi baseURL: https://comate.baidu.com/api
+[2026-02-24 19:10:58][INFO] SmartAPI AIapi baseURL: https://comate.baidu.com/api
+[2026-02-24 19:10:58][INFO] UnitTest api baseURL: https://comate.baidu.com
+[2026-02-24 19:10:58][INFO] Knowledge api baseURL: https://comate.baidu.com
+[2026-02-24 19:10:58][INFO] License api baseURL: https://comate.baidu.com/api
+[2026-02-24 19:10:58][ERROR] No Git provider found.
+[2026-02-24 19:10:58][INFO] Language Server State Changed - From: Stopped To: Starting
+[2026-02-24 19:10:58][ERROR] Response error: getaddrinfo ENOTFOUND comate.baidu-int.com for URL: /baidu-int.json
+[2026-02-24 19:10:59][INFO] Webview Monitor ping
+[2026-02-24 19:10:59][INFO] Language Server State Changed - From: Starting To: Running
+[2026-02-24 19:10:59][INFO] ✅ Language Server started successfully
+[2026-02-24 19:11:00][INFO] TerminalLinkProvider: regex rule updated at 1771949460553
+[2026-02-24 19:11:00][INFO] codeRatioCalculatorByGit isEnabled: {"key":"d94b4bb9-334a-40b5-a2df-02b269fa6d26","orgId":"c_github_59117241","typeId":2,"type":"Basic","typeCode":"TRIAL_INDIVIDUAL","customizedUrl":null,"vpcConfig":null,"features":null,"commonConfig":{"diffTrackerRateSeconds":180,"effectiveInputLines":30,"uploadFilesBranchChangeMonitoringInterval":10,"gitPollingInterval":180},"customized":false}
+[2026-02-24 19:11:01][INFO] Initializing repository state tracking for 1 repositories
+[2026-02-24 19:11:01][ERROR] Response error: Request failed with status code 500 for URL: /key/valid/d94b4bb9-334a-40b5-a2df-02b269fa6d26
+[2026-02-24 19:11:01][ERROR] Response error: Request failed with status code 500 for URL: /key/valid/d94b4bb9-334a-40b5-a2df-02b269fa6d26

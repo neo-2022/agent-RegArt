@@ -404,6 +404,15 @@ function App() {
     }
   };
 
+  const fetchWorkspaces = async () => {
+    try {
+      const res = await axios.get(WORKSPACES_API);
+      setWorkspaces(res.data);
+    } catch (err) {
+      console.error('Failed to fetch workspaces', err);
+    }
+  };
+
   const fetchModels = async () => {
     try {
       const res = await axios.get(MODELS_API);
@@ -459,15 +468,6 @@ function App() {
     }
   };
 
-  // fetchWorkspaces — загрузка списка рабочих пространств из бэкенда.
-  const fetchWorkspaces = async () => {
-    try {
-      const res = await axios.get(WORKSPACES_API);
-      setWorkspaces(res.data || []);
-    } catch (err) {
-      console.error('Failed to fetch workspaces', err);
-    }
-  };
 
   // createWorkspace — создание нового рабочего пространства через диалог prompt().
   // Запрашивает имя и опционально путь к директории на ПК.
@@ -617,7 +617,7 @@ function App() {
   const fetchRagFiles = async () => {
     try {
       const res = await axios.get(`${RAG_API}/files`);
-      setRagFiles(Array.isArray(res.data) ? res.data : []);
+      setRagFiles(Array.isArray(res.data) ? res.data.filter(Boolean) : []);
     } catch (err) {
       console.error('Failed to fetch RAG files', err);
       setRagFiles([]);
@@ -632,6 +632,15 @@ function App() {
     } catch (err) {
       console.error('Failed to delete RAG file', err);
     }
+  };
+
+  // Добавляем защитные проверки для методов map и find
+  const safeMap = (array: any[] | undefined | null, callback: (item: any, index: number) => any) => {
+    return Array.isArray(array) ? array.map(callback) : [];
+  };
+
+  const safeFind = (array: any[] | undefined | null, predicate: (item: any) => boolean) => {
+    return Array.isArray(array) ? array.find(predicate) : undefined;
   };
 
   const fetchLogs = async () => {
@@ -741,11 +750,11 @@ function App() {
   const onFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    Array.from(files).forEach(file => {
+    Array.from(files || []).forEach(file => {
       const reader = new FileReader();
       reader.onload = () => {
         const content = reader.result as string;
-        setAttachedFiles(prev => [...prev, { name: file.name, content }]);
+        setAttachedFiles(prev => [...(prev || []), { name: file.name, content }]);
       };
       reader.readAsText(file);
     });
@@ -760,7 +769,7 @@ function App() {
   // Использует SpeechRecognition с языком ru-RU, непрерывное распознавание.
   // При распознавании текст добавляется в поле ввода.
   const toggleVoiceInput = () => {
-    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       alert('Ваш браузер не поддерживает голосовой ввод');
       return;
@@ -1196,7 +1205,7 @@ function App() {
                   <img src={`${AVATAR_BASE}${agent.avatar}`} alt={agent.name} onError={(e) => { const t = e.target as HTMLImageElement; const b = BUILT_IN_AVATARS[agent.name]; if (b && t.src !== window.location.origin + b) { t.src = b; } else { t.style.display = 'none'; t.parentElement!.textContent = agent.name.charAt(0).toUpperCase(); } }} />
                 ) : BUILT_IN_AVATARS[agent.name] ? (
                   <img src={BUILT_IN_AVATARS[agent.name]} alt={agent.name} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.textContent = agent.name.charAt(0).toUpperCase(); }} />
-                ) : agent.name.charAt(0).toUpperCase()}
+                ) : (agent.name || '?').charAt(0).toUpperCase()}
               </div>
             ))}
           </div>
@@ -1295,7 +1304,7 @@ function App() {
                       <img src={`${AVATAR_BASE}${agent.avatar}`} alt={agent.name} onError={(e) => { const t = e.target as HTMLImageElement; const b = BUILT_IN_AVATARS[agent.name]; if (b && t.src !== window.location.origin + b) { t.src = b; } else { t.style.display = 'none'; t.parentElement!.textContent = agent.name.charAt(0).toUpperCase(); } }} />
                     ) : BUILT_IN_AVATARS[agent.name] ? (
                       <img src={BUILT_IN_AVATARS[agent.name]} alt={agent.name} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.textContent = agent.name.charAt(0).toUpperCase(); }} />
-                    ) : agent.name.charAt(0).toUpperCase()}
+                    ) : (agent.name || '?').charAt(0).toUpperCase()}
                   </span>
                   <span className="agent-name">{agent.name}</span>
                   <select
@@ -1769,7 +1778,7 @@ function App() {
                   if (agent?.avatar) return <img src={`${AVATAR_BASE}${agent.avatar}`} alt={agent.name} />;
                   const builtIn = BUILT_IN_AVATARS[speakingAgent || currentAgent];
                   if (builtIn) return <img src={builtIn} alt={speakingAgent || currentAgent} />;
-                  return (speakingAgent || currentAgent).charAt(0).toUpperCase();
+                  return (speakingAgent || currentAgent || '?').charAt(0).toUpperCase();
                 })()}
               </div>
               <div className="message-content loading-indicator">

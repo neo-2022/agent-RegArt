@@ -17,7 +17,19 @@ type IntentPlan struct {
 
 var intentToolMap = map[string]ToolMapping{
 	IntentHardwareInfo: {
-		ToolName: "sysinfo",
+		ToolName: "full_system_report",
+		ArgsFrom: func(_ Params) map[string]interface{} {
+			return map[string]interface{}{}
+		},
+	},
+	"system_info": {
+		ToolName: "full_system_report",
+		ArgsFrom: func(_ Params) map[string]interface{} {
+			return map[string]interface{}{}
+		},
+	},
+	"hardware_info": {
+		ToolName: "full_system_report", 
 		ArgsFrom: func(_ Params) map[string]interface{} {
 			return map[string]interface{}{}
 		},
@@ -63,11 +75,13 @@ func PlanIntent(intentType string, params Params) *IntentPlan {
 func KnownIntents() []string {
 	return []string{
 		IntentRememberFact,
-		IntentAddSynonym,
+		IntentAddSynonym, 
 		IntentAddToAutostart,
 		IntentOpenApp,
 		IntentOpenFolder,
 		IntentHardwareInfo,
+		"system_info",
+		"hardware_info",
 	}
 }
 

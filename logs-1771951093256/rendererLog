@@ -1,0 +1,162 @@
+2026-02-24 19:10:57.405 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'baiducomate.comate' wants API proposal 'chatReadonlyPromptReference' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.412 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'baiducomate.comate' wants API proposal 'inlineEdit' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.412 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'baidu.comate' wants API proposal 'chatReadonlyPromptReference' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.412 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'baidu.comate' wants API proposal 'inlineEdit' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.413 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'ms-vsliveshare.vsliveshare' wants API proposal 'notebookCellExecutionState' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.413 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'ms-python.python' wants API proposal 'terminalShellType' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.413 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'ms-python.vscode-python-envs' wants API proposal 'terminalShellType' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.413 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'github.copilot-chat' wants API proposal 'chatReadonlyPromptReference' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.413 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'github.copilot-chat' wants API proposal 'inlineEdit' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.413 [warning] [Window] Via 'product.json#extensionEnabledApiProposals' extension 'ms-python.gather' wants API proposal 'notebookCellExecutionState' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:57.675 [info] [Window] Started local extension host with pid 5700.
+2026-02-24 19:10:58.038 [error] [Window] Extension 'baiducomate.comate' wants API proposal 'inlineEdit' but that proposal DOES NOT EXIST. Likely, the proposal has been finalized (check 'vscode.d.ts') or was abandoned.
+2026-02-24 19:10:58.039 [error] [Window] Extension 'ms-python.vscode-python-envs' appears in product.json but enables LESS API proposals than the extension wants.
+package.json (LOSES): terminalShellEnv, terminalDataWriteEvent
+product.json (WINS): terminalShellEnv
+2026-02-24 19:10:58.067 [warning] [Window] [ms-python.python]: Cannot register 'python.venvPath'. This property is already registered.
+2026-02-24 19:10:58.111 [warning] [Window] [Layout] View container workbench.view.extension.claude-sidebar-secondary not found after extensions registered
+2026-02-24 19:10:59.015 [error] [Window] [Extension Host] (node:5700) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `exe --trace-deprecation ...` to show where the warning was created)
+2026-02-24 19:11:00.304 [error] [Window] An unknown error occurred. Please consult the log for more details.
+2026-02-24 19:11:00.535 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:customizeUserChangeEvent
+2026-02-24 19:11:00.623 [error] [Window] Unable to write to User Settings because baidu.comate.enableSecurityEnhancement is not a registered configuration.
+2026-02-24 19:11:00.629 [error] [Window] Unable to write to User Settings because baidu.comate.enableSecurityIntelligence is not a registered configuration.
+2026-02-24 19:11:00.629 [error] [Window] Unable to write to User Settings because baidu.comate.enableDebugIntelligence is not a registered configuration.
+2026-02-24 19:11:00.629 [error] [Window] Unable to write to User Settings because baidu.comate.useImageDiff is not a registered configuration.
+2026-02-24 19:11:00.668 [error] [Network] #7: https://comate.baidu-int.com/extensions.json - error GET Failed to fetch
+2026-02-24 19:11:00.668 [info] [Window] Not a Baidu employee: request failed Failed to fetch
+2026-02-24 19:11:01.264 [info] [Window] [perf] Render performance baseline is 12ms
+2026-02-24 19:11:02.904 [error] [Window] Request failed with status code 500: AxiosError: Request failed with status code 500
+	at _0x576f5d (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3249209)
+	at IncomingMessage.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3280689)
+	at IncomingMessage.emit (node:events:531:35)
+	at endReadableNT (node:internal/streams/readable:1698:12)
+	at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+	at _0x4b5931.request (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3308383)
+	at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+	at async _0x4b8c36.<computed> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:1828119)
+	at async _0x5926bb.isActive (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5049850)
+	at async _0x5926bb.licenseValidity (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050049)
+	at async _0x5926bb.checkExpire (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050466)
+2026-02-24 19:11:02.917 [error] [Window] Request failed with status code 500: AxiosError: Request failed with status code 500
+	at _0x576f5d (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3249209)
+	at IncomingMessage.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3280689)
+	at IncomingMessage.emit (node:events:531:35)
+	at endReadableNT (node:internal/streams/readable:1698:12)
+	at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+	at _0x4b5931.request (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3308383)
+	at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+	at async _0x4b8c36.<computed> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:1828119)
+	at async _0x5926bb.isActive (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5049850)
+	at async _0x5926bb.licenseValidity (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050049)
+	at async wA.h (file:///home/art/Comate-linux-x64/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:116:41743)
+	at async _0x445d43.WebviewMessageHandler.handleMessage (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:33636)
+2026-02-24 19:12:11.882 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:12:15.206 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:12:32.768 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:12:51.048 [error] [Window] An unknown error occurred. Please consult the log for more details.
+2026-02-24 19:13:15.023 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:21:10.818 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:21:12.134 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:21:38.501 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:21:39.562 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:23:18.388 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:26:23.765 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:26:25.088 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:28:15.465 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:28:15.594 [error] [Window] The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.: Error: The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.
+    at WebViewElement.getWebContentsId (node:electron/js2c/isolated_bundle:2:6552)
+    at e.<computed> [as executeJavaScript] (node:electron/js2c/isolated_bundle:2:10772)
+    at $Lt.setRunningFlag (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3887:4686)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3897:31576)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+    at Ub.D (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2419)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2637)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:3732)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1368:30543)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+2026-02-24 19:28:47.836 [error] [Window] The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.: Error: The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.
+    at WebViewElement.getWebContentsId (node:electron/js2c/isolated_bundle:2:6552)
+    at e.<computed> [as executeJavaScript] (node:electron/js2c/isolated_bundle:2:10772)
+    at $Lt.setRunningFlag (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3887:4686)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3897:31576)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+    at Ub.D (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2419)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2637)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:3732)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1368:30543)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+2026-02-24 19:29:20.352 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:29:21.649 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:30:25.773 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:30:26.836 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:31:05.222 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:34:26.318 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:34:27.365 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:34:47.217 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:34:48.277 [error] [Window] [Extension Host] WebviewMessageHandler.send.silentError: No handler found for scope:QueryVisibilitySelector
+2026-02-24 19:35:08.685 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:35:55.411 [error] [Window] command 'baidu.comate.agentEditor.updateTabIcon' not found: Error: command 'baidu.comate.agentEditor.updateTabIcon' not found
+    at _et.n (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3902)
+    at _et.executeCommand (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1348:3834)
+2026-02-24 19:35:55.807 [error] [Window] The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.: Error: The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.
+    at WebViewElement.getWebContentsId (node:electron/js2c/isolated_bundle:2:6552)
+    at e.<computed> [as executeJavaScript] (node:electron/js2c/isolated_bundle:2:10772)
+    at $Lt.setRunningFlag (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3887:4686)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3897:31576)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+    at Ub.D (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2419)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2637)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:3732)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1368:30543)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+2026-02-24 19:36:13.810 [error] [Window] The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.: Error: The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.
+    at WebViewElement.getWebContentsId (node:electron/js2c/isolated_bundle:2:6552)
+    at e.<computed> [as executeJavaScript] (node:electron/js2c/isolated_bundle:2:10772)
+    at $Lt.setRunningFlag (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3887:4686)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3897:31576)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+    at Ub.D (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2419)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2637)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:3732)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1368:30543)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+2026-02-24 19:37:43.835 [error] [Window] The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.: Error: The WebView must be attached to the DOM and the dom-ready event emitted before this method can be called.
+    at WebViewElement.getWebContentsId (node:electron/js2c/isolated_bundle:2:6552)
+    at e.<computed> [as executeJavaScript] (node:electron/js2c/isolated_bundle:2:10772)
+    at $Lt.setRunningFlag (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3887:4686)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3897:31576)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)
+    at Ub.D (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2419)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2637)
+    at Ub.fire (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:3732)
+    at Phe.value (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:1368:30543)
+    at Ub.C (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:29:2349)

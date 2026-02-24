@@ -1,0 +1,20 @@
+{
+  "/home/art/agent-RegArt-1": {
+    "tabs": [
+      {
+        "id": "fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe",
+        "title": "项目审阅与评估",
+        "conversationId": "fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe",
+        "isTemporary": false,
+        "isSpec": true,
+        "agentId": 1,
+        "specModelConfig": {
+          "modelId": "auto",
+          "enableMaxMode": false
+        }
+      }
+    ],
+    "activeTabId": "fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe",
+    "utime": 1771951089443
+  }
+}

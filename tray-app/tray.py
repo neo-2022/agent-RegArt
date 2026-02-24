@@ -4,7 +4,6 @@ import subprocess
 import sys
 import threading
 import time
-
 try:
     import gi
     gi.require_version('Gtk', '3.0')
@@ -25,86 +24,242 @@ class AgentTray:
             icon_name = "face-smile"
         else:
             icon_name = icon_path
-
+            
         self.indicator = AppIndicator3.Indicator.new(
             "agent-core-ng",
             icon_name,
             AppIndicator3.IndicatorCategory.APPLICATION_STATUS
         )
         self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+        self.indicator.set_title("Agent Core NG")
+        self.indicator.set_label("Проверка статуса...", "Status")
         self.indicator.set_menu(self.create_menu())
         self.update_status_thread()
+        self.indicator.connect('button-press-event', self.on_button_press)
 
     def create_menu(self):
         menu = Gtk.Menu()
-
-        # Пункт "Статус"
-        item_status = Gtk.MenuItem(label="Показать статус")
-        item_status.connect("activate", self.show_status)
-        menu.append(item_status)
-
+        
+        # Пункт "Открыть веб-интерфейс"
+        item_open_ui = Gtk.MenuItem(label="Открыть веб-интерфейс")
+        item_open_ui.connect("activate", self.open_web_interface)
+        menu.append(item_open_ui)
+        
         # Пункт "Перезапустить все сервисы"
-        item_restart = Gtk.MenuItem(label="Перезапустить все")
+        item_restart = Gtk.MenuItem(label="Перезапустить все сервисы")
         item_restart.connect("activate", self.restart_all)
         menu.append(item_restart)
-
+        
+        # Пункт "Показать статус сервисов"
+        item_status = Gtk.MenuItem(label="Показать статус сервисов")
+        item_status.connect("activate", self.show_status)
+        menu.append(item_status)
+        
         # Разделитель
         menu.append(Gtk.SeparatorMenuItem())
-
+        
         # Пункт "Выход"
         item_quit = Gtk.MenuItem(label="Выход")
         item_quit.connect("activate", self.quit)
         menu.append(item_quit)
-
-        menu.show_all()
+        
         return menu
+    def open_web_interface(self, _):
+        """Открывает веб-интерфейс в браузере"""
+        try:
+            # Получаем порт из скрипта
+            port_result = subprocess.run(
+                ["/home/art/agent-RegArt-1/tray-app/get_vite_port.sh"],
+                capture_output=True, text=True, timeout=5
+            )
+            port = port_result.stdout.strip()
+            web_url = f"http://localhost:{port}"
+            
+            # Пробуем открыть через xdg-open
+            subprocess.run(["xdg-open", web_url], check=True)
+        except Exception as e:
+            # Если не получилось, пробуем другие браузеры
+            browsers = ["firefox", "google-chrome"]
+            success = False
+            
+            for browser in browsers:
+                try:
+                    subprocess.run([browser, web_url], check=True)
+                    success = True
+                    break
+                except Exception:
+                    continue
+            
+            if not success:
+                # Если ничего не помогло, показываем сообщение один раз
+                dialog = Gtk.MessageDialog(
+                    None,
+                    Gtk.DialogFlags.MODAL,
+                    Gtk.MessageType.INFO,
+                    Gtk.ButtonsType.OK,
+                    f"Не удалось открыть интерфейс. Пожалуйста, откройте вручную по адресу: {web_url}"
+                )
+                dialog.run()
+                dialog.destroy()
 
     def show_status(self, _):
         """Показывает статус всех сервисов через уведомление"""
         services = ["agent-tools", "agent-agent", "agent-gateway"]
         status_lines = []
+        
+        # Проверяем статус сервисов
         for srv in services:
-            result = subprocess.run(
-                ["systemctl", "is-active", srv],
-                capture_output=True, text=True
-            )
-            status = result.stdout.strip() or "inactive"
-            status_lines.append(f"{srv}: {status}")
-
-        # Проверка Docker-контейнера
-        docker_result = subprocess.run(
-            ["docker", "ps", "--filter", "name=agent-memory", "--format", "{{.Status}}"],
+            status = "активен" if self.check_service_status(srv) else "не активен"
+            status_lines.append(f"{srv}: {status} ({'🟢' if self.check_service_status(srv) else '🔴'})")
+            
+        # Проверяем веб-интерфейс
+        web_accessible = self.check_web_interface()
+        web_status = "доступен" if web_accessible else "недоступен"
+        status_lines.append(f"Веб-интерфейс: {web_status} ({'🟢' if web_accessible else '🔴'})")
+            
+        # Добавляем информацию о ChromaDB
+        chroma_result = subprocess.run(
+            ["docker", "ps", "-q", "-f", "name=agent-chroma"],
             capture_output=True, text=True
         )
-        docker_status = docker_result.stdout.strip() or "not running"
-        status_lines.append(f"agent-memory: {docker_status}")
-
-        message = "\n".join(status_lines)
-        subprocess.run(["notify-send", "Agent Core NG", message])
+        chroma_status = "запущен" if chroma_result.stdout.strip() else "не запущен"
+        status_lines.append(f"ChromaDB: {chroma_status}")
+        
+        # Добавляем информацию о файлах
+        try:
+            find_result = subprocess.run(
+                ["find", "agent-service/uploads", "-type", "f", "-name", "*.md"],
+                capture_output=True, text=True
+            ).stdout.strip()
+            file_count = len(find_result.split('\n')) if find_result else 0
+            status_lines.append(f"Файлов в RAG: {file_count}")
+        except:
+            status_lines.append("Файлов в RAG: не определено")
+            
+        # Создаем диалог с информацией
+        dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.INFO,
+            Gtk.ButtonsType.OK,
+            "\n".join(status_lines)
+        )
+        dialog.set_title("Статус системы")
+        dialog.run()
+        dialog.destroy()
 
     def restart_all(self, _):
-        """Перезапускает все сервисы (требует sudo)"""
-        # Для Docker-контейнера
-        subprocess.run(["docker", "restart", "agent-memory"], capture_output=True)
-
-        # Для systemd-сервисов
-        for srv in ["agent-tools", "agent-agent", "agent-gateway"]:
-            subprocess.run(["sudo", "systemctl", "restart", srv], capture_output=True)
-
-        self.show_status(None)  # показать обновлённый статус
+        """Перезапускает все сервисы"""
+        dialog = Gtk.MessageDialog(
+            None,
+            Gtk.DialogFlags.MODAL,
+            Gtk.MessageType.WARNING,
+            Gtk.ButtonsType.YES_NO,
+            "Вы уверены, что хотите перезапустить все сервисы?"
+        )
+        response = dialog.run()
+        dialog.destroy()
+        
+        if response == Gtk.ResponseType.YES:
+            try:
+                # Перезапуск сервисов
+                subprocess.run(["sudo", "systemctl", "restart", "agent-tools"], check=True)
+                subprocess.run(["sudo", "systemctl", "restart", "agent-agent"], check=True)
+                subprocess.run(["sudo", "systemctl", "restart", "agent-gateway"], check=True)
+                
+                # Ждем немного
+                time.sleep(2)
+                
+                # Показываем успешное завершение
+                dialog_success = Gtk.MessageDialog(
+                    None,
+                    Gtk.DialogFlags.MODAL,
+                    Gtk.MessageType.INFO,
+                    Gtk.ButtonsType.OK,
+                    "Сервисы успешно перезапущены!"
+                )
+                dialog_success.run()
+                dialog_success.destroy()
+                
+            except Exception as e:
+                dialog_error = Gtk.MessageDialog(
+                    None,
+                    Gtk.DialogFlags.MODAL,
+                    Gtk.MessageType.ERROR,
+                    Gtk.ButtonsType.OK,
+                    f"Ошибка перезапуска: {str(e)}"
+                )
+                dialog_error.run()
+                dialog_error.destroy()
 
     def quit(self, _):
+        """Завершает работу приложения"""
         Gtk.main_quit()
 
+    def check_service_status(self, service_name):
+        """Проверяет статус сервиса"""
+        try:
+            result = subprocess.run(
+                ["systemctl", "is-active", service_name],
+                capture_output=True, text=True
+            )
+            return result.stdout.strip() == "active"
+        except:
+            return False
+
+    def check_web_interface(self):
+        """Проверяет доступность веб-интерфейса"""
+        try:
+            # Получаем порт из скрипта
+            port_result = subprocess.run(
+                ["/home/art/agent-RegArt-1/tray-app/get_vite_port.sh"],
+                capture_output=True, text=True, timeout=5
+            )
+            port = port_result.stdout.strip()
+            web_url = f"http://localhost:{port}"
+            
+            # Проверяем доступность
+            result = subprocess.run(
+                ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", web_url],
+                capture_output=True, text=True, timeout=5
+            )
+            return result.stdout.strip() == "200"
+        except:
+            return False
+
     def update_status_thread(self):
-        """Периодически обновляет иконку (заглушка)"""
-        GLib.timeout_add_seconds(60, self.update_status_thread)
+        """Обновление статуса в фоне с визуальными индикаторами"""
+        def update():
+            # Проверяем статус основных сервисов
+            services_ok = all(self.check_service_status(srv) for srv in ["agent-tools", "agent-agent", "agent-gateway"])
+            
+            # Проверяем доступность веб-интерфейса
+            web_ok = self.check_web_interface()
+            
+            # Определяем путь к иконке статуса
+            base_dir = os.path.dirname(__file__)
+            status_icon = "status-green.png" if (services_ok and web_ok) else "status-red.png"
+            icon_path = os.path.join(base_dir, status_icon)
+            
+            # Если иконка статуса не существует, используем основную иконку
+            if not os.path.exists(icon_path):
+                icon_path = os.path.join(base_dir, "favicon.png") if os.path.exists(os.path.join(base_dir, "favicon.png")) else "face-smile"
+            
+            self.indicator.set_icon_full(icon_path, "Status")
+            
+            # Обновляем каждые 10 секунд
+            GLib.timeout_add_seconds(10, update)
+        
+        # Первый запуск проверки
+        GLib.timeout_add_seconds(1, update)
 
 def main():
     if not HAVE_TRAY:
+        print("Ошибка: Не установлены библиотеки для системного трея")
         return
-    Gtk.init([])
-    app = AgentTray()
+    
+    # Запускаем трей-приложение
+    indicator = AgentTray()
     Gtk.main()
 
 if __name__ == "__main__":

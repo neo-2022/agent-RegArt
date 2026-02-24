@@ -1,0 +1,109 @@
+2026-02-24 19:10:58.072 [info] Extension host with pid 5700 started
+2026-02-24 19:10:58.072 [info] Skipping acquiring lock for /home/art/.config/Comate/User/workspaceStorage/5b0845aee3d166dafcafd305b52f02e2.
+2026-02-24 19:10:58.227 [info] ExtensionService#_doActivateExtension vscode.emmet, startup: false, activationEvent: 'onLanguage'
+2026-02-24 19:10:58.239 [info] ExtensionService#_doActivateExtension BaiduComate.comate, startup: false, activationEvent: 'onView:comate.views.chat'
+2026-02-24 19:10:58.571 [info] ExtensionService#_doActivateExtension vscode.extension-editing, startup: false, activationEvent: 'onLanguage:markdown'
+2026-02-24 19:10:58.579 [info] ExtensionService#_doActivateExtension vscode.markdown-language-features, startup: false, activationEvent: 'onLanguage:markdown'
+2026-02-24 19:10:58.633 [info] ExtensionService#_doActivateExtension vscode.git-base, startup: false, activationEvent: '*', root cause: vscode.git
+2026-02-24 19:10:58.759 [info] ExtensionService#_doActivateExtension vscode.terminal-suggest, startup: false, activationEvent: 'onTerminalShellIntegration:*'
+2026-02-24 19:10:58.797 [info] ExtensionService#_doActivateExtension vscode.git, startup: false, activationEvent: '*'
+2026-02-24 19:10:58.824 [info] ExtensionService#_doActivateExtension vscode.github, startup: false, activationEvent: '*'
+2026-02-24 19:10:59.077 [info] ExtensionService#_doActivateExtension vscode.markdown-math, startup: false, activationEvent: 'api', root cause: vscode.markdown-language-features
+2026-02-24 19:10:59.124 [info] Eager extensions activated
+2026-02-24 19:10:59.136 [info] ExtensionService#_doActivateExtension vscode.debug-auto-launch, startup: false, activationEvent: 'onStartupFinished'
+2026-02-24 19:10:59.137 [info] ExtensionService#_doActivateExtension vscode.merge-conflict, startup: false, activationEvent: 'onStartupFinished'
+2026-02-24 19:10:59.149 [info] ExtensionService#_doActivateExtension vscode.preview-dev-tools, startup: false, activationEvent: 'onStartupFinished'
+2026-02-24 19:10:59.232 [info] ExtensionService#_doActivateExtension vscode.github-authentication, startup: false, activationEvent: 'onAuthenticationRequest:github'
+2026-02-24 19:10:59.302 [error] Error: Request COMATE_AGENT_SET_FOREGROUND_CONVERSATION failed with message: Cannot read properties of undefined (reading 'setForegroundConversation')
+	at /home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:826212
+	at /home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:826741
+	at Immediate.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:827343)
+	at process.processImmediate (node:internal/timers:485:21) baidu.comate.agent.setForeground {"value":"BaiduComate.comate","_lower":"baiducomate.comate"}
+2026-02-24 19:11:00.303 [error] Error: Request COMATE_AGENT_SET_FOREGROUND_CONVERSATION failed with message: Cannot read properties of undefined (reading 'setForegroundConversation')
+	at /home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:826212
+	at /home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:826741
+	at Immediate.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:827343)
+	at process.processImmediate (node:internal/timers:485:21)
+2026-02-24 19:11:00.622 [error] CodeExpectedError: Unable to write to User Settings because baidu.comate.enableSecurityEnhancement is not a registered configuration.
+    at bTt.z (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:6793)
+    at bTt.F (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:9281)
+    at bTt.o (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3874)
+    at Object.factory (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3774)
+    at Cw.j (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76060)
+    at vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75972
+    at new Promise (<anonymous>)
+    at Cw.queue (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:75914)
+    at bTt.writeConfiguration (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3743)
+    at hDn.Hb (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:42703)
+2026-02-24 19:11:00.626 [error] CodeExpectedError: Unable to write to User Settings because baidu.comate.enableSecurityIntelligence is not a registered configuration.
+    at bTt.z (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:6793)
+    at bTt.F (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:9281)
+    at bTt.o (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3874)
+    at Object.factory (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3774)
+    at Cw.j (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76060)
+    at Cw.k (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76193)
+    at vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76102
+2026-02-24 19:11:00.626 [error] CodeExpectedError: Unable to write to User Settings because baidu.comate.enableDebugIntelligence is not a registered configuration.
+    at bTt.z (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:6793)
+    at bTt.F (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:9281)
+    at bTt.o (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3874)
+    at Object.factory (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3774)
+    at Cw.j (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76060)
+    at Cw.k (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76193)
+    at vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76115
+2026-02-24 19:11:00.626 [error] CodeExpectedError: Unable to write to User Settings because baidu.comate.useImageDiff is not a registered configuration.
+    at bTt.z (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:6793)
+    at bTt.F (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:9281)
+    at bTt.o (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3874)
+    at Object.factory (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:3915:3774)
+    at Cw.j (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76060)
+    at Cw.k (vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76193)
+    at vscode-file://vscode-app/home/art/Comate-linux-x64/resources/app/out/vs/workbench/workbench.desktop.main.js:30:76115
+2026-02-24 19:11:00.628 [info] ExtensionService#_doActivateExtension vscode.configuration-editing, startup: false, activationEvent: 'onLanguage:jsonc'
+2026-02-24 19:11:00.635 [info] ExtensionService#_doActivateExtension vscode.json-language-features, startup: false, activationEvent: 'onLanguage:jsonc'
+2026-02-24 19:11:00.665 [info] ExtensionService#_doActivateExtension vscode.typescript-language-features, startup: false, activationEvent: 'onLanguage:jsonc'
+2026-02-24 19:11:01.916 [error] AxiosError: Request failed with status code 500
+	at _0x576f5d (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3249209)
+	at IncomingMessage.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3280689)
+	at IncomingMessage.emit (node:events:531:35)
+	at endReadableNT (node:internal/streams/readable:1698:12)
+	at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+	at _0x4b5931.request (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3308383)
+	at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+	at async _0x4b8c36.<computed> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:1828119)
+	at async _0x5926bb.isActive (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5049850)
+	at async _0x5926bb.licenseValidity (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050049)
+	at async wA.h (file:///home/art/Comate-linux-x64/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:116:41743)
+	at async _0x445d43.WebviewMessageHandler.handleMessage (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:33636) baidu.comate.licenseExpired {"value":"BaiduComate.comate","_lower":"baiducomate.comate"}
+2026-02-24 19:11:02.903 [error] AxiosError: Request failed with status code 500
+	at _0x576f5d (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3249209)
+	at IncomingMessage.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3280689)
+	at IncomingMessage.emit (node:events:531:35)
+	at endReadableNT (node:internal/streams/readable:1698:12)
+	at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+	at _0x4b5931.request (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3308383)
+	at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+	at async _0x4b8c36.<computed> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:1828119)
+	at async _0x5926bb.isActive (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5049850)
+	at async _0x5926bb.licenseValidity (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050049)
+	at async _0x5926bb.checkExpire (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050466)
+2026-02-24 19:11:02.916 [error] AxiosError: Request failed with status code 500
+	at _0x576f5d (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3249209)
+	at IncomingMessage.<anonymous> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3280689)
+	at IncomingMessage.emit (node:events:531:35)
+	at endReadableNT (node:internal/streams/readable:1698:12)
+	at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+	at _0x4b5931.request (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:3308383)
+	at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+	at async _0x4b8c36.<computed> (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:1828119)
+	at async _0x5926bb.isActive (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5049850)
+	at async _0x5926bb.licenseValidity (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:1:5050049)
+	at async wA.h (file:///home/art/Comate-linux-x64/resources/app/out/vs/workbench/api/node/extensionHostProcess.js:116:41743)
+	at async _0x445d43.WebviewMessageHandler.handleMessage (/home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/extension.js:12:33636)
+2026-02-24 19:11:49.550 [info] ExtensionService#_doActivateExtension vscode.npm, startup: false, activationEvent: 'onTerminalQuickFixRequest:ms-vscode.npm-command'
+2026-02-24 19:21:10.606 [info] ExtensionService#_doActivateExtension detachhead.basedpyright, startup: false, activationEvent: 'onLanguage:python'
+2026-02-24 19:21:10.625 [info] ExtensionService#_doActivateExtension ms-python.debugpy, startup: false, activationEvent: 'onLanguage:python'
+2026-02-24 19:21:10.652 [info] ExtensionService#_doActivateExtension ms-python.python, startup: false, activationEvent: 'onLanguage:python'
+2026-02-24 19:21:10.761 [info] ExtensionService#_doActivateExtension ms-python.vscode-python-envs, startup: false, activationEvent: 'onLanguage:python'
+2026-02-24 19:21:10.989 [warning] DiagnosticCollection with name 'basedpyright' does already exist.
+2026-02-24 19:21:11.077 [warning] DiagnosticCollection with name 'basedpyright' does already exist.

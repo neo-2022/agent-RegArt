@@ -1,0 +1,476 @@
+[Info  - 19:10:59] [5847] [2026-02-24 19:10:59] [INFO] Kernel LSP initialized 🤝
+
+[Info  - 19:10:59] [5847] [2026-02-24 19:10:59] [INFO] Receive a message from webview 🌐
+
+[Info  - 19:10:59] [5847] [2026-02-24 19:10:59] [INFO] Kernel all server initialized 🚀
+
+[Info  - 19:11:00] [5847] [2026-02-24 19:11:00] [INFO] Zulu [CodeWrittenMetric] Switch branch from  to main
+
+[Info  - 19:11:00] [5847] [2026-02-24 19:11:00] [INFO] [SecurityFilterApi] 安全规则响应状态异常: UNAUTHORIZED
+
+[Info  - 19:11:00] [5847] [2026-02-24 19:11:00] [INFO] [SecurityFilter] 成功获取安全规则 0 条 []
+
+[Info  - 19:11:00] [5847] [2026-02-24 19:11:00] [INFO] [SecurityFilter] 安全过滤服务启动成功，规则数量: 
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [ERROR] Failed to GET /remote-index-config {"code":"ERR_BAD_REQUEST","config":{"adapter":["xhr","http","fetch"],"allowAbsoluteUrls":true,"baseURL":"https://comate.baidu.com","env":{},"headers":{"Accept":"application/json, text/plain, */*","Accept-Encoding":"gzip, compress, deflate, br","Accept-Language":"en-US,en","User-Agent":"axios/1.9.0","X-Client-Type":"comate-local","X-Client-Version":"0.13.1","X-Comate-License":"d94b4bb9-334a-40b5-a2df-02b269fa6d26","X-Comate-User":"neo-2022"},"maxBodyLength":-1,"maxContentLength":-1,"method":"get","proxy":false,"timeout":0,"transformRequest":[null],"transformResponse":[null],"transitional":{"clarifyTimeoutError":false,"forcedJSONParsing":true,"silentJSONParsing":true},"url":"https://comate.baidu.com/api/autowork/index/v2/remote-index-config","xsrfCookieName":"XSRF-TOKEN","xsrfHeaderName":"X-XSRF-TOKEN"},"message":"Request failed with status code 403","name":"AxiosError","stack":"AxiosError: Request failed with status code 403\n    at settle$1 (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:8:39525)\n    at IncomingMessage.<anonymous> (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:8:75487)\n    at IncomingMessage.emit (node:events:531:35)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios$1.request (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:8:89965)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async apiGetIndexConfig (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:73:275321)\n    at async file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:73:272433\n    at async Timeout._onTimeout (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:162:104861)","status":403}
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ContextEngine] 索引任务开始
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ContextEngine] 上传打点: trigger 
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [ERROR] Failed to GET /remote-index-config {"code":"ERR_BAD_REQUEST","config":{"adapter":["xhr","http","fetch"],"allowAbsoluteUrls":true,"baseURL":"https://comate.baidu.com","env":{},"headers":{"Accept":"application/json, text/plain, */*","Accept-Encoding":"gzip, compress, deflate, br","Accept-Language":"en-US,en","User-Agent":"axios/1.9.0","X-Client-Type":"comate-local","X-Client-Version":"0.13.1","X-Comate-License":"d94b4bb9-334a-40b5-a2df-02b269fa6d26","X-Comate-User":"neo-2022"},"maxBodyLength":-1,"maxContentLength":-1,"method":"get","proxy":false,"timeout":0,"transformRequest":[null],"transformResponse":[null],"transitional":{"clarifyTimeoutError":false,"forcedJSONParsing":true,"silentJSONParsing":true},"url":"https://comate.baidu.com/api/autowork/index/v2/remote-index-config","xsrfCookieName":"XSRF-TOKEN","xsrfHeaderName":"X-XSRF-TOKEN"},"message":"Request failed with status code 403","name":"AxiosError","stack":"AxiosError: Request failed with status code 403\n    at settle$1 (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:8:39525)\n    at IncomingMessage.<anonymous> (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:8:75487)\n    at IncomingMessage.emit (node:events:531:35)\n    at endReadableNT (node:internal/streams/readable:1698:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n    at Axios$1.request (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:8:89965)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async apiGetIndexConfig (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:73:275321)\n    at async file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:73:272433\n    at async getIndexConfigWithLoad (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:73:277746)\n    at async startEmbeddingJob (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:156:1026136)\n    at async createEmbeddingJob (file:///home/art/Comate-linux-x64/resources/app/extensions/baiducomate.comate/dist/comate-engine/server.js:156:1027716)","status":403}
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ContextEngine] 上传打点: failed remote: Cannot read properties of undefined (reading 'local_index_config')
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] embedding(error): Embedding 失败：Cannot read properties of undefined (reading 'local_index_config')
+
+[Error - 19:11:02] [5847] [2026-02-24 19:11:02] [ERROR] [SADIAGNOSTIC]  AISAService: Failed to fetch agent config list The current license information is invalid. You can [click here](https://comate.baidu.com/user) Quick login.
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] Zulu [RewriteAcceptanceEventHandler] Event handlers registered
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] Found project agents in /home/art/agent-RegArt-1: 
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ConversationTab] Fetched tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ConversationTab] Fetched tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ConversationTab] Fetched tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ConversationTab] Fetched tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] Found project agents in /home/art/agent-RegArt-1: 
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ConversationTab] Fetched tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:02] [5847] [2026-02-24 19:11:02] [INFO] [ConversationTab] Fetched tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:04] [5847] [2026-02-24 19:11:03] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:06] [5847] [2026-02-24 19:11:04] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:04] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:05] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:05] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:05] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:05] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:05] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:06] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:06] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:06] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:07] [5847] [2026-02-24 19:11:06] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:08] [5847] [2026-02-24 19:11:08] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:09] [5847] [2026-02-24 19:11:09] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:25] [5847] [2026-02-24 19:11:25] [INFO] [Zulu] start analyze, traceId fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe
+
+[Info  - 19:11:25] [5847] [2026-02-24 19:11:25] [INFO] [history] Saving latest history: {"agent":"Spec","knowledgeList":[],"rawMessage":"после презапуска не появился","repoName":"agent-RegArt-1","role":"zulu","slash":"","value":"после презапуска не появился"}
+
+[Info  - 19:11:26] [5847] [2026-02-24 19:11:26] [INFO] [Zulu] start read contexts in /home/art/agent-RegArt-1: []
+
+[Info  - 19:11:26] [5847] [2026-02-24 19:11:26] [INFO] [Zulu] start get system info
+
+[Info  - 19:11:26] [5847] [2026-02-24 19:11:26] [INFO] [Zulu] start read workspace directories
+
+[Info  - 19:11:26] [5847] [2026-02-24 19:11:26] [INFO] [Zulu] read workspace directories done
+
+[Info  - 19:11:26] [5847] [2026-02-24 19:11:26] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] start analyze, conversationId=19228940
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] start chat 
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] start collect command info
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:11:29] [5847] [2026-02-24 19:11:29] [INFO] [Zulu] request chat response
+
+[Info  - 19:11:54] [5847] [2026-02-24 19:11:54] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:11:54] [5847] [2026-02-24 19:11:54] [INFO] [Zulu] start collect command info
+
+[Info  - 19:11:54] [5847] [2026-02-24 19:11:54] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:11:54] [5847] [2026-02-24 19:11:54] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:11:54] [5847] [2026-02-24 19:11:54] [INFO] [Zulu] request chat response
+
+[Info  - 19:11:55] [5847] [2026-02-24 19:11:55] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Error - 19:12:11] [5847] [2026-02-24 19:12:11] [ERROR] [ENGINE]  failed to send to ide connection VIRTUAL_EDITOR_EVENT {"action":"saveDocumentSilently","payload":{"absolutePath":"/etc/xdg/autostart/agent-core-ng-final.desktop","content":"[Desktop Entry]\nType=Application\nName=Agent Core NG Final Tray\nComment=System tray application for Agent Core NG\nExec=/usr/bin/python3 /home/art/agent-RegArt-1/tray-app/final_working_tray.py\nIcon=/home/art/agent-RegArt-1/tray-app/favicon.png\nTerminal=false\nX-GNOME-Autostart-enabled=true","source":"E2EBotConversation","uuid":"83bfcb29-d87f-467b-b61e-75a2d4a55f95"}} {"code":-32603}
+
+[Error - 19:12:12] [5847] [2026-02-24 19:12:12] [ERROR] [ENGINE]  failed to send to ide connection VIRTUAL_EDITOR_EVENT {"action":"saveDocumentSilently","payload":{"absolutePath":"/etc/xdg/autostart/agent-core-ng-final.desktop","content":"[Desktop Entry]\nType=Application\nName=Agent Core NG Final Tray\nComment=System tray application for Agent Core NG\nExec=/usr/bin/python3 /home/art/agent-RegArt-1/tray-app/final_working_tray.py\nIcon=/home/art/agent-RegArt-1/tray-app/favicon.png\nTerminal=false\nX-GNOME-Autostart-enabled=true","source":"E2EBotConversation","uuid":"45ecc818-37de-4705-b61e-4a87b47da88d"}} {"code":-32603}
+
+[Info  - 19:12:13] [5847] [2026-02-24 19:12:13] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:12:15] [5847] [2026-02-24 19:12:15] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:12:15] [5847] [2026-02-24 19:12:15] [INFO] [Zulu] start collect command info
+
+[Info  - 19:12:15] [5847] [2026-02-24 19:12:15] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:12:15] [5847] [2026-02-24 19:12:15] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:12:15] [5847] [2026-02-24 19:12:15] [INFO] [Zulu] request chat response
+
+[Info  - 19:12:32] [5847] [2026-02-24 19:12:32] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:12:32] [5847] [2026-02-24 19:12:32] [INFO] [Zulu] start collect command info
+
+[Info  - 19:12:32] [5847] [2026-02-24 19:12:32] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:12:32] [5847] [2026-02-24 19:12:32] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:12:32] [5847] [2026-02-24 19:12:32] [INFO] [Zulu] request chat response
+
+[Info  - 19:12:33] [5847] [2026-02-24 19:12:33] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:12:55] [5847] [2026-02-24 19:12:55] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:12:55] [5847] [2026-02-24 19:12:55] [INFO] [Zulu] start collect command info
+
+[Info  - 19:12:55] [5847] [2026-02-24 19:12:55] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:12:55] [5847] [2026-02-24 19:12:55] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:12:55] [5847] [2026-02-24 19:12:55] [INFO] [Zulu] request chat response
+
+[Info  - 19:13:16] [5847] [2026-02-24 19:13:16] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:20:42] [5847] [2026-02-24 19:20:42] [INFO] [Zulu] start analyze, traceId fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe
+
+[Info  - 19:20:43] [5847] [2026-02-24 19:20:43] [INFO] [history] Saving latest history: {"agent":"Spec","knowledgeList":[],"rawMessage":"где у значка в трее пкнгт логи ? И перезагрузка? Если на выход нажаьб он просто исчезает. ССылка открыть в браузере не открывает  сраницу\n\nhttp://localhost:5180/\n \nТехническая информация: ошибка connectionfailure","repoName":"agent-RegArt-1","role":"zulu","slash":"","value":"где у значка в трее пкнгт логи ? И перезагрузка? Если на выход нажаьб он просто исчезает. ССылка открыть в браузере не открывает  сраницу\n\nhttp://localhost:5180/\n \nТехническая информация: ошибка connectionfailure"}
+
+[Info  - 19:20:43] [5847] [2026-02-24 19:20:43] [INFO] [Zulu] start read contexts in /home/art/agent-RegArt-1: []
+
+[Info  - 19:20:43] [5847] [2026-02-24 19:20:43] [INFO] [Zulu] start get system info
+
+[Info  - 19:20:43] [5847] [2026-02-24 19:20:43] [INFO] [Zulu] start read workspace directories
+
+[Info  - 19:20:43] [5847] [2026-02-24 19:20:43] [INFO] [Zulu] read workspace directories done
+
+[Info  - 19:20:43] [5847] [2026-02-24 19:20:43] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] start analyze, conversationId=19228940
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] start chat 
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] start collect command info
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:20:44] [5847] [2026-02-24 19:20:44] [INFO] [Zulu] request chat response
+
+[Info  - 19:21:11] [5847] [2026-02-24 19:21:11] [INFO] [Zulu] patchFile execute 0.06610400008503348ms
+
+[Info  - 19:21:11] [5847] [2026-02-24 19:21:11] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:21:11] [5847] [2026-02-24 19:21:11] [INFO] [Zulu] start collect command info
+
+[Info  - 19:21:11] [5847] [2026-02-24 19:21:11] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:21:11] [5847] [2026-02-24 19:21:11] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:21:11] [5847] [2026-02-24 19:21:11] [INFO] [Zulu] request chat response
+
+[Info  - 19:21:38] [5847] [2026-02-24 19:21:38] [INFO] [Zulu] patchFile execute 0.0733579999068752ms
+
+[Info  - 19:21:38] [5847] [2026-02-24 19:21:38] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:21:38] [5847] [2026-02-24 19:21:38] [INFO] [Zulu] start collect command info
+
+[Info  - 19:21:38] [5847] [2026-02-24 19:21:38] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:21:38] [5847] [2026-02-24 19:21:38] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:21:38] [5847] [2026-02-24 19:21:38] [INFO] [Zulu] request chat response
+
+[Info  - 19:22:03] [5847] [2026-02-24 19:22:03] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:22:03] [5847] [2026-02-24 19:22:03] [INFO] [Zulu] start collect command info
+
+[Info  - 19:22:03] [5847] [2026-02-24 19:22:03] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:22:03] [5847] [2026-02-24 19:22:03] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:22:03] [5847] [2026-02-24 19:22:03] [INFO] [Zulu] request chat response
+
+[Info  - 19:22:24] [5847] [2026-02-24 19:22:24] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:22:24] [5847] [2026-02-24 19:22:24] [INFO] [Zulu] start collect command info
+
+[Info  - 19:22:24] [5847] [2026-02-24 19:22:24] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:22:24] [5847] [2026-02-24 19:22:24] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:22:24] [5847] [2026-02-24 19:22:24] [INFO] [Zulu] request chat response
+
+[Info  - 19:22:25] [5847] [2026-02-24 19:22:25] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:22:30] [5847] [2026-02-24 19:22:30] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:22:30] [5847] [2026-02-24 19:22:30] [INFO] [Zulu] start collect command info
+
+[Info  - 19:22:30] [5847] [2026-02-24 19:22:30] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:22:30] [5847] [2026-02-24 19:22:30] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:22:30] [5847] [2026-02-24 19:22:30] [INFO] [Zulu] request chat response
+
+[Info  - 19:22:32] [5847] [2026-02-24 19:22:32] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:22:49] [5847] [2026-02-24 19:22:49] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:22:49] [5847] [2026-02-24 19:22:49] [INFO] [Zulu] start collect command info
+
+[Info  - 19:22:49] [5847] [2026-02-24 19:22:49] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:22:49] [5847] [2026-02-24 19:22:49] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:22:49] [5847] [2026-02-24 19:22:49] [INFO] [Zulu] request chat response
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:48] [INFO] [Zulu] start analyze, traceId fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:49] [INFO] [Zulu] start read contexts in /home/art/agent-RegArt-1: []
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:49] [INFO] [Zulu] start get system info
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:49] [INFO] [Zulu] start read workspace directories
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:49] [INFO] [history] Saving latest history: {"agent":"Spec","knowledgeList":[],"rawMessage":"Видимо, веб-сервер не запущен. Но это не критично для работы самого трей-приложения.\n\nЧТО ЗНАЧИТ НЕ КРИТИЧНО!? \nВообще то значок в трее должен показывать запущены службы проекта. Он же перезапукает все службы. И да пункта этого нет в нем  показать статус. \n","repoName":"agent-RegArt-1","role":"zulu","slash":"","value":"Видимо, веб-сервер не запущен. Но это не критично для работы самого трей-приложения.\n\nЧТО ЗНАЧИТ НЕ КРИТИЧНО!? \nВообще то значок в трее должен показывать запущены службы проекта. Он же перезапукает все службы. И да пункта этого нет в нем  показать статус. \n"}
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:49] [INFO] [Zulu] read workspace directories done
+
+[Info  - 19:25:49] [5847] [2026-02-24 19:25:49] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] start analyze, conversationId=19228940
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] start chat 
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] start collect command info
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:25:55] [5847] [2026-02-24 19:25:55] [INFO] [Zulu] request chat response
+
+[Info  - 19:26:23] [5847] [2026-02-24 19:26:23] [INFO] [Zulu] patchFile execute 0.07545000000391155ms
+
+[Info  - 19:26:24] [5847] [2026-02-24 19:26:23] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:26:24] [5847] [2026-02-24 19:26:23] [INFO] [Zulu] start collect command info
+
+[Info  - 19:26:24] [5847] [2026-02-24 19:26:23] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:26:24] [5847] [2026-02-24 19:26:23] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:26:24] [5847] [2026-02-24 19:26:23] [INFO] [Zulu] request chat response
+
+[Info  - 19:26:24] [5847] [2026-02-24 19:26:24] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Error - 19:28:15] [5847] [2026-02-24 19:28:15] [ERROR] [CONVERSATIONMANAGER]  [Zulu] failed create conversaion, reason: aborted {"chatParams":{"username":"d94b4bb9-334a-40b5-a2df-02b269fa6d26","cancelToken":{"promise":{},"_listeners":[]},"agentInfo":{"agentName":"Spec","agentImage":"spec","description":"一个由 Spec 驱动的AI Agent，善于在严肃编程场景中工作","strategy":"DEFAULT","tools":[],"isProjectAgent":false,"agentId":12,"mcpInfos":[]},"messageId":76423891,"query":"<external_knowledge_snippets>\n\n</external_knowledge_snippets>\n<query>Видимо, веб-сервер не запущен. Но это не критично для работы самого трей-приложения.\n\nЧТО ЗНАЧИТ НЕ КРИТИЧНО!? \nВообще то значок в трее должен показывать запущены службы проекта. Он же перезапукает все службы. И да пункта этого нет в нем  показать статус. \n</query>","contexts":[],"conversationId":19228940,"codeChunks":[],"extend":{"fileOperate":{"acceptedFiles":["edit:tray-app/final_working_tray.py","create:.comate/specs/final_tray_solution/summary.md"],"rejectedFiles":[]},"contextMode":"NORMAL","requestType":"COMATE_DEFAULT_MODE","promptENName":""},"analyze":{"conversationId":19228940,"messageId":76423891,"isTech":null,"queryType":null,"codeSearchQueries":null,"extend":{},"searchStrategies":null,"intentStrategies":null,"needMock":false,"quotaMessages":{"key":"d94b4bb9-334a-40b5-a2df-02b269fa6d26","userType":"TRIAL_INDIVIDUAL","userActions":{"headerMessage":null,"footerMessage":null,"cards":[{"message":"当月赠送的智能体tokens额度已用完，当前仅可使用Auto模式。若想切换使用高级模型，请升级专业版。","buttons":null}]},"autoModel":"auto-free-individual","usageDetail":null},"tech":false,"taskId":1074570,"traceId":"fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe"},"sysInfo":{"os":"Linux 6.8","defaultShell":"/usr/bin/bash","homeDir":"/home/art","installedCommands":["python3","pip","pip3","go","docker","curl","pip","jq"],"notInstalledCommands":["python","ffmpeg","brew","nuget"],"workspaceDirTree":"agent-RegArt-1\n  - .comate/\n    - config/\n      - language_settings.json\n    - rules/\n      - language_rules.mdr\n    - specs/\n      - final_tray_solution/\n        - summary.md\n      - fix_sql_syntax/\n        - doc.md\n        - summary.md\n        - tasks.md\n      - fix_tray_app/\n        - summary.md\n      - improve_tray_app/\n        - summary.md\n      - consensus_prompt.md\n  - .git/\n  - .github/\n    - workflows/\n      - ci.yml\n  - ~/\n    - .config/\n      - autostart/\n        - agent-core-ng-final.desktop\n        - agent-core-ng-tray.desktop\n        - agent-core-ng.desktop\n    - .local/\n      - share/\n        - autostart/\n          - [+1 files (1 *.desktop) & 0 dirs]\n  - agent-service/\n    - cmd/\n      - server/\n        - main.go\n    - internal/\n      - apierror/\n        - apierror.go\n      - apperror/\n        - apperror.go\n      - config/\n        - config.go\n      - db/\n        - db.go\n      - domain/\n        - entities.go\n        - repository.go\n        - services.go\n      - embeddings/\n        - embedding.go\n      - handlers/\n        - intent_handlers.go\n      - infrastructure/\n        - persistence/\n          - [+1 files (1 *.go) & 0 dirs]\n      - intent/\n        - detector.go\n        - planner.go\n      - llm/\n        - anthropic.go\n        - cerebras.go\n        - client.go\n        - [+9 files (9 *.go) & 0 dirs]\n      - logger/\n        - logger.go\n      - metrics/\n        - metrics.go\n        - scenario_metrics_test.go\n        - scenario_metrics.go\n      - models/\n        - models.go\n      - rag/\n        - rag_logger.go\n        - rag.go\n        - rag.go.bak\n      - repository/\n        - agent_repo.go\n        - model_repo_test.go\n        - model_repo.go\n      - skills/\n        - autoskill_test.go\n        - autoskill.go\n        - loader.go\n      - tools/\n        - list.go\n      - usecase/\n        - chat.go\n        - [+1 files (1 *.go) & 0 dirs]\n      - vector-store/\n        - [+1 files (1 *.go) & 0 dirs]\n    - models/\n      - test_model.bin\n    - prompts/\n      - admin/\n        - [+1 files & 0 dirs]\n    - scripts/\n      - update_models.sh\n    - skills/\n    - uploads/\n    - agentcore.db\n    - Dockerfile\n    - go.mod\n    - [+2 files (1 *.sum, 1 *.gz) & 0 dirs]\n  - api-gateway/\n    - cmd/\n      - main.go\n    - gates/\n      - routes.go\n    - internal/\n      - apierror/\n        - [+1 files (1 *.go) & 0 dirs]\n      - logger/\n        - [+1 files (1 *.go) & 0 dirs]\n      - middleware/\n        - [+6 files (6 *.go) & 0 dirs]\n    - Dockerfile\n    - go.mod\n  - browser-service/\n    - cmd/\n      - server/\n        - [+1 files (1 *.go) & 0 dirs]\n    - internal/\n      - access/\n        - [+1 files (1 *.go) & 0 dirs]\n      - browser/\n        - [+1 files (1 *.go) & 0 dirs]\n      - crawler/\n        - [+1 files (1 *.go) & 0 dirs]\n      - input/\n        - [+1 files (1 *.go) & 0 dirs]\n      - search/\n        - [+1 files (1 *.go) & 0 dirs]\n    - go.mod\n  - docs/\n    - openapi/\n      - agent-service.yaml\n      - api-gateway.yaml\n      - memory-service.yaml\n      - [+1 files (1 *.yaml) & 0 dirs]\n    - ru/\n      - models-setup.md\n    - embeddings-module.md\n    - rag-module.md\n    - vector-store-module.md\n  - k8s/\n    - agent-service.yaml\n    - api-gateway.yaml\n    - memory-service.yaml\n    - [+2 files (2 *.yaml) & 0 dirs]\n  - logs/\n  - memory-service/\n    - app/\n      - __init__.py\n      - config.py\n      - main.py\n      - [+3 files (3 *.py) & 0 dirs]\n    - tests/\n      - __init__.py\n      - test_main.py\n      - test_middleware.py\n    - .dockerignore\n    - Dockerfile\n    - requirements.txt\n  - rag_data/\n  - scripts/\n    - security-scan.sh\n  - skills/\n    - check_access.yaml\n    - crawler_fetch.yaml\n    - page_to_pdf.yaml\n    - [+2 files (2 *.yaml) & 0 dirs]\n  - tasks/\n    - admin_test_tasks.md\n  - tests/\n    - __pycache__/\n    - e2e/\n      - gateway_test.go\n      - memory_test.py\n    - load/\n      - gateway_load.js\n      - memory_load.js\n      - tools_load.js\n    - e2e_smoke_test.sh\n    - test_rag_table.py\n  - tools-service/\n    - cmd/\n      - server/\n        - [+1 files (1 *.go) & 0 dirs]\n    - internal/\n      - apierror/\n        - [+1 files (1 *.go) & 0 dirs]\n      - auth/\n        - [+4 files (4 *.go) & 0 dirs]\n      - execmode/\n        - [+2 files (2 *.go) & 0 dirs]\n      - executor/\n        - [+8 files (8 *.go) & 0 dirs]\n      - logger/\n        - [+1 files (1 *.go) & 0 dirs]\n      - sandbox/\n        - [+2 files (2 *.go) & 0 dirs]\n    - Dockerfile\n    - go.mod\n    - n\n  - tray-app/\n    - __pycache__/\n    - core_manager.py\n    - favicon.png\n    - final_working_tray.py\n    - [+8 files (4 *.py, 2 *.sh, 1 *.md, ...) & 0 dirs]\n  - web-ui/\n    - public/\n      - avatars/\n        - [+1 files (1 *.jpg) & 0 dirs]\n      - favicon.png\n      - vite.svg\n    - src/\n      - assets/\n        - [+1 files (1 *.svg) & 0 dirs]\n      - components/\n        - [+1 files (1 *.tsx) & 0 dirs]\n      - styles/\n        - [+1 files (1 *.css) & 0 dirs]\n      - App.css\n      - App.tsx\n      - App.tsx.bak\n      - [+4 files (2 *.tsx, 1 *.css, 1 *.ts) & 0 dirs]\n    - .gitignore\n    - eslint.config.js\n    - index.html\n    - [+8 files (5 *.json, 1 *.md, 1 *.js, ...) & 0 dirs]\n  - .env\n  - .env.example\n  - .gitignore\n  - agentcore.db\n  - CHANGELOG.md\n  - create_rag_table.sql\n  - docker-compose.yml\n  - favicon.png\n  - install.sh\n  - logs-1771941465601.zip\n  - logs-1771941482529.zip\n  - logs-1771941563945.zip\n  - logs-1771943181547.zip\n  - Makefile\n  - PLAN.md\n  - PRODUCTION_ROADMAP.md\n  - PROJECT_ASSESSMENT.md\n  - README.md\n  - ROADMAP.md","workspacePath":"/home/art/agent-RegArt-1"},"paths":[],"mcpInfo":[],"modelKey":"auto-free-individual","isCurrentFileSelected":false,"repoName":"neo-2022/agent-RegArt","repoId":"","currentFilePath":"","osVersion":"#100-Ubuntu SMP PREEMPT_DYNAMIC Tue Jan 13 16:40:06 UTC 2026","workspacePath":"/home/art/agent-RegArt-1","agentId":12,"sessionId":28231014,"subAgents":[],"configContexts":[{"code":"codebase_search","name":"代码索引管理","state":"beta","group":"codebase","type":"BOOLEAN","value":"false","enable":false,"description":"对当前工作空间代码建立向量索引，对话时更快、更准匹配相关上下\n文，显著提升回答质量。"}],"taskId":1074570,"toolUseResults":[{"name":"patch_file","type":"tool_use","version":2,"params":{"path":"tray-app/final_working_tray.py","ask_approval":"false","content":"<<< SEARCH <<<\n        # Пункт \"Открыть веб-интерфейс\"\n        item_open_ui = Gtk.MenuItem(label=\"Открыть веб-интерфейс\")\n        item_open_ui.connect(\"activate\", self.open_web_interface)\n        menu.append(item_open_ui)\n        \n        # Пункт \"Открыть логи\"\n        item_logs = Gtk.MenuItem(label=\"Открыть логи\")\n        item_logs.connect(\"activate\", self.open_logs)\n        menu.append(item_logs)\n        \n        # Пункт \"Выход\"\n        item_quit = Gtk.MenuItem(label=\"Выход\")\n        item_quit.connect(\"activate\", self.quit)\n        menu.append(item_quit)\n==== REPLACED_BY ====\n        # Пункт \"Показать статус\"\n        item_status = Gtk.MenuItem(label=\"Показать статус\")\n        item_status.connect(\"activate\", self.show_status)\n        menu.append(item_status)\n        \n        # Пункт \"Открыть веб-интерфейс\"\n        item_open_ui = Gtk.MenuItem(label=\"Открыть веб-интерфейс\")\n        item_open_ui.connect(\"activate\", self.open_web_interface)\n        menu.append(item_open_ui)\n        \n        # Пункт \"Открыть логи\"\n        item_logs = Gtk.MenuItem(label=\"Открыть логи\")\n        item_logs.connect(\"activate\", self.open_logs)\n        menu.append(item_logs)\n        \n        # Пункт \"Выход\"\n        item_quit = Gtk.MenuItem(label=\"Выход\")\n        item_quit.connect(\"activate\", self.quit)\n        menu.append(item_quit)\n>>> END >>>"},"success":true,"message":"","code":0,"result":{"failedPatchIndex":-1,"fileName":"tray-app/final_working_tray.py","beforeChangeFileContent":"#!/usr/bin/env python3\nimport os\nimport subprocess\nimport sys\nimport socket\nimport logging\ntry:\n    import gi\n    gi.require_version('Gtk', '3.0')\n    gi.require_version('AppIndicator3', '0.1')\n    from gi.repository import Gtk, AppIndicator3, GLib\n    HAVE_TRAY = True\nexcept ImportError:\n    print(\"Не установлены библиотеки для трея. Установите: sudo apt install gir1.2-appindicator3-0.1 python3-gi\")\n    HAVE_TRAY = False\n    sys.exit(1)\n\n# Настройка логирования\nlog_dir = os.path.expanduser(\"~/.logs\")\nos.makedirs(log_dir, exist_ok=True)\nlog_file = os.path.join(log_dir, \"agent-core-ng-final.log\")\n\nlogging.basicConfig(\n    level=logging.INFO,\n    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',\n    handlers=[\n        logging.FileHandler(log_file),\n        logging.StreamHandler()\n    ]\n)\nlogger = logging.getLogger(\"AgentTray\")\n\n# Проверка на уже запущенный экземпляр\ntry:\n    lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)\n    lock_socket.bind('\\0agent-core-ng-tray-final')\nexcept socket.error:\n    print(\"Приложение уже запущено\")\n    sys.exit(1)\n\nclass FinalTray:\n    def __init__(self):\n        logger.info(\"Инициализация FinalTray\")\n        # Путь к иконке\n        icon_path = os.path.join(os.path.dirname(__file__), \"favicon.png\")\n        if not os.path.exists(icon_path):\n            icon_name = \"face-smile\"\n        else:\n            icon_name = icon_path\n            \n        self.indicator = AppIndicator3.Indicator.new(\n            \"agent-core-ng-final\",\n            icon_name,\n            AppIndicator3.IndicatorCategory.APPLICATION_STATUS\n        )\n        self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)\n        self.indicator.set_title(\"Agent Core NG\")\n        self.indicator.set_label(\"Готов\", \"Status\")\n        \n        # Создаем меню\n        menu = Gtk.Menu()\n        \n        # Пункт \"Открыть веб-интерфейс\"\n        item_open_ui = Gtk.MenuItem(label=\"Открыть веб-интерфейс\")\n        item_open_ui.connect(\"activate\", self.open_web_interface)\n        menu.append(item_open_ui)\n        \n        # Пункт \"Открыть логи\"\n        item_logs = Gtk.MenuItem(label=\"Открыть логи\")\n        item_logs.connect(\"activate\", self.open_logs)\n        menu.append(item_logs)\n        \n        # Пункт \"Выход\"\n        item_quit = Gtk.MenuItem(label=\"Выход\")\n        item_quit.connect(\"activate\", self.quit)\n        menu.append(item_quit)\n        \n        menu.show_all()\n        self.indicator.set_menu(menu)\n        \n    def open_web_interface(self, _):\n        \"\"\"Открывает веб-интерфейс в браузере\"\"\"\n        logger.info(\"Попытка открыть веб-интерфейс\")\n        try:\n            # Получаем порт из скрипта\n            port_result = subprocess.run(\n                [\"/home/art/agent-RegArt-1/tray-app/get_vite_port.sh\"],\n                capture_output=True, text=True, timeout=5\n            )\n            port = port_result.stdout.strip()\n            web_url = f\"http://localhost:{port}\"\n            \n            # Пробуем открыть через xdg-open\n            subprocess.run([\"xdg-open\", web_url], check=True)\n        except Exception as e:\n            logger.error(f\"Ошибка открытия веб-интерфейса: {str(e)}\")\n            dialog = Gtk.MessageDialog(\n                None,\n                Gtk.DialogFlags.MODAL,\n                Gtk.MessageType.ERROR,\n                Gtk.ButtonsType.OK,\n                f\"Не удалось открыть интерфейс: {str(e)}\"\n            )\n            dialog.run()\n            dialog.destroy()\n\n    def open_logs(self, _):\n        \"\"\"Открывает файл логов\"\"\"\n        logger.info(\"Открытие файла логов\")\n        try:\n            log_file = os.path.expanduser(\"~/.logs/agent-core-ng-final.log\")\n            subprocess.run([\"xdg-open\", log_file], check=True)\n        except Exception as e:\n            logger.error(f\"Ошибка при открытии логов: {str(e)}\")\n            dialog = Gtk.MessageDialog(\n                None,\n                Gtk.DialogFlags.MODAL,\n                Gtk.MessageType.ERROR,\n                Gtk.ButtonsType.OK,\n                f\"Не удалось открыть файл логов: {str(e)}\"\n            )\n            dialog.run()\n            dialog.destroy()\n\n    def quit(self, _):\n        \"\"\"Завершает работу приложения\"\"\"\n        logger.info(\"Завершение работы приложения\")\n        Gtk.main_quit()\n\ndef main():\n    if not HAVE_TRAY:\n        logger.error(\"Не установлены библиотеки для системного трея\")\n        print(\"Ошибка: Не установлены библиотеки для системного трея\")\n        return\n    \n    # Запускаем трей-приложение\n    indicator = FinalTray()\n    Gtk.main()\n\nif __name__ == \"__main__\":\n    main()","afterChangeFileContent":"#!/usr/bin/env python3\nimport os\nimport subprocess\nimport sys\nimport socket\nimport logging\ntry:\n    import gi\n    gi.require_version('Gtk', '3.0')\n    gi.require_version('AppIndicator3', '0.1')\n    from gi.repository import Gtk, AppIndicator3, GLib\n    HAVE_TRAY = True\nexcept ImportError:\n    print(\"Не установлены библиотеки для трея. Установите: sudo apt install gir1.2-appindicator3-0.1 python3-gi\")\n    HAVE_TRAY = False\n    sys.exit(1)\n\n# Настройка логирования\nlog_dir = os.path.expanduser(\"~/.logs\")\nos.makedirs(log_dir, exist_ok=True)\nlog_file = os.path.join(log_dir, \"agent-core-ng-final.log\")\n\nlogging.basicConfig(\n    level=logging.INFO,\n    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',\n    handlers=[\n        logging.FileHandler(log_file),\n        logging.StreamHandler()\n    ]\n)\nlogger = logging.getLogger(\"AgentTray\")\n\n# Проверка на уже запущенный экземпляр\ntry:\n    lock_socket = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)\n    lock_socket.bind('\\0agent-core-ng-tray-final')\nexcept socket.error:\n    print(\"Приложение уже запущено\")\n    sys.exit(1)\n\nclass FinalTray:\n    def __init__(self):\n        logger.info(\"Инициализация FinalTray\")\n        # Путь к иконке\n        icon_path = os.path.join(os.path.dirname(__file__), \"favicon.png\")\n        if not os.path.exists(icon_path):\n            icon_name = \"face-smile\"\n        else:\n            icon_name = icon_path\n            \n        self.indicator = AppIndicator3.Indicator.new(\n            \"agent-core-ng-final\",\n            icon_name,\n            AppIndicator3.IndicatorCategory.APPLICATION_STATUS\n        )\n        self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)\n        self.indicator.set_title(\"Agent Core NG\")\n        self.indicator.set_label(\"Готов\", \"Status\")\n        \n        # Создаем меню\n        menu = Gtk.Menu()\n        \n        # Пункт \"Показать статус\"\n        item_status = Gtk.MenuItem(label=\"Показать статус\")\n        item_status.connect(\"activate\", self.show_status)\n        menu.append(item_status)\n        \n        # Пункт \"Открыть веб-интерфейс\"\n        item_open_ui = Gtk.MenuItem(label=\"Открыть веб-интерфейс\")\n        item_open_ui.connect(\"activate\", self.open_web_interface)\n        menu.append(item_open_ui)\n        \n        # Пункт \"Открыть логи\"\n        item_logs = Gtk.MenuItem(label=\"Открыть логи\")\n        item_logs.connect(\"activate\", self.open_logs)\n        menu.append(item_logs)\n        \n        # Пункт \"Выход\"\n        item_quit = Gtk.MenuItem(label=\"Выход\")\n        item_quit.connect(\"activate\", self.quit)\n        menu.append(item_quit)\n        \n        menu.show_all()\n        self.indicator.set_menu(menu)\n        \n    def open_web_interface(self, _):\n        \"\"\"Открывает веб-интерфейс в браузере\"\"\"\n        logger.info(\"Попытка открыть веб-интерфейс\")\n        try:\n            # Получаем порт из скрипта\n            port_result = subprocess.run(\n                [\"/home/art/agent-RegArt-1/tray-app/get_vite_port.sh\"],\n                capture_output=True, text=True, timeout=5\n            )\n            port = port_result.stdout.strip()\n            web_url = f\"http://localhost:{port}\"\n            \n            # Пробуем открыть через xdg-open\n            subprocess.run([\"xdg-open\", web_url], check=True)\n        except Exception as e:\n            logger.error(f\"Ошибка открытия веб-интерфейса: {str(e)}\")\n            dialog = Gtk.MessageDialog(\n                None,\n                Gtk.DialogFlags.MODAL,\n                Gtk.MessageType.ERROR,\n                Gtk.ButtonsType.OK,\n                f\"Не удалось открыть интерфейс: {str(e)}\"\n            )\n            dialog.run()\n            dialog.destroy()\n\n    def open_logs(self, _):\n        \"\"\"Открывает файл логов\"\"\"\n        logger.info(\"Открытие файла логов\")\n        try:\n            log_file = os.path.expanduser(\"~/.logs/agent-core-ng-final.log\")\n            subprocess.run([\"xdg-open\", log_file], check=True)\n        except Exception as e:\n            logger.error(f\"Ошибка при открытии логов: {str(e)}\")\n            dialog = Gtk.MessageDialog(\n                None,\n                Gtk.DialogFlags.MODAL,\n                Gtk.MessageType.ERROR,\n                Gtk.ButtonsType.OK,\n                f\"Не удалось открыть файл логов: {str(e)}\"\n            )\n            dialog.run()\n            dialog.destroy()\n\n    def quit(self, _):\n        \"\"\"Завершает работу приложения\"\"\"\n        logger.info(\"Завершение работы приложения\")\n        Gtk.main_quit()\n\ndef main():\n    if not HAVE_TRAY:\n        logger.error(\"Не установлены библиотеки для системного трея\")\n        print(\"Ошибка: Не установлены библиотеки для системного трея\")\n        return\n    \n    # Запускаем трей-приложение\n    indicator = FinalTray()\n    Gtk.main()\n\nif __name__ == \"__main__\":\n    main()"}}],"projectMemory":[]},"err":{"code":"ECONNRESET"},"retryMessageId":"699dd131d7d46d4280a3f14d"}
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [Zulu] start analyze, traceId fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [history] Saving latest history: {"agent":"Spec","knowledgeList":[],"rawMessage":"продолжи ","repoName":"agent-RegArt-1","role":"zulu","slash":"","value":"продолжи "}
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [Zulu] start read contexts in /home/art/agent-RegArt-1: []
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [Zulu] start get system info
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [Zulu] start read workspace directories
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [Zulu] read workspace directories done
+
+[Info  - 19:28:47] [5847] [2026-02-24 19:28:47] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] start analyze, conversationId=19228940
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] start chat 
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] start collect command info
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:28:49] [5847] [2026-02-24 19:28:49] [INFO] [Zulu] request chat response
+
+[Info  - 19:29:02] [5847] [2026-02-24 19:29:02] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:29:20] [5847] [2026-02-24 19:29:20] [INFO] [Zulu] patchFile execute 0.1026329998858273ms
+
+[Info  - 19:29:20] [5847] [2026-02-24 19:29:20] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:29:20] [5847] [2026-02-24 19:29:20] [INFO] [Zulu] start collect command info
+
+[Info  - 19:29:20] [5847] [2026-02-24 19:29:20] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:29:20] [5847] [2026-02-24 19:29:20] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:29:20] [5847] [2026-02-24 19:29:20] [INFO] [Zulu] request chat response
+
+[Info  - 19:29:21] [5847] [2026-02-24 19:29:21] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:29:43] [5847] [2026-02-24 19:29:43] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:30:25] [5847] [2026-02-24 19:30:25] [INFO] [Zulu] patchFile execute 0.12339200009591877ms
+
+[Info  - 19:30:25] [5847] [2026-02-24 19:30:25] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:30:25] [5847] [2026-02-24 19:30:25] [INFO] [Zulu] start collect command info
+
+[Info  - 19:30:25] [5847] [2026-02-24 19:30:25] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:30:25] [5847] [2026-02-24 19:30:25] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:30:25] [5847] [2026-02-24 19:30:25] [INFO] [Zulu] request chat response
+
+[Info  - 19:30:44] [5847] [2026-02-24 19:30:44] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:31:04] [5847] [2026-02-24 19:31:04] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:31:04] [5847] [2026-02-24 19:31:04] [INFO] [Zulu] start collect command info
+
+[Info  - 19:31:04] [5847] [2026-02-24 19:31:04] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:31:04] [5847] [2026-02-24 19:31:04] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:31:04] [5847] [2026-02-24 19:31:04] [INFO] [Zulu] request chat response
+
+[Info  - 19:31:17] [5847] [2026-02-24 19:31:17] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:33:47] [5847] [2026-02-24 19:33:47] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:33:47] [5847] [2026-02-24 19:33:47] [INFO] [Zulu] start collect command info
+
+[Info  - 19:33:47] [5847] [2026-02-24 19:33:47] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:33:47] [5847] [2026-02-24 19:33:47] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:33:47] [5847] [2026-02-24 19:33:47] [INFO] [Zulu] request chat response
+
+[Info  - 19:34:04] [5847] [2026-02-24 19:34:04] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:34:26] [5847] [2026-02-24 19:34:26] [INFO] [Zulu] patchFile execute 0.14056500000879169ms
+
+[Info  - 19:34:26] [5847] [2026-02-24 19:34:26] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:34:26] [5847] [2026-02-24 19:34:26] [INFO] [Zulu] start collect command info
+
+[Info  - 19:34:26] [5847] [2026-02-24 19:34:26] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:34:26] [5847] [2026-02-24 19:34:26] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:34:26] [5847] [2026-02-24 19:34:26] [INFO] [Zulu] request chat response
+
+[Info  - 19:34:38] [5847] [2026-02-24 19:34:38] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:34:47] [5847] [2026-02-24 19:34:47] [INFO] [Zulu] patchFile execute 0.1050779998768121ms
+
+[Info  - 19:34:47] [5847] [2026-02-24 19:34:47] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:34:47] [5847] [2026-02-24 19:34:47] [INFO] [Zulu] start collect command info
+
+[Info  - 19:34:47] [5847] [2026-02-24 19:34:47] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:34:47] [5847] [2026-02-24 19:34:47] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:34:47] [5847] [2026-02-24 19:34:47] [INFO] [Zulu] request chat response
+
+[Info  - 19:34:48] [5847] [2026-02-24 19:34:48] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:35:05] [5847] [2026-02-24 19:35:05] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:35:08] [5847] [2026-02-24 19:35:08] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:35:08] [5847] [2026-02-24 19:35:08] [INFO] [Zulu] start collect command info
+
+[Info  - 19:35:08] [5847] [2026-02-24 19:35:08] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:35:08] [5847] [2026-02-24 19:35:08] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:35:08] [5847] [2026-02-24 19:35:08] [INFO] [Zulu] request chat response
+
+[Info  - 19:35:10] [5847] [2026-02-24 19:35:10] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:35:25] [5847] [2026-02-24 19:35:25] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:35:36] [5847] [2026-02-24 19:35:36] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:35:36] [5847] [2026-02-24 19:35:36] [INFO] [Zulu] start collect command info
+
+[Info  - 19:35:36] [5847] [2026-02-24 19:35:36] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:35:36] [5847] [2026-02-24 19:35:36] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:35:36] [5847] [2026-02-24 19:35:36] [INFO] [Zulu] request chat response
+
+[Info  - 19:35:37] [5847] [2026-02-24 19:35:37] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:35:49] [5847] [2026-02-24 19:35:49] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:35:56] [5847] [2026-02-24 19:35:56] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [Zulu] start analyze, traceId fb4d6f86-b5bf-4edf-9382-b4cfb9a947fe
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [history] Saving latest history: {"agent":"Spec","knowledgeList":[],"rawMessage":"при перезапуске написано: ошибка перезапуска: name 'time' is note defined\n","repoName":"agent-RegArt-1","role":"zulu","slash":"","value":"при перезапуске написано: ошибка перезапуска: name 'time' is note defined\n"}
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [Zulu] start read contexts in /home/art/agent-RegArt-1: []
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [Zulu] start get system info
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [Zulu] start read workspace directories
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [Zulu] read workspace directories done
+
+[Info  - 19:36:13] [5847] [2026-02-24 19:36:13] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] start analyze, conversationId=19228940
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] start chat 
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] start collect chat params
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] start collect command info
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] start collect rule info
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] start collect share memory info
+
+[Info  - 19:36:14] [5847] [2026-02-24 19:36:14] [INFO] [Zulu] request chat response
+
+[Error - 19:37:43] [5847] [2026-02-24 19:37:43] [ERROR] [CONVERSATIONMANAGER]  [Zulu] failed create conversaion, reason: aborted {"code":"ECONNRESET"}
+
+[Info  - 19:38:07] [5847] [2026-02-24 19:38:07] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:38:07] [5847] [2026-02-24 19:38:07] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:38:09] [5847] [2026-02-24 19:38:08] [INFO] [ConversationTab] Saved 2 tabs for workspace: /home/art/agent-RegArt-1
+
+[Info  - 19:38:09] [5847] [2026-02-24 19:38:09] [INFO] [ConversationTab] Saved 1 tabs for workspace: /home/art/agent-RegArt-1
+

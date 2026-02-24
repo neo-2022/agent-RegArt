@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Agent Core NG Final Tray
+Comment=System tray application for Agent Core NG
+Exec=/usr/bin/python3 /home/art/agent-RegArt-1/tray-app/final_working_tray.py
+Icon=/home/art/agent-RegArt-1/tray-app/favicon.png
+Terminal=false
+Categories=System;Utility;
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart=true
+Hidden=false
+NoDisplay=false

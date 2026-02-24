@@ -293,7 +293,20 @@ func callTool(toolName string, args map[string]interface{}) (map[string]interfac
 		slog.Error("[TOOL-CALL] ошибка маршалинга", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
 		return nil, err
 	}
-	resp, err := http.Post(fullURL, "application/json", bytes.NewReader(data))
+	// Создаём HTTP клиент с заголовком авторизации для tools-service
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", fullURL, bytes.NewReader(data))
+	if err != nil {
+		slog.Error("[TOOL-CALL] ошибка создания запроса", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	// Добавляем токен авторизации для tools-service
+	toolsToken := getEnv("TOOLS_SERVICE_TOKEN", "")
+	if toolsToken != "" {
+		req.Header.Set("Authorization", "Bearer "+toolsToken)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("[TOOL-CALL] ошибка HTTP", slog.String("инструмент", toolName), slog.String("ошибка", err.Error()), slog.Duration("длительность", time.Since(callStart)))
 		return nil, err

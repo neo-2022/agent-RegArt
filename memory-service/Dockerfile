@@ -2,6 +2,7 @@
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
+ENV HUGGINGFACE_HUB_CACHE=/app/data/huggingface_cache
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ make \
@@ -15,14 +16,14 @@ FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd -r appgroup && useradd -r -g appgroup appuser
+    && groupadd -r appgroup && useradd --create-home -r -g appgroup appuser
 
 WORKDIR /app
 
 COPY --from=builder /install /usr/local
 COPY app/ ./app/
 
-RUN mkdir -p /app/data/chroma /app/data/temp \
+RUN mkdir -p /app/data/chroma /app/data/temp /app/data/huggingface_cache \
     && chown -R appuser:appgroup /app
 
 USER appuser

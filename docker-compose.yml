@@ -60,7 +60,6 @@ services:
     restart: unless-stopped
     cap_drop:
       - ALL
-    read_only: true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 10s
@@ -83,6 +82,9 @@ services:
       - TOOLS_SERVICE_URL=http://tools-service:8082
       - MEMORY_SERVICE_URL=http://memory-service:8001
       - DATABASE_URL=postgres://agentcore:agentcore@postgres:5432/agentcore?sslmode=disable
+      - OLLAMA_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,7 +107,7 @@ services:
     build: ./tools-service
     container_name: agent-tools
     ports:
-      - "8082:8082"
+      - "8084:8082"
     environment:
       - TOOLS_PORT=8082
     restart: unless-stopped
@@ -167,7 +169,6 @@ services:
     restart: unless-stopped
     cap_drop:
       - ALL
-    read_only: true
     deploy:
       resources:
         limits:

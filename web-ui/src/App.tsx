@@ -312,6 +312,8 @@ function App() {
   const [ragFiles, setRagFiles] = useState<RagFolderEntry[]>([]);
   const [ragSearch, setRagSearch] = useState('');
   const [ragSortBy, setRagSortBy] = useState<'name' | 'chunks'>('name');
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set()); // Свёрнутые папки в RAG-панели
+  const [ragDragOver, setRagDragOver] = useState(false); // Индикатор drag&drop зоны
   const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
   const [promptSaveStatus, setPromptSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [promptSaveError, setPromptSaveError] = useState('');
@@ -1636,7 +1638,37 @@ function App() {
         )}
 
         {showRagPanel && (
-          <div className="rag-panel">
+          <div
+            className={`rag-panel ${ragDragOver ? 'rag-drag-active' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setRagDragOver(true); }}
+            onDragLeave={() => setRagDragOver(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setRagDragOver(false);
+              const files = e.dataTransfer.files;
+              if (!files || files.length === 0) return;
+              setRagUploadStatus('uploading');
+              setRagUploadMessage(`Загрузка ${files.length}...`);
+              let successCount = 0;
+              let skippedCount = 0;
+              for (const file of Array.from(files)) {
+                const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
+                if (!RAG_SUPPORTED_EXTENSIONS.includes(ext)) { skippedCount++; continue; }
+                try {
+                  const content = await file.text();
+                  await addRagFileChunks(file.name, content);
+                  successCount++;
+                } catch (err) { console.error('Drag&drop error:', file.name, err); }
+              }
+              await fetchRagFiles();
+              await fetchRagStats();
+              setRagUploadStatus('success');
+              let msg = `Загружено: ${successCount}`;
+              if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
+              setRagUploadMessage(msg);
+              setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
+            }}
+          >
             <div className="rag-panel-header">
               <h4>RAG — база знаний</h4>
               <label className="rag-toggle-label">
@@ -1739,12 +1771,27 @@ function App() {
                     .filter((folder) => !ragSearch || folder.folder.toLowerCase().includes(ragSearch.toLowerCase()) || folder.files.some((f) => f.file_name.toLowerCase().includes(ragSearch.toLowerCase())))
                     .sort((a, b) => ragSortBy === 'chunks' ? b.total_files - a.total_files : a.folder.localeCompare(b.folder))
                     .map((folder, idx: number) => (
-                    <div key={idx} className="rag-folder-group">
-                      <div className="rag-folder-header">
+                    <div key={idx} className={`rag-folder-group ${collapsedFolders.has(folder.folder) ? 'collapsed' : ''}`}>
+                      <div
+                        className="rag-folder-header"
+                        onClick={() => {
+                          // Переключаем свёрнутость папки
+                          setCollapsedFolders((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(folder.folder)) { next.delete(folder.folder); } else { next.add(folder.folder); }
+                            return next;
+                          });
+                        }}
+                        role="button"
+                        aria-expanded={!collapsedFolders.has(folder.folder)}
+                        tabIndex={0}
+                      >
+                        <span className={`rag-folder-chevron ${collapsedFolders.has(folder.folder) ? '' : 'open'}`}>▸</span>
                         <span className="rag-folder-icon">📁</span>
                         <span className="rag-folder-name">{folder.folder}</span>
                         <span className="rag-folder-count">({folder.total_files} файлов)</span>
-                        <button className="rag-folder-delete" onClick={() => {
+                        <button className="rag-folder-delete" onClick={(e) => {
+                          e.stopPropagation();
                           // Удаляем все файлы из папки
                           if (folder.files.length > 0) {
                             folder.files.forEach((f) => deleteRagFile(folder.folder + '/' + f.file_name));
@@ -1753,7 +1800,7 @@ function App() {
                           }
                         }} title="Удалить папку">✕</button>
                       </div>
-                      <div className="rag-folder-files">
+                      <div className={`rag-folder-files ${collapsedFolders.has(folder.folder) ? 'collapsed' : ''}`}>
                         {folder.files.slice(0, 10).map((rf, fileIdx: number) => (
                           <div key={fileIdx} className="rag-file-item">
                             <span className="rag-file-icon">📄</span>

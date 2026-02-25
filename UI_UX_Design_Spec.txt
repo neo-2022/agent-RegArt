@@ -1,147 +1,146 @@
-AI CHAT — PREMIUM UI/UX DESIGN SPECIFICATION
+СПЕЦИФИКАЦИЯ ДИЗАЙНА UI/UX ДЛЯ AI-ЧАТА ПРЕМИУМ-КЛАССА
 
-GOAL
-Create a premium-level AI chat interface that feels calm, minimalistic, modern, and elegant.
-No visual noise. No admin-panel feeling. Everything must look like a real polished product.
+ЦЕЛЬ
+Создать интерфейс AI-чата премиум-уровня: спокойный, минималистичный, современный и элегантный.
+Никакого визуального шума. Никакого ощущения админ-панели. Всё должно выглядеть как настоящий отполированный продукт.
 
-CORE PRINCIPLES
-• Minimalism
-• Soft depth (not flat, not textured)
-• Fully adaptive layout
-• Smooth motion
-• No overlay popups blocking content
+ОСНОВНЫЕ ПРИНЦИПЫ
+- Минимализм
+- Мягкая глубина (не плоский, не текстурный)
+- Полностью адаптивный layout
+- Плавные анимации
+- Никаких overlay-попапов, блокирующих контент
 
-SCREEN STRUCTURE
-The interface has 3 zones:
+СТРУКТУРА ЭКРАНА
+Интерфейс состоит из 3 зон:
 
-1. Left panel – chats and spaces
-2. Center – chat conversation
-3. Right panel – system panel (RAG / Logs / Settings)
+1. Левая панель — чаты и пространства
+2. Центр — разговор в чате
+3. Правая панель — системная панель (RAG / Логи / Настройки)
 
-Panels are part of layout. They shift content, never cover it.
+Панели являются частью layout. Они сдвигают контент, но никогда не перекрывают его.
 
-ADAPTIVE LAYOUT
-All sizes must be relative:
-• Percent-based layout
-• Relative spacing
-• Min/max constraints
+АДАПТИВНЫЙ LAYOUT
+Все размеры должны быть относительными:
+- Layout на процентах
+- Относительные отступы
+- Ограничения min/max
 
-Interface must look correct on small laptop, large monitor, ultrawide, split screen.
+Интерфейс должен корректно выглядеть на маленьком ноутбуке, большом мониторе, ультрашироком экране, разделённом экране.
 
-SOFT DEPTH STYLE
-No textures, no grain.
+СТИЛЬ МЯГКОЙ ГЛУБИНЫ
+Без текстур, без зернистости.
 
-Depth created by:
-• subtle inner borders
-• soft wide shadows
-• slight gradients
-• subtle glow for active items
+Глубина создаётся за счёт:
+- тонких внутренних рамок
+- мягких широких теней
+- лёгких градиентов
+- тонкого свечения для активных элементов
 
-Four depth levels:
-Background → Chat → Panels → Active elements.
+Четыре уровня глубины:
+Фон -> Чат -> Панели -> Активные элементы.
 
-COLOR STYLE
-• Dark graphite background
-• Slightly lighter panels
-• Soft blue/violet accent
-• No neon colors
+ЦВЕТОВОЙ СТИЛЬ
+- Тёмный графитовый фон
+- Чуть более светлые панели
+- Мягкий синий/фиолетовый акцент
+- Никаких неоновых цветов
 
-PANELS BEHAVIOR
-Left panel:
-• Slides left when closed
-• Center expands smoothly
+ПОВЕДЕНИЕ ПАНЕЛЕЙ
+Левая панель:
+- Выдвигается влево при закрытии
+- Центр плавно расширяется
 
-Right panel:
-• Slides right
-• Right-side buttons move with it
-• Panel never overlaps buttons or chat
+Правая панель:
+- Выдвигается вправо
+- Кнопки на правой стороне двигаются вместе с ней
+- Панель никогда не перекрывает кнопки или чат
 
-Panel modes switch inside container:
-RAG / Logs / Settings.
+Режимы панели переключаются внутри контейнера:
+RAG / Логи / Настройки.
 
-AVATAR AND MODEL SELECTOR
-One agent avatar at top-left of chat.
+АВАТАР И ВЫБОР МОДЕЛИ
+Один аватар агента в верхнем левом углу чата.
 
-Model selector opens as a premium popover under avatar.
+Селектор модели открывается как премиум-поповер под аватаром.
 
-Model dropdown must include:
-• search field
-• model cards with description
-• soft hover highlight
-• subtle animation
+Дропдаун модели должен включать:
+- поле поиска
+- карточки моделей с описанием
+- мягкую подсветку при наведении
+- тонкую анимацию
 
-No standard dropdown UI.
+Никакого стандартного UI для дропдаунов.
 
-RAG PANEL — UI REQUIREMENTS
-RAG looks like a real file explorer.
+RAG-ПАНЕЛЬ — ТРЕБОВАНИЯ К UI
+RAG выглядит как настоящий файловый менеджер.
 
-Structure:
-• Header with knowledge base name
-• Action buttons
-• Search
-• Folder tree
-• File metadata preview
-• Footer stats
+Структура:
+- Заголовок с названием базы знаний
+- Кнопки действий
+- Поиск
+- Дерево папок
+- Превью метаданных файла
+- Статистика в подвале
 
-File system behavior:
-• Drag & drop
-• Rename
-• Move
-• Delete (soft delete)
-• Multi-select
-• Pinned files
-• Highlight active file
+Поведение файловой системы:
+- Drag & drop
+- Переименование
+- Перемещение
+- Удаление (мягкое удаление)
+- Множественный выбор
+- Закреплённые файлы
+- Подсветка активного файла
 
-Search must support:
-• filename
-• content
-• semantic search
+Поиск должен поддерживать:
+- по имени файла
+- по содержимому
+- семантический поиск
 
-UI STATES
-The panel must support states:
-• Empty
-• Processing
-• Ready
-• Error
-• Outdated
-• Conflict
+СОСТОЯНИЯ UI
+Панель должна поддерживать состояния:
+- Пусто
+- Обработка
+- Готово
+- Ошибка
+- Устарело
+- Конфликт
 
-MICRO-ANIMATIONS
-• Hover slight scale
-• Active glow
-• Smooth panel slide
-• Smooth folder expand
+МИКРО-АНИМАЦИИ
+- Лёгкое масштабирование при наведении
+- Свечение для активных элементов
+- Плавное выдвижение панели
+- Плавное раскрытие папки
 
-No harsh motion.
+Никаких резких движений.
 
-TYPOGRAPHY
-Use clean sans-serif font.
-Clear hierarchy.
-Readable on small screens.
+ТИПОГРАФИКА
+Чистый шрифт без засечек.
+Чёткая иерархия.
+Читаемый на маленьких экранах.
 
-ICONS
-Minimal line icons.
-Consistent stroke width.
-No gradients.
+ИКОНКИ
+Минималистичные линейные иконки.
+Единая толщина линий.
+Без градиентов.
 
-MOBILE / SMALL SCREEN
-• Left panel collapsible
-• Right panel may become full screen sheet
-• Model dropdown centered
+МОБИЛЬНЫЕ / МАЛЕНЬКИЕ ЭКРАНЫ
+- Левая панель сворачиваемая
+- Правая панель может стать полноэкранным листом
+- Дропдаун модели центрируется
 
-DO NOT DO
-• Overlay modals
-• Bootstrap look
-• Grain textures
-• Bright neon colors
-• Flat UI without depth
-• Fixed pixel sizes
+ЧЕГО НЕ ДЕЛАТЬ
+- Overlay-модальные окна
+- Внешний вид Bootstrap
+- Зернистые текстуры
+- Яркие неоновые цвета
+- Плоский UI без глубины
+- Фиксированные пиксельные размеры
 
-QUALITY CHECK
-Design is ready if:
-• Looks good on any screen
-• Panels never block content
-• Model dropdown feels premium
-• RAG looks like real file system
-• Interface feels calm and polished.
-
+ПРОВЕРКА КАЧЕСТВА
+Дизайн готов, если:
+- Выглядит хорошо на любом экране
+- Панели никогда не блокируют контент
+- Дропдаун модели ощущается премиальным
+- RAG выглядит как настоящая файловая система
+- Интерфейс ощущается спокойным и отполированным

@@ -328,6 +328,21 @@ async def get_contradictions(top_k: int = 50):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/files/deleted", tags=["Files"])
+async def list_deleted_files():
+    """
+    Получить список мягко удалённых файлов для отображения в корзине.
+
+    Возвращает уникальные имена файлов с пометкой status=deleted.
+    """
+    try:
+        files = memory_store.list_deleted_files()
+        return {"deleted_files": files, "count": len(files)}
+    except Exception as e:
+        logger.exception("Ошибка получения списка удалённых файлов")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/files", tags=["Files"])
 async def delete_file_by_name(name: str):
     """

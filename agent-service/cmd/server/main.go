@@ -2805,6 +2805,16 @@ func ragContradictionsHandler(w http.ResponseWriter, r *http.Request) {
 	proxyToMemoryService(w, "GET", path, nil)
 }
 
+// ragDeletedFilesHandler — получение списка мягко удалённых файлов для корзины
+func ragDeletedFilesHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodGet {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	proxyToMemoryService(w, "GET", "/files/deleted", nil)
+}
+
 // ragAddFolderHandler — обработчик для рекурсивной загрузки папки в RAG
 func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
 	cid := r.Header.Get("X-Request-ID")
@@ -3835,6 +3845,7 @@ func main() {
 	http.HandleFunc("/rag/rename", requestIDMiddleware(ragRenameHandler))
 	http.HandleFunc("/rag/content-search", requestIDMiddleware(ragContentSearchHandler))
 	http.HandleFunc("/rag/contradictions", requestIDMiddleware(ragContradictionsHandler))
+	http.HandleFunc("/rag/deleted-files", requestIDMiddleware(ragDeletedFilesHandler))
 
 	for _, dir := range []string{
 		filepath.Join(".", "uploads"),

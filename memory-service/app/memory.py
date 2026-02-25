@@ -929,6 +929,36 @@ class MemoryStore:
             logger.error(f"Ошибка получения списка противоречий: {e}")
             return []
 
+    def list_deleted_files(self) -> List[str]:
+        """
+        Получение списка мягко удалённых файлов для отображения в корзине.
+
+        Сканирует коллекцию файлов и возвращает уникальные имена файлов
+        с пометкой status=deleted или наличием deleted_at.
+
+        Returns:
+            Список уникальных имён удалённых файлов
+        """
+        try:
+            data = self.files_collection.get(include=["metadatas"])
+            if not data or "ids" not in data or not data["ids"]:
+                return []
+
+            deleted_names: set = set()
+            for idx in range(len(data["ids"])):
+                meta = data["metadatas"][idx] if idx < len(data.get("metadatas", [])) else {}
+                if not isinstance(meta, dict):
+                    continue
+                if meta.get("deleted_at") or meta.get("status") == "deleted":
+                    file_name = meta.get("file_name", meta.get("filename", ""))
+                    if file_name:
+                        deleted_names.add(file_name)
+
+            return sorted(deleted_names)
+        except Exception as e:
+            logger.error(f"Ошибка получения списка удалённых файлов: {e}")
+            return []
+
     def add_learning(self, text: str, model_name: str, agent_name: str,
                      category: str = "general", metadata: Optional[Dict[str, Any]] = None,
                      workspace_id: Optional[str] = None) -> str:

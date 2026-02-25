@@ -1116,3 +1116,57 @@ class TestListContradictions:
 
         result = mock_memory_store.list_contradictions()
         assert len(result) == 0
+
+
+class TestListDeletedFiles:
+    """Тесты для получения списка мягко удалённых файлов (корзина)."""
+
+    def test_empty_collection_returns_empty(self, mock_memory_store):
+        """Пустая коллекция → пустой список."""
+        result = mock_memory_store.list_deleted_files()
+        assert result == []
+
+    def test_returns_deleted_files(self, mock_memory_store):
+        """Возвращает уникальные имена файлов с пометкой deleted."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 3,
+            documents=["c1", "c2", "c3"],
+            metadatas=[
+                {"file_name": "deleted1.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0},
+                {"file_name": "deleted1.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 1},
+                {"file_name": "active.txt", "status": "active", "chunk_index": 0},
+            ],
+            ids=["c1", "c2", "c3"],
+        )
+
+        result = mock_memory_store.list_deleted_files()
+        assert result == ["deleted1.txt"]
+
+    def test_excludes_active_files(self, mock_memory_store):
+        """Активные файлы не попадают в список удалённых."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "active.txt", "status": "active", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        result = mock_memory_store.list_deleted_files()
+        assert result == []
+
+    def test_returns_sorted_unique_names(self, mock_memory_store):
+        """Список отсортирован и содержит уникальные имена."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 4,
+            documents=["c1", "c2", "c3", "c4"],
+            metadatas=[
+                {"file_name": "z_file.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0},
+                {"file_name": "a_file.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0},
+                {"file_name": "z_file.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 1},
+                {"file_name": "m_file.txt", "deleted_at": "2025-01-01", "chunk_index": 0},
+            ],
+            ids=["c1", "c2", "c3", "c4"],
+        )
+
+        result = mock_memory_store.list_deleted_files()
+        assert result == ["a_file.txt", "m_file.txt", "z_file.txt"]

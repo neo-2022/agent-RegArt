@@ -446,6 +446,7 @@ function App() {
       fetchRagStats();
       fetchRagFiles();
       fetchEmbeddingStatus();
+      fetchDeletedFiles();
     }
     if (nextMode === SYSTEM_PANEL_MODES.logs) {
       fetchLogs();
@@ -817,10 +818,11 @@ function App() {
   // Файл остаётся в базе, но исключается из поиска. Можно восстановить через restoreRagFile.
   const softDeleteRagFile = async (fileName: string) => {
     try {
-      await axios.post(`${RAG_API}/soft-delete`, { name: fileName });
+      await axios.post(`${RAG_API}/soft-delete`, { file_name: fileName });
       setRagSelectedFiles(prev => { const next = new Set(prev); next.delete(fileName); return next; });
       fetchRagFiles();
       fetchRagStats();
+      fetchDeletedFiles();
       setRagLastFailedOp(null);
     } catch (err) {
       console.error('Failed to soft-delete RAG file', err);
@@ -831,8 +833,8 @@ function App() {
   // Восстановление мягко удалённого файла
   const restoreRagFile = async (fileName: string) => {
     try {
-      await axios.post(`${RAG_API}/restore`, { name: fileName });
-      setRagDeletedFiles(prev => prev.filter(f => f !== fileName));
+      await axios.post(`${RAG_API}/restore`, { file_name: fileName });
+      fetchDeletedFiles();
       fetchRagFiles();
       fetchRagStats();
     } catch (err) {
@@ -844,7 +846,7 @@ function App() {
   const pinRagFile = async (fileName: string, pinned: boolean) => {
     try {
       if (pinned) {
-        await axios.post(`${RAG_API}/pin`, { name: fileName });
+        await axios.post(`${RAG_API}/pin`, { file_name: fileName });
         setRagPinnedFiles(prev => new Set([...prev, fileName]));
       } else {
         await axios.delete(`${RAG_API}/pin?name=${encodeURIComponent(fileName)}`);
@@ -858,7 +860,7 @@ function App() {
   // Перемещение файла между папками
   const moveRagFile = async (fileName: string, targetFolder: string) => {
     try {
-      await axios.post(`${RAG_API}/move`, { name: fileName, target_folder: targetFolder });
+      await axios.post(`${RAG_API}/move`, { file_name: fileName, target_folder: targetFolder });
       setRagMoveTarget({ file: '', open: false });
       fetchRagFiles();
     } catch (err) {
@@ -882,6 +884,16 @@ function App() {
     }
   };
 
+  // Получение списка мягко удалённых файлов для корзины
+  const fetchDeletedFiles = async () => {
+    try {
+      const res = await axios.get(`${RAG_API}/deleted-files`);
+      setRagDeletedFiles(res.data?.deleted_files || []);
+    } catch (err) {
+      console.error('Failed to fetch deleted files', err);
+    }
+  };
+
   // Получение списка обнаруженных противоречий из memory-service
   const fetchContradictions = async () => {
     try {
@@ -898,14 +910,15 @@ function App() {
     if (ragSelectedFiles.size === 0) return;
     for (const fileName of ragSelectedFiles) {
       try {
-        await axios.post(`${RAG_API}/soft-delete`, { name: fileName });
-      } catch (err) {
-        console.error('Failed to soft-delete selected RAG file', fileName, err);
+              await axios.post(`${RAG_API}/soft-delete`, { file_name: fileName });
+            } catch (err) {
+              console.error('Failed to soft-delete selected RAG file', fileName, err);
       }
     }
     setRagSelectedFiles(new Set());
     fetchRagFiles();
     fetchRagStats();
+    fetchDeletedFiles();
   };
 
   const fetchLogs = async () => {

@@ -55,3 +55,29 @@ def build_rank_score(relevance_score: float, metadata: Dict[str, Any]) -> float:
         + frequency * settings.RANK_WEIGHT_FREQUENCY
     )
     return round(max(0.0, min(1.0, total)), 4)
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def blend_relevance_scores(semantic_relevance: float, keyword_relevance: float) -> float:
+    """
+    Объединяет семантическую и keyword-релевантность в единый сигнал relevance.
+
+    Зачем:
+    - семантика лучше ловит смысл запроса;
+    - keyword-сигнал повышает точность при совпадении терминов/идентификаторов.
+
+    Все коэффициенты управляются через env (`SEARCH_SEMANTIC_WEIGHT`, `SEARCH_KEYWORD_WEIGHT`)
+    и не захардкожены в бизнес-логике.
+    """
+    semantic = _clamp01(float(semantic_relevance))
+    keyword = _clamp01(float(keyword_relevance))
+    semantic_weight = max(float(settings.SEARCH_SEMANTIC_WEIGHT), 0.0)
+    keyword_weight = max(float(settings.SEARCH_KEYWORD_WEIGHT), 0.0)
+    total_weight = semantic_weight + keyword_weight
+    if total_weight <= 0.0:
+        return semantic
+    blended = (semantic * semantic_weight + keyword * keyword_weight) / total_weight
+    return round(_clamp01(blended), 4)

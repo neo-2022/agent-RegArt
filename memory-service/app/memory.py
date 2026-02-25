@@ -12,7 +12,7 @@ from sentence_transformers import SentenceTransformer
 
 from .config import settings
 from .qdrant_store import QdrantCollectionCompat
-from .ranking import build_rank_score
+from .ranking import build_rank_score, blend_relevance_scores
 from .vector_backend import VECTOR_BACKEND_QDRANT
 
 # Настройка логирования
@@ -174,6 +174,24 @@ class MemoryStore:
             return None
         return {"workspace_id": workspace_id}
 
+    @staticmethod
+    def _keyword_relevance(query: str, text: str) -> float:
+        """
+        Лёгкий keyword-сигнал релевантности [0..1] по доле совпавших токенов запроса.
+
+        Edge-cases:
+        - пустой query/text -> 0.0;
+        - повторяющиеся токены запроса схлопываются множеством, чтобы не завышать score.
+        """
+        if not query or not text:
+            return 0.0
+        query_tokens = {token.strip().lower() for token in query.split() if token.strip()}
+        if not query_tokens:
+            return 0.0
+        text_lc = text.lower()
+        matched = sum(1 for token in query_tokens if token in text_lc)
+        return matched / len(query_tokens)
+
     def add_fact(self, fact_text: str, metadata: Optional[Dict[str, Any]] = None) -> str:
         """
         Добавление факта в память.
@@ -255,7 +273,9 @@ class MemoryStore:
                 metas = facts_res.get('metadatas', [[]])[0]
                 for i, doc in enumerate(docs):
                     dist = dists[i] if i < len(dists) else 1.0
-                    relevance = max(0.0, 1.0 - dist)
+                    semantic_relevance = max(0.0, 1.0 - dist)
+                    keyword_relevance = self._keyword_relevance(query=query, text=doc)
+                    relevance = blend_relevance_scores(semantic_relevance, keyword_relevance)
                     meta = metas[i] if i < len(metas) else {}
                     score = build_rank_score(relevance, meta)
                     results.append({"text": doc, "score": score, "source": "facts", "metadata": meta})
@@ -279,7 +299,9 @@ class MemoryStore:
                 metas = files_res.get('metadatas', [[]])[0]
                 for i, doc in enumerate(docs):
                     dist = dists[i] if i < len(dists) else 1.0
-                    relevance = max(0.0, 1.0 - dist)
+                    semantic_relevance = max(0.0, 1.0 - dist)
+                    keyword_relevance = self._keyword_relevance(query=query, text=doc)
+                    relevance = blend_relevance_scores(semantic_relevance, keyword_relevance)
                     meta = metas[i] if i < len(metas) else {}
                     score = build_rank_score(relevance, meta)
                     results.append({"text": doc, "score": score, "source": "files", "metadata": meta})

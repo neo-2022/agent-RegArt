@@ -33,6 +33,10 @@ class Settings:
     # Количество результатов при поиске
     TOP_K = int(os.getenv("TOP_K", "5"))
 
+    # Веса гибридной релевантности (semantic + keyword) для retrieval.
+    SEARCH_SEMANTIC_WEIGHT = float(os.getenv("SEARCH_SEMANTIC_WEIGHT", "0.8"))
+    SEARCH_KEYWORD_WEIGHT = float(os.getenv("SEARCH_KEYWORD_WEIGHT", "0.2"))
+
     # === Весовые коэффициенты ранжирования памяти ===
     RANK_WEIGHT_RELEVANCE = float(os.getenv("RANK_WEIGHT_RELEVANCE", "0.55"))
     RANK_WEIGHT_IMPORTANCE = float(os.getenv("RANK_WEIGHT_IMPORTANCE", "0.15"))

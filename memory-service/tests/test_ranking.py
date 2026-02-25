@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from app.ranking import build_rank_score
+from app.ranking import build_rank_score, blend_relevance_scores
 
 
 def test_rank_score_respects_metadata_factors():
@@ -39,3 +39,15 @@ def test_rank_score_handles_invalid_timestamp_gracefully():
     }
     score = build_rank_score(0.7, meta)
     assert 0.0 <= score <= 1.0
+
+
+def test_blend_relevance_scores_prefers_keyword_when_semantic_low():
+    """Проверяет, что keyword-сигнал поднимает relevance при слабой семантике."""
+    blended = blend_relevance_scores(semantic_relevance=0.2, keyword_relevance=1.0)
+    assert 0.2 < blended <= 1.0
+
+
+def test_blend_relevance_scores_clamps_invalid_values():
+    """Проверяет защиту от выхода relevance за диапазон [0..1]."""
+    blended = blend_relevance_scores(semantic_relevance=2.0, keyword_relevance=-1.0)
+    assert 0.0 <= blended <= 1.0

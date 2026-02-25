@@ -55,7 +55,7 @@ def build_rank_score(relevance_score: float, metadata: Dict[str, Any]) -> float:
     reliability = max(0.0, min(1.0, _safe_float(metadata.get("reliability"), 0.5)))
     frequency = max(0.0, min(1.0, _safe_float(metadata.get("frequency"), 0.5)))
     recency = _recency_score(str(metadata.get("created_at", "")))
-    priority = MEMORY_PRIORITY_SCORES.get(str(metadata.get("priority", "normal")).strip().lower(), MEMORY_PRIORITY_SCORES["normal"])
+    priority = resolve_priority_score(metadata.get("priority", "normal"))
 
     total = (
         relevance * settings.RANK_WEIGHT_RELEVANCE
@@ -92,3 +92,9 @@ def blend_relevance_scores(semantic_relevance: float, keyword_relevance: float) 
         return semantic
     blended = (semantic * semantic_weight + keyword * keyword_weight) / total_weight
     return round(_clamp01(blended), 4)
+
+
+def resolve_priority_score(raw_priority: Any) -> float:
+    """Возвращает числовой score приоритета памяти с безопасным fallback на normal."""
+    key = str(raw_priority if raw_priority is not None else "normal").strip().lower()
+    return MEMORY_PRIORITY_SCORES.get(key, MEMORY_PRIORITY_SCORES["normal"])

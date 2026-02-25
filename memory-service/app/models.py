@@ -27,6 +27,7 @@ class SearchRequest(BaseModel):
     agent_name: Optional[str] = Field(None, description="Фильтр по имени агента")
     workspace_id: Optional[str] = Field(None, description="Фильтр по workspace (изоляция контекста)")
     include_files: bool = Field(False, description="Включать ли фрагменты файлов")
+    min_priority: Optional[str] = Field(None, description="Минимальный приоритет памяти: critical|pinned|reinforced|normal|archived")
 
 
 class SearchResultItem(BaseModel):

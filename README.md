@@ -595,6 +595,7 @@ MIT License
 Для retrieval и learnings добавлена фильтрация `workspace_id`:
 
 - `POST /search` поддерживает `workspace_id` и ограничивает выборку фактами/файлами только этого workspace;
+- `POST /search` поддерживает `min_priority` для фильтрации памяти по минимальному приоритету (`critical|pinned|reinforced|normal|archived`);
 - `POST /learnings` сохраняет `workspace_id` в метаданных знания;
 - `POST /learnings/search` и `DELETE /learnings/{model_name}` поддерживают `workspace_id` и работают в границах workspace.
 

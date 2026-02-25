@@ -346,3 +346,27 @@ def test_backup_checks_endpoint(client):
     assert "neo4j_backup_enabled" in data
     assert "minio_versioning_enabled" in data
     assert "restore_test_enabled" in data
+
+
+def test_search_min_priority_filter(client):
+    """Проверяет фильтрацию retrieval по минимальному приоритету памяти."""
+    client.post("/facts", json={
+        "text": "priority archived sample",
+        "metadata": {"source": "test", "priority": "archived", "workspace_id": "prio-ws"},
+    })
+    client.post("/facts", json={
+        "text": "priority critical sample",
+        "metadata": {"source": "test", "priority": "critical", "workspace_id": "prio-ws"},
+    })
+
+    response = client.post("/search", json={
+        "query": "priority sample",
+        "top_k": 10,
+        "workspace_id": "prio-ws",
+        "min_priority": "critical",
+    })
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["count"] >= 1
+    assert all(item["metadata"].get("priority") == "critical" for item in data["results"])

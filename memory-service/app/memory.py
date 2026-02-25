@@ -12,7 +12,7 @@ from sentence_transformers import SentenceTransformer
 
 from .config import settings
 from .qdrant_store import QdrantCollectionCompat
-from .ranking import build_rank_score, blend_relevance_scores
+from .ranking import build_rank_score, blend_relevance_scores, resolve_priority_score
 from .vector_backend import VECTOR_BACKEND_QDRANT
 
 # Настройка логирования
@@ -238,6 +238,7 @@ class MemoryStore:
         agent_name: Optional[str] = None,
         include_files: bool = False,
         workspace_id: Optional[str] = None,
+        min_priority: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Поиск релевантных фактов и/или фрагментов файлов.
@@ -313,6 +314,15 @@ class MemoryStore:
                 seen.add(r["text"])
                 unique.append(r)
         
+        # Фильтрация по минимальному приоритету памяти применяется после объединения
+        # candidates из разных источников, чтобы одинаково обрабатывать facts и files.
+        if min_priority:
+            threshold = resolve_priority_score(min_priority)
+            unique = [
+                item for item in unique
+                if resolve_priority_score((item.get("metadata") or {}).get("priority", "normal")) >= threshold
+            ]
+
         unique.sort(key=lambda x: x["score"], reverse=True)
         self._record_search_metrics(start_ts=start_ts, results_count=len(unique), is_error=False)
         return unique

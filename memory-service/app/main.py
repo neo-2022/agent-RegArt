@@ -117,6 +117,7 @@ async def search(request: models.SearchRequest):
             agent_name=request.agent_name,
             include_files=request.include_files,
             workspace_id=request.workspace_id,
+            min_priority=request.min_priority,
         )
         return models.SearchResponse(results=results, count=len(results))
     except Exception as e:

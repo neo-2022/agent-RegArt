@@ -1,51 +1,51 @@
-# 🚀 AGENT CORE NG - PRODUCTION DEPLOYMENT GUIDE
+# AGENT CORE NG — РУКОВОДСТВО ПО РАЗВЁРТЫВАНИЮ
 
-## Status: ✅ PRODUCTION READY (100%)
+## Статус: ГОТОВ К PRODUCTION (100%)
 
-Полный гайд для развертывания Agent Core NG на production.
-
----
-
-## 📋 Что было реализовано на 100%:
-
-### ✅ Completed Tasks:
-- [x] RAG функциональность (workspace_id, min_priority, hybrid retrieval)
-- [x] Learnings система (модель накапливает знания)
-- [x] Security hardening v0.2.1 (path traversal, SSRF защита)
-- [x] LLM providers (9 провайдеров готовых)
-- [x] Tool calling (4 формата поддерживаются)
-- [x] Unit tests (130+ тестов, 100% coverage критических функций)
-- [x] Integration tests (полный тест docker-compose стека)
-- [x] Deployment scripts (полные скрипты для production)
-- [x] RAG uncommented в main.go (enabled)
-- [x] Learnings uncommented в main.go (enabled)
+Полное руководство по развёртыванию Agent Core NG на production.
 
 ---
 
-## 🎯 QUICK START (5 минут)
+## Что реализовано на 100%:
+
+- [x] RAG функциональность (workspace_id, min_priority, гибридный поиск)
+- [x] Система обучения (модель накапливает знания)
+- [x] Skill Engine (навыки агента с версионированием и confidence)
+- [x] Graph Engine (связи между знаниями: relates_to, contradicts, depends_on, supersedes, derived_from)
+- [x] Безопасность v0.2.1 (защита от path traversal, SSRF)
+- [x] LLM-провайдеры (9 провайдеров готовы)
+- [x] Tool calling (поддержка 4 форматов)
+- [x] Unit-тесты (178+ memory-service, 59 web-ui, 61 Go)
+- [x] Скрипты развёртывания
+- [x] RAG включён в main.go
+- [x] Learnings включены в main.go
+
+---
+
+## БЫСТРЫЙ СТАРТ (5 минут)
 
 ### 1. Проверить требования:
 
 ```bash
 # Проверить Docker
 docker --version
-# Docker version 20.10+ требуется
+# Требуется Docker 20.10+
 
 # Проверить Docker Compose
 docker-compose --version
-# Docker Compose 2.0+ требуется
+# Требуется Docker Compose 2.0+
 
-# Проверить Go (опционально для локальной разработки)
+# Проверить Go (опционально, для локальной разработки)
 go version
-# Go 1.22+ требуется
+# Требуется Go 1.24+
 ```
 
-### 2. Запустить интеграционные тесты (автоматическая проверка всего):
+### 2. Запустить интеграционные тесты (автоматическая проверка):
 
 ```bash
-cd /home/art/agent-RegArt
+cd /path/to/agent-RegArt
 
-# Вариант 1: Полный deployment с тестами (рекомендуется)
+# Вариант 1: Полное развёртывание с тестами (рекомендуется)
 ./deploy.sh
 
 # Вариант 2: Только интеграционные тесты (если уже запущено)
@@ -58,7 +58,7 @@ cd /home/art/agent-RegArt
 # Web UI
 open http://localhost:5173
 
-# API Gateway health
+# API Gateway — проверка здоровья
 curl http://localhost:8080/health
 
 # Agent Service
@@ -70,106 +70,85 @@ curl http://localhost:8001/health
 
 ---
 
-## 📊 ARCHITECTURE VERIFICATION
+## ВЕРИФИКАЦИЯ АРХИТЕКТУРЫ
 
 Все компоненты проверены и готовы:
 
 ```
-┌─────────────────────────┐
-│   Web UI (React)        │ → :5173
-│   ✓ Soft depth design   │
-│   ✓ Adaptive layout     │
-└────────────┬────────────┘
-             │ HTTP
-             ▼
-┌─────────────────────────┐
-│   API Gateway (Go)      │ → :8080
-│   ✓ CORS protection     │
-│   ✓ Request ID tracking │
-└──┬──────┬──────┬────────┘
-   │      │      │
-   ▼      ▼      ▼
-┌─────────────────────────────────────────────────────┐
-│ memory-service  │ agent-service  │ tools-service   │
-│ :8001 (Python)  │ :8083 (Go)      │ :8082 (Go)      │
-│ ✓ RAG enabled   │ ✓ RAG enabled   │ ✓ Security OK   │
-│ ✓ Learnings     │ ✓ Learnings     │ ✓ 130+ tests    │
-└──────┬──────────┬────────────────┬────────────────┘
-       │          │                │
-       ▼          ▼                ▼
-   ┌─────────┬────────┐       (tools-service executes)
-   │Qdrant   │PostgreSQL
-   │:6333    │:5432
-   └─────────┴────────┘
++---------------------------+
+|   Web UI (React)          | -> :5173
+|   - Soft depth дизайн     |
+|   - Адаптивный layout     |
++------------+--------------+
+             | HTTP
+             v
++---------------------------+
+|   API Gateway (Go)        | -> :8080
+|   - CORS защита           |
+|   - X-Request-ID          |
++--+-------+-------+-------+
+   |       |       |
+   v       v       v
++------------------------------------------+
+| memory-service | agent-service | tools   |
+| :8001 (Python) | :8083 (Go)   | :8082   |
+| - RAG вкл.     | - RAG вкл.   | - Безоп.|
+| - Skill Engine | - Learnings  | - Тесты |
+| - Graph Engine | - Skills     |         |
++------+--------+------+-------+---------+
+       |                |
+       v                v
+   +--------+  +----------+
+   | Qdrant |  | PostgreSQL|
+   | :6333  |  | :5432     |
+   +--------+  +----------+
 ```
 
-### Component Status:
+### Статус компонентов:
 
-| Service | Port | Status | Features |
-|---------|------|--------|----------|
-| **web-ui** | 5173 | ✅ Online | React + Vite, Premium UI |
-| **api-gateway** | 8080 | ✅ Online | Routing, CORS, RequestID |
-| **agent-service** | 8083 | ✅ Online | LLM, Tool calling, RAG ✓, Learnings ✓ |
-| **memory-service** | 8001 | ✅ Online | RAG, Qdrant, embeddings |
-| **tools-service** | 8082 | ✅ Online | Commands, files, security ✓ |
-| **PostgreSQL** | 5432 | ✅ Online | Chat history, metadata |
-| **Qdrant** | 6333 | ✅ Online | Vector storage for RAG |
+| Сервис | Порт | Статус | Назначение |
+|--------|------|--------|------------|
+| **web-ui** | 5173 | Готов | React + Vite, Premium UI |
+| **api-gateway** | 8080 | Готов | Маршрутизация, CORS, RequestID |
+| **agent-service** | 8083 | Готов | LLM, Tool calling, RAG, Learnings, Skills |
+| **memory-service** | 8001 | Готов | RAG, Qdrant, эмбеддинги, Skill Engine, Graph Engine |
+| **tools-service** | 8082 | Готов | Команды, файлы, безопасность |
+| **PostgreSQL** | 5432 | Готов | История чатов, метаданные |
+| **Qdrant** | 6333 | Готов | Векторное хранилище для RAG |
 
 ---
 
-## 🧪 RUN TESTS
+## ЗАПУСК ТЕСТОВ
 
-### Full Test Suite (всё за раз):
+### Полный набор тестов (всё за раз):
 
 ```bash
 ./deploy.sh
 ```
 
 Этот скрипт:
-1. Компилирует Go сервисы (go build)
-2. Проверяет Python синтаксис
-3. Собирает Docker образы (docker build)
+1. Компилирует Go-сервисы (go build)
+2. Проверяет синтаксис Python
+3. Собирает Docker-образы (docker build)
 4. Запускает unit-тесты (go test)
-5. Поднимает docker-compose stack
+5. Поднимает docker-compose стек
 6. Проверяет здоровье всех сервисов
 7. Запускает интеграционные тесты
-8. Выводит итоговый отчет
+8. Выводит итоговый отчёт
 
-**Ожидаемый результат:**
-```
-════════════════════════════════════════════════════════════
-DEPLOYMENT SUMMARY
-════════════════════════════════════════════════════════════
-
-✓ BUILD: Success
-✓ DOCKER: Success
-✓ TESTS: Passed
-✓ DEPLOYMENT: Complete
-✓ HEALTH: All services online
-✓ RAG: Enabled
-✓ LEARNINGS: Enabled
-
-Production URLs:
-  Web UI:         http://localhost:5173
-  API Gateway:    http://localhost:8080
-  Agent Service:  http://localhost:8083
-  Memory Service: http://localhost:8001
-  Tools Service:  http://localhost:8082
-```
-
-### Run Unit Tests Separately:
+### Запуск unit-тестов отдельно:
 
 ```bash
-# Go tests (61 тестов)
+# Go-тесты (61 тест)
 cd agent-service && go test ./... -v
 cd ../tools-service && go test ./... -v
 
-# Python tests (69+ тестов)
+# Python-тесты (178+ тестов)
 cd memory-service
 python -m pytest tests/ -v
 ```
 
-### Run Integration Tests Separately:
+### Запуск интеграционных тестов отдельно:
 
 ```bash
 # Требует запущенного docker-compose
@@ -178,98 +157,116 @@ python -m pytest tests/ -v
 
 ---
 
-## 📝 WHAT'S INCLUDED IN THIS DEPLOYMENT
+## ЧТО ВХОДИТ В РАЗВЁРТЫВАНИЕ
 
-### 1. RAG System ✅ ENABLED
+### 1. Система RAG (включена)
+
 ```go
-// agent-service/cmd/server/main.go:475
-// RAG ВКЛЮЧЕН - поиск документов из memory-service через Qdrant
+// agent-service/cmd/server/main.go
+// RAG ВКЛЮЧЁН — поиск документов из memory-service через Qdrant
 if ragRetriever != nil {
     results, err := ragRetriever.Search(lastMsg, 5)
     // ... семантический поиск работает
 }
 ```
 
-**Features:**
-- Vector search через Qdrant v1.12.5
-- Workspace isolation (workspace_id фильтр)
-- Priority filtering (critical, pinned, reinforced, normal, archived)
-- Hybrid retrieval (semantic + keyword)
-- Composite ranking (6 факторов)
+**Возможности:**
+- Векторный поиск через Qdrant v1.12.5
+- Изоляция по workspace (фильтр workspace_id)
+- Фильтрация по приоритету (critical, pinned, reinforced, normal, archived)
+- Гибридный поиск (семантический + ключевые слова)
+- Композитное ранжирование (6 факторов)
 
-### 2. Learnings System ✅ ENABLED
+### 2. Система обучения (включена)
+
 ```go
-// agent-service/cmd/server/main.go:508
-// Learnings ВКЛЮЧЕНЫ - получаем накопленные знания модели
+// agent-service/cmd/server/main.go
+// Learnings ВКЛЮЧЕНЫ — получаем накопленные знания модели
 learnings := fetchModelLearnings(agent.LLMModel, lastMsg)
-// ... модель использует свои накопленные знания для точнейших ответов
+// ... модель использует свои накопленные знания
 ```
 
-**Features:**
-- Soft delete (status=deleted, не hard delete)
-- Versioning (learning_key, version, superseded status)
-- Workspace isolation
-- Per-model knowledge isolation
+**Возможности:**
+- Мягкое удаление (status=deleted, без физического удаления)
+- Версионирование (learning_key, version, superseded status)
+- Изоляция по workspace
+- Изоляция знаний по модели
 
-### 3. LLM Providers (9 штук)
+### 3. Skill Engine (включён)
 
-| Provider | Type | Status | Config |
-|----------|------|--------|--------|
-| **Ollama** | Local | ✅ | OLLAMA_URL |
-| **OpenAI** | Cloud | ✅ | OPENAI_API_KEY |
-| **Anthropic** | Cloud | ✅ | ANTHROPIC_API_KEY |
-| **YandexGPT** | Russian | ✅ | YANDEXGPT_API_KEY, FOLDER_ID |
-| **GigaChat** | Russian | ✅ | GIGACHAT_CLIENT_SECRET, ID |
-| **OpenRouter** | Aggregator | ✅ | OPENROUTER_API_KEY |
-| **LM Studio** | Local | ✅ | LM_STUDIO_URL |
-| **Routeway** | Free | ✅ | Auto-configured |
-| **Cerebras** | Cloud | ✅ | CEREBRAS_API_KEY |
+**Возможности:**
+- Создание, поиск, обновление навыков агента
+- Версионирование навыков с confidence
+- Семантический поиск навыков через эмбеддинги
+- Авто-создание навыков из диалогов (category="skill")
 
-### 4. Tool Calling (4 formats)
+### 4. Graph Engine (включён)
 
-The agent can call tools in multiple formats:
-```
-1. ✅ Structured calls (OpenAI format)
-2. ✅ JSON inline ({"name":"cmd","arguments":{...}})
-3. ✅ XML format (nemotron, mistral)
-4. ✅ Inline format (execute{...})
-```
+**Возможности:**
+- Связи между знаниями (5 типов: relates_to, contradicts, depends_on, supersedes, derived_from)
+- Авто-создание связей relates_to при высоком сходстве (порог 0.7)
+- Обнаружение противоречий
 
-### 5. Security Features ✅
+### 5. LLM-провайдеры (9 штук)
 
-- Path traversal protection (`..' detection)
-- SSRF protection (private IP blocking)
-- File size limits (10 MB max)
-- Command whitelist (70+ safe commands)
-- Dangerous commands blocked (rm -rf /, dd, mkfs)
-- No hardcoded secrets (all from env)
-- Request ID tracking (X-Request-ID)
-- Panic recovery middleware
-- CORS protection
+| Провайдер | Тип | Конфигурация |
+|-----------|-----|-------------|
+| **Ollama** | Локальный | OLLAMA_URL |
+| **OpenAI** | Облачный | OPENAI_API_KEY |
+| **Anthropic** | Облачный | ANTHROPIC_API_KEY |
+| **YandexGPT** | Российский | YANDEXGPT_API_KEY, FOLDER_ID |
+| **GigaChat** | Российский | GIGACHAT_CLIENT_SECRET, ID |
+| **OpenRouter** | Агрегатор | OPENROUTER_API_KEY |
+| **LM Studio** | Локальный | LM_STUDIO_URL |
+| **Routeway** | Бесплатный | Автоконфигурация |
+| **Cerebras** | Облачный | CEREBRAS_API_KEY |
 
-### 6. Testing Suite
+### 6. Tool Calling (4 формата)
 
-**Unit Tests (130+):**
-- Path validation (47 tests)
-- Provider registry (14 tests)
-- RAG ranking (57 tests)
-- Memory soft delete (12 tests)
+Агент поддерживает вызов инструментов в нескольких форматах:
+1. Structured (формат OpenAI)
+2. JSON inline
+3. XML формат (nemotron, mistral)
+4. Inline формат
 
-**Integration Tests:**
-- Full stack health checks
-- API routing verification
-- RAG functionality test
-- Learnings functionality test
-- Performance baseline
+### 7. Безопасность
+
+- Защита от path traversal (обнаружение `..`)
+- Защита от SSRF (блокировка приватных IP)
+- Лимит размера файлов (макс. 10 МБ)
+- Белый список команд (70+ безопасных команд)
+- Блокировка опасных команд (rm -rf /, dd, mkfs)
+- Нет захардкоженных секретов (всё из env)
+- Отслеживание X-Request-ID
+- Middleware восстановления после паник
+- Защита CORS
+
+### 8. Набор тестов
+
+**Unit-тесты (298+):**
+- Валидация путей (47 тестов)
+- Реестр провайдеров (14 тестов)
+- RAG ранжирование (57 тестов)
+- Мягкое удаление (12 тестов)
+- Skill Engine (тесты)
+- Graph Engine (тесты)
+- Web UI компоненты (59 тестов)
+
+**Интеграционные тесты:**
+- Проверка здоровья всего стека
+- Верификация маршрутизации API
+- Тест функциональности RAG
+- Тест функциональности Learnings
+- Базовые показатели производительности
 
 ---
 
-## 🐛 TROUBLESHOOTING
+## УСТРАНЕНИЕ НЕПОЛАДОК
 
-### Port Already in Use
+### Порт уже занят
 
 ```bash
-# Kill process on port
+# Завершить процесс на порту
 lsof -ti:5173 | xargs kill  # web-ui
 lsof -ti:8080 | xargs kill  # gateway
 lsof -ti:8001 | xargs kill  # memory
@@ -277,7 +274,7 @@ lsof -ti:8082 | xargs kill  # tools
 lsof -ti:8083 | xargs kill  # agent
 ```
 
-### Ollama Connection Issues
+### Проблемы с подключением к Ollama
 
 ```bash
 # Если Ollama на хост-машине, убедитесь что запущен:
@@ -287,18 +284,18 @@ ollama serve
 docker run -d -p 11434:11434 ollama/ollama
 ```
 
-### Memory Service Issues
+### Проблемы с Memory Service
 
 ```bash
 # Проверить логи
 docker-compose logs memory-service
 
-# Перестроить образ
+# Пересобрать образ
 docker-compose build --no-cache memory-service
 docker-compose restart memory-service
 ```
 
-### PostgreSQL Connection Error
+### Ошибка подключения к PostgreSQL
 
 ```bash
 # Проверить статус
@@ -312,131 +309,126 @@ docker-compose up -d  # остальные сервисы
 
 ---
 
-## 📈 PERFORMANCE BASELINE
+## БАЗОВЫЕ ПОКАЗАТЕЛИ ПРОИЗВОДИТЕЛЬНОСТИ
 
-После полного deployment проверьте базовую производительность:
+После полного развёртывания проверьте базовую производительность:
 
 ```bash
-# API Gateway response time
+# Время ответа API Gateway
 time curl http://localhost:8080/health
 
-# Memory Service latency
+# Задержка Memory Service
 time curl http://localhost:8001/health
 
-# RAG search performance
+# Производительность RAG-поиска
 time curl -X POST http://localhost:8001/search \
   -H "Content-Type: application/json" \
   -d '{"query":"test","top_k":5}'
 ```
 
-**Expected times:**
-- Gateway health: < 50ms
-- Memory health: < 100ms
-- RAG search: < 500ms (зависит от индекса)
+**Ожидаемые показатели:**
+- Здоровье gateway: < 50мс
+- Здоровье memory: < 100мс
+- RAG-поиск: < 500мс (зависит от индекса)
 
 ---
 
-## 🔒 SECURITY CHECKLIST
+## ЧЕКЛИСТ БЕЗОПАСНОСТИ
 
-Before going to production:
+Перед выходом в production:
 
-- [ ] Environment variables set correctly (.env file)
-- [ ] No API keys in git commits
-- [ ] CORS_ALLOWED_ORIGINS configured properly
-- [ ] PostgreSQL password changed from default (agentcore)
-- [ ] Ollama/LLM firewall protected (not exposed to internet)
-- [ ] Read logs for any security warnings
-- [ ] Test path traversal protection: `curl -X POST http://localhost:8082/read -H "Content-Type: application/json" -d '{"path":"../../../etc/passwd"}'` (должно вернуть ошибку)
-- [ ] Test SSRF protection: test that private IPs are blocked
-
----
-
-## 📚 DOCUMENTATION
-
-Full documentation available in:
-
-| Document | Purpose |
-|----------|---------|
-| **README.md** | Project overview |
-| **PLAN.md** | Detailed architecture & status |
-| **ROADMAP.md** | Feature roadmap v0.2-v1.0 |
-| **PROJECT_INSPECTION_REPORT.md** | Full quality report (91/100) |
-| **deployment_TIMESTAMP.log** | Deployment logs |
+- [ ] Переменные окружения настроены корректно (файл .env)
+- [ ] Нет API-ключей в git-коммитах
+- [ ] CORS_ALLOWED_ORIGINS настроен правильно
+- [ ] Пароль PostgreSQL изменён с дефолтного (agentcore)
+- [ ] Ollama/LLM защищён файрволом (не выставлен в интернет)
+- [ ] Просмотрены логи на предмет предупреждений безопасности
+- [ ] Проверена защита от path traversal
+- [ ] Проверена защита от SSRF: приватные IP блокируются
 
 ---
 
-## 🎯 NEXT STEPS
+## ДОКУМЕНТАЦИЯ
 
-After successful deployment:
+Полная документация доступна в:
 
-1. **Test the UI:**
-   - Open http://localhost:5173 in browser
-   - Create a chat
-   - Test RAG search
-   - Test model selection
-
-2. **Verify RAG:**
-   - Add some facts via API
-   - Search for them
-   - Verify results in agent responses
-
-3. **Test Tool Calling:**
-   - Ask agent to execute a safe command (e.g., "что такое ls?")
-   - Check tool execution in logs
-
-4. **Setup Monitoring:**
-   - Enable Prometheus metrics collection
-   - Setup alerts for service failures
-   - Monitor PostgreSQL disk usage
-
-5. **Backup & Disaster Recovery:**
-   - Setup regular PostgreSQL backups
-   - Test restore procedures
-   - Document recovery process
+| Документ | Назначение |
+|----------|------------|
+| **README.md** | Обзор проекта |
+| **PLAN.md** | Детальная архитектура и статус |
+| **ROADMAP.md** | Дорожная карта v0.2-v1.0 |
+| **PROJECT_INSPECTION_REPORT.md** | Полный отчёт о качестве |
+| **TESTS_GUIDE.md** | Руководство по тестам |
 
 ---
 
-## 📞 SUPPORT
+## СЛЕДУЮЩИЕ ШАГИ
 
-If you encounter issues:
+После успешного развёртывания:
 
-1. Check deployment logs: `cat deployment_*.log`
-2. View service logs: `docker-compose logs <service>`
-3. Test individual endpoints with curl
-4. Review error messages in detail
+1. **Проверить UI:**
+   - Открыть http://localhost:5173 в браузере
+   - Создать чат
+   - Проверить RAG-поиск
+   - Проверить выбор модели
+
+2. **Проверить RAG:**
+   - Добавить факты через API
+   - Найти их через поиск
+   - Убедиться что контекст появляется в ответах агента
+
+3. **Проверить Tool Calling:**
+   - Спросить агента выполнить безопасную команду
+   - Проверить выполнение инструмента в логах
+
+4. **Настроить мониторинг:**
+   - Включить сбор метрик Prometheus
+   - Настроить алерты на сбои сервисов
+   - Мониторить использование диска PostgreSQL
+
+5. **Резервное копирование и восстановление:**
+   - Настроить регулярные бэкапы PostgreSQL
+   - Протестировать процедуры восстановления
+   - Задокументировать процесс восстановления
 
 ---
 
-## ✨ FINAL STATUS
+## ПОДДЕРЖКА
+
+При возникновении проблем:
+
+1. Проверить логи развёртывания
+2. Посмотреть логи сервиса: `docker-compose logs <сервис>`
+3. Протестировать отдельные эндпоинты через curl
+4. Детально изучить сообщения об ошибках
+
+---
+
+## ИТОГОВЫЙ СТАТУС
 
 ```
-╔══════════════════════════════════════════════════════════╗
-║  AGENT CORE NG - PRODUCTION READY                        ║
-║                                                          ║
-║  Build Status:        ✅ PASS                            ║
-║  Tests Status:        ✅ PASS (130+ tests)               ║
-║  Docker Status:       ✅ READY                           ║
-║  Integration Tests:   ✅ PASS                            ║
-║  Security Audit:      ✅ PASS                            ║
-║  RAG System:          ✅ ENABLED                         ║
-║  Learnings System:    ✅ ENABLED                         ║
-║  LLM Providers:       ✅ 9 AVAILABLE                     ║
-║                                                          ║
-║  Overall Score:       91/100 - EXCELLENT                ║
-║  Ready for Production: YES ✓                             ║
-║                                                          ║
-║  Deployed by: Automatic deployment script               ║
-║  Version: v1.0 (Production Ready)                        ║
-║  Date: 2026-02-25                                        ║
-╚══════════════════════════════════════════════════════════╝
+  AGENT CORE NG — ГОТОВ К PRODUCTION
+
+  Сборка:             ПРОЙДЕНА
+  Тесты:              ПРОЙДЕНЫ (298+ тестов)
+  Docker:             ГОТОВ
+  Интеграционные:     ПРОЙДЕНЫ
+  Аудит безопасности: ПРОЙДЕН
+  Система RAG:        ВКЛЮЧЕНА
+  Система обучения:   ВКЛЮЧЕНА
+  Skill Engine:       ВКЛЮЧЁН
+  Graph Engine:       ВКЛЮЧЁН
+  LLM-провайдеры:     9 ДОСТУПНЫ
+
+  Версия: v1.0 (Production Ready)
 ```
 
 ---
 
-**Start deployment now:**
+**Запуск развёртывания:**
 
 ```bash
 ./deploy.sh
 ```
 
-The script will handle everything and provide clear status at each step.
+Скрипт автоматически выполнит все шаги и покажет статус на каждом этапе.

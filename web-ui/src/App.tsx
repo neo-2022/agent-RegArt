@@ -23,6 +23,7 @@ import { normalizeWorkspaceList, type WorkspaceInfo } from './config/workspaceAp
 import { normalizeModelList, type ModelInfo } from './config/modelsApi';
 import { normalizeProviderList, type ModelDetailInfo, type ProviderInfo } from './config/providersApi';
 import { normalizeAgentList, type AgentInfo } from './config/agentsApi';
+import { LOG_LEVEL_OPTIONS, LOG_SERVICE_OPTIONS } from './config/logFilters';
 
 // AttachedFile — интерфейс прикреплённого файла.
 // Содержит имя файла и его текстовое содержимое (прочитанное через FileReader).
@@ -1753,17 +1754,14 @@ function App() {
           </div>
           <div className="logs-toolbar">
             <select value={logLevelFilter} onChange={(e) => { setLogLevelFilter(e.target.value); }}>
-              <option value="all">Все уровни</option>
-              <option value="error">Error</option>
-              <option value="warn">Warn</option>
-              <option value="info">Info</option>
+              {LOG_LEVEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
             <select value={logServiceFilter} onChange={(e) => { setLogServiceFilter(e.target.value); }}>
-              <option value="all">Все сервисы</option>
-              <option value="agent-service">Agent</option>
-              <option value="tools-service">Tools</option>
-              <option value="memory-service">Memory</option>
-              <option value="api-gateway">Gateway</option>
+              {LOG_SERVICE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
             <button className="logs-refresh-btn" onClick={fetchLogs} disabled={logsLoading}>
               {logsLoading ? '...' : '\u21BB'}

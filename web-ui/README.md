@@ -22,7 +22,7 @@
 - токены ширин/анимаций: `src/config/uiLayout.ts`;
 - модель состояний RAG-панели: `src/config/ragPanelState.ts`;
 - пользовательские UI-настройки: `src/config/uiPreferences.ts`.
-- централизованные фильтры логов: `src/config/logFilters.ts`.
+- централизованные фильтры логов: `src/config/logFilters.ts`. (значения фильтра + русские подписи в UI).
 
 ## Тестовое покрытие UI-конфигов
 

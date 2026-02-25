@@ -34,8 +34,8 @@ export type LogServiceValue = (typeof LOG_SERVICE_VALUES)[keyof typeof LOG_SERVI
 
 export const LOG_SERVICE_OPTIONS: ReadonlyArray<{ value: LogServiceValue; label: string }> = [
   { value: LOG_SERVICE_VALUES.all, label: 'Все сервисы' },
-  { value: LOG_SERVICE_VALUES.agent, label: 'Agent' },
-  { value: LOG_SERVICE_VALUES.tools, label: 'Tools' },
-  { value: LOG_SERVICE_VALUES.memory, label: 'Memory' },
-  { value: LOG_SERVICE_VALUES.gateway, label: 'Gateway' },
+  { value: LOG_SERVICE_VALUES.agent, label: 'Агент' },
+  { value: LOG_SERVICE_VALUES.tools, label: 'Инструменты' },
+  { value: LOG_SERVICE_VALUES.memory, label: 'Память' },
+  { value: LOG_SERVICE_VALUES.gateway, label: 'Шлюз API' },
 ] as const;

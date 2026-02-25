@@ -15,6 +15,24 @@ describe('parseUiPreferences', () => {
     expect(parseUiPreferences(JSON.stringify({ reducedMotion: true, compactSidebar: true }))).toEqual({
       reducedMotion: true,
       compactSidebar: true,
+      inferenceProfile: 'standard',
     });
   });
+
+  it('использует standard профиль, если профиль не задан', () => {
+    expect(parseUiPreferences(JSON.stringify({ reducedMotion: true }))).toEqual({
+      reducedMotion: true,
+      compactSidebar: false,
+      inferenceProfile: 'standard',
+    });
+  });
+
+  it('корректно извлекает inference profile', () => {
+    expect(parseUiPreferences(JSON.stringify({ inferenceProfile: 'deep' }))).toEqual({
+      reducedMotion: false,
+      compactSidebar: false,
+      inferenceProfile: 'deep',
+    });
+  });
+
 });

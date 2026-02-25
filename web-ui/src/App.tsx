@@ -19,6 +19,11 @@ import './styles/App.css';
 import { SYSTEM_PANEL_MODES, type SystemPanelMode, toggleSystemPanelMode, UI_LAYOUT } from './config/uiLayout';
 import { deriveRagPanelState, RAG_PANEL_STATE_LABELS } from './config/ragPanelState';
 import { DEFAULT_UI_PREFERENCES, parseUiPreferences, UI_PREFERENCES_STORAGE_KEY } from './config/uiPreferences';
+import { normalizeWorkspaceList, type WorkspaceInfo } from './config/workspaceApi';
+import { normalizeModelList, type ModelInfo } from './config/modelsApi';
+import { normalizeProviderList, type ModelDetailInfo, type ProviderInfo } from './config/providersApi';
+import { normalizeAgentList, type AgentInfo } from './config/agentsApi';
+import { LOG_LEVEL_OPTIONS, LOG_SERVICE_OPTIONS } from './config/logFilters';
 
 // AttachedFile — интерфейс прикреплённого файла.
 // Содержит имя файла и его текстовое содержимое (прочитанное через FileReader).
@@ -49,15 +54,7 @@ interface Source {
 
 // Agent — интерфейс агента, полученный от бэкенда (/agents).
 // Содержит имя, текущую модель, провайдера, поддержку инструментов, аватар и промпт.
-interface Agent {
-  name: string;
-  model: string;
-  provider: string;
-  supportsTools: boolean;
-  avatar: string;
-  prompt_file?: string;
-  prompt: string;
-}
+type Agent = AgentInfo;
 
 // Chat — интерфейс чата в боковой панели.
 // Каждый чат имеет уникальный ID, имя, массив сообщений, превью последнего сообщения
@@ -68,31 +65,6 @@ interface Chat {
   messages: Message[];
   lastMessage?: string;
   pinned: boolean;
-}
-
-// ModelInfo — информация о локальной модели Ollama.
-// Включает автоматически определённые характеристики: семейство, размер, специализация,
-// подходящие роли агентов и пояснения к каждой роли.
-// Вся информация определяется динамически — никаких жёстких привязок в коде.
-interface ModelInfo {
-  name: string;
-  supportsTools: boolean;
-  family: string;
-  parameterSize: string;
-  isCodeModel: boolean;
-  suitableRoles: string[];
-  roleNotes: { [role: string]: string };
-}
-
-// ModelDetailInfo — детальная информация о модели провайдера (доступность, цена, активация).
-// Приходит из бэкенда в поле models_detail ответа /providers.
-// is_available=true — модель доступна прямо сейчас (яркая в UI)
-// is_available=false — модель нельзя использовать, нужно активировать (тусклая в UI)
-interface ModelDetailInfo {
-  id: string;
-  is_available: boolean;
-  pricing_info: string;
-  activation_hint: string;
 }
 
 interface SystemLog {
@@ -127,37 +99,8 @@ interface BrowserSpeechWindow extends Window {
   webkitSpeechRecognition?: new () => SpeechRecognition;
 }
 
-// ProviderGuideInfo — подробное руководство по провайдеру.
-// Содержит инструкции: как подключить, как выбрать модель, где оплатить, как проверить баланс.
-interface ProviderGuideInfo {
-  how_to_connect: string;
-  how_to_choose: string;
-  how_to_pay: string;
-  how_to_balance: string;
-}
-
-// ProviderInfo — информация об облачном LLM-провайдере.
-// hasKey указывает, настроен ли API-ключ для этого провайдера.
-// models — список доступных моделей у провайдера.
-// models_detail — детальная информация с ценами и подсказками по активации.
-// guide — подробное руководство по подключению, оплате и проверке баланса.
-interface ProviderInfo {
-  name: string;
-  enabled: boolean;
-  models: string[];
-  models_detail?: ModelDetailInfo[];
-  hasKey: boolean;
-  guide?: ProviderGuideInfo;
-}
-
 // WorkspaceInfo — информация о рабочем пространстве.
 // Каждое пространство привязано к директории на ПК и имеет отдельную историю чатов.
-interface WorkspaceInfo {
-  ID: number;
-  Name: string;
-  Path: string;
-}
-
 // BUILT_IN_AVATARS — встроенные аватарки агентов (статические файлы в public/avatars/).
 // Admin — единственный агент системы.
 const BUILT_IN_AVATARS: Record<string, string> = {
@@ -213,6 +156,19 @@ const RAG_LANGUAGE_EXTENSIONS: Record<string, string[]> = {
 const RAG_SUPPORTED_EXTENSIONS = Array.from(
   new Set(Object.values(RAG_LANGUAGE_EXTENSIONS).flat().map(ext => ext.toLowerCase())),
 );
+
+
+const INFERENCE_PROFILE_LABELS: Record<'economy' | 'standard' | 'deep', string> = {
+  economy: 'Эконом',
+  standard: 'Стандарт',
+  deep: 'Глубокий',
+};
+
+const INFERENCE_PROFILE_NOTES: Record<'economy' | 'standard' | 'deep', string> = {
+  economy: 'Быстрее ответ, минимальный расход лимитов.',
+  standard: 'Сбалансированный режим качества и скорости.',
+  deep: 'Максимальное качество, обычно медленнее и дороже по лимитам.',
+};
 
 // CHUNK_SIZE — максимальный размер содержимого файла для отправки в одном сообщении.
 // Файлы больше этого лимита обрезаются с предложением «продолжить чтение».
@@ -471,7 +427,10 @@ function App() {
   const fetchAgents = async () => {
     try {
       const res = await axios.get(API_BASE);
-      setAgents(res.data);
+      // Нормализуем ответ API агентов (массив/обёртка), чтобы UI не падал
+      // на map/sort при нестабильной форме payload.
+      const normalizedAgents = normalizeAgentList(res.data);
+      setAgents(normalizedAgents);
     } catch (err) {
       console.error('Failed to fetch agents', err);
       // Если бэкенд недоступен — показываем агентов по умолчанию
@@ -485,7 +444,10 @@ function App() {
   const fetchWorkspaces = async () => {
     try {
       const res = await axios.get(WORKSPACES_API);
-      setWorkspaces(res.data);
+      // Валидация и нормализация на границе API обязательна: backend может вернуть
+      // как массив, так и объект-обёртку ({workspaces|items|data}).
+      // Без этой защиты UI может упасть на рендере workspaces.map(...).
+      setWorkspaces(normalizeWorkspaceList(res.data));
     } catch (err) {
       console.error('Failed to fetch workspaces', err);
     }
@@ -494,7 +456,9 @@ function App() {
   const fetchModels = async () => {
     try {
       const res = await axios.get(MODELS_API);
-      setModels(res.data);
+      // Нормализуем форму ответа (массив/обёртка) и отбрасываем невалидные элементы,
+      // чтобы селектор моделей не падал на map/find при нестабильном payload.
+      setModels(normalizeModelList(res.data));
     } catch (err) {
       console.error('Failed to fetch models', err);
     }
@@ -505,10 +469,13 @@ function App() {
   const fetchProviders = async () => {
     try {
       const res = await axios.get(PROVIDERS_API);
-      setProviders(res.data);
+      // Нормализуем payload провайдеров (массив/обёртка), чтобы исключить падения
+      // в селекторах и фильтрах providers.find/filter/map.
+      const normalizedProviders = normalizeProviderList(res.data);
+      setProviders(normalizedProviders);
       const cm: {[k: string]: string[]} = {};
       const cmd: {[k: string]: ModelDetailInfo[]} = {};
-      for (const p of res.data) {
+      for (const p of normalizedProviders) {
         if (p.models && p.models.length > 0) {
           cm[p.name] = p.models;
         }
@@ -1787,17 +1754,14 @@ function App() {
           </div>
           <div className="logs-toolbar">
             <select value={logLevelFilter} onChange={(e) => { setLogLevelFilter(e.target.value); }}>
-              <option value="all">Все уровни</option>
-              <option value="error">Error</option>
-              <option value="warn">Warn</option>
-              <option value="info">Info</option>
+              {LOG_LEVEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
             <select value={logServiceFilter} onChange={(e) => { setLogServiceFilter(e.target.value); }}>
-              <option value="all">Все сервисы</option>
-              <option value="agent-service">Agent</option>
-              <option value="tools-service">Tools</option>
-              <option value="memory-service">Memory</option>
-              <option value="api-gateway">Gateway</option>
+              {LOG_SERVICE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
             <button className="logs-refresh-btn" onClick={fetchLogs} disabled={logsLoading}>
               {logsLoading ? '...' : '\u21BB'}
@@ -1851,6 +1815,23 @@ function App() {
                 onChange={() => setUiPreferences(prev => ({ ...prev, reducedMotion: !prev.reducedMotion }))}
               />
             </label>
+
+            <div className="settings-item settings-item-column">
+              <span>Профиль ответа модели</span>
+              <select
+                className="settings-select"
+                value={uiPreferences.inferenceProfile}
+                onChange={(e) => {
+                  const profile = e.target.value as 'economy' | 'standard' | 'deep';
+                  setUiPreferences(prev => ({ ...prev, inferenceProfile: profile }));
+                }}
+              >
+                <option value="economy">Эконом (быстрее, дешевле)</option>
+                <option value="standard">Стандарт (баланс)</option>
+                <option value="deep">Глубокий (качество, выше расход)</option>
+              </select>
+              <small className="settings-hint">{INFERENCE_PROFILE_NOTES[uiPreferences.inferenceProfile]}</small>
+            </div>
 
             <button
               className="provider-save-btn"
@@ -1972,6 +1953,14 @@ function App() {
               multiple
               style={{ display: 'none' }}
             />
+            <div className="input-profile-row">
+              <span
+                className={`inference-profile-badge inference-profile-${uiPreferences.inferenceProfile}`}
+                title={INFERENCE_PROFILE_NOTES[uiPreferences.inferenceProfile]}
+              >
+                {INFERENCE_PROFILE_LABELS[uiPreferences.inferenceProfile]}
+              </span>
+            </div>
             <textarea
               id="user-input"
               value={input}

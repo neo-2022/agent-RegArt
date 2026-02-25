@@ -6,6 +6,7 @@
 export interface UiPreferences {
   reducedMotion: boolean;
   compactSidebar: boolean;
+  inferenceProfile: 'economy' | 'standard' | 'deep';
 }
 
 export const UI_PREFERENCES_STORAGE_KEY = 'web_ui_preferences';
@@ -13,6 +14,7 @@ export const UI_PREFERENCES_STORAGE_KEY = 'web_ui_preferences';
 export const DEFAULT_UI_PREFERENCES: UiPreferences = {
   reducedMotion: false,
   compactSidebar: false,
+  inferenceProfile: 'standard',
 };
 
 export function parseUiPreferences(raw: string | null): UiPreferences {
@@ -25,6 +27,9 @@ export function parseUiPreferences(raw: string | null): UiPreferences {
     return {
       reducedMotion: Boolean(parsed.reducedMotion),
       compactSidebar: Boolean(parsed.compactSidebar),
+      inferenceProfile: parsed.inferenceProfile === 'economy' || parsed.inferenceProfile === 'deep'
+        ? parsed.inferenceProfile
+        : 'standard',
     };
   } catch {
     return DEFAULT_UI_PREFERENCES;

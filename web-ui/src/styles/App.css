@@ -1041,6 +1041,34 @@ body {
     border-color: var(--input-focus-border);
 }
 
+.input-profile-row {
+    display: flex;
+    align-items: center;
+    padding-left: 14px;
+}
+
+.inference-profile-badge {
+    font-size: 0.72rem;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--input-border);
+    color: var(--text-color);
+    background: var(--button-bg);
+    white-space: nowrap;
+}
+
+.inference-profile-economy {
+    border-color: #5d944b;
+}
+
+.inference-profile-standard {
+    border-color: var(--accent-color);
+}
+
+.inference-profile-deep {
+    border-color: #9c4dcc;
+}
+
 #user-input {
     flex: 1;
     padding: 14px 20px;
@@ -1281,6 +1309,27 @@ body {
     padding: 0.6rem 0.7rem;
     color: var(--text-color);
     font-size: 0.85rem;
+}
+
+.settings-item-column {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+}
+
+.settings-select {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 0.45rem;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 0.82rem;
+}
+
+.settings-hint {
+    color: var(--icon-color);
+    font-size: 0.75rem;
 }
 
 .logs-slide-header {

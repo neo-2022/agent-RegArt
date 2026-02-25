@@ -4,6 +4,15 @@ from typing import Any, Dict
 from .config import settings
 
 
+MEMORY_PRIORITY_SCORES = {
+    "critical": 1.0,
+    "pinned": 0.9,
+    "reinforced": 0.75,
+    "normal": 0.5,
+    "archived": 0.2,
+}
+
+
 def _safe_float(value: Any, default: float) -> float:
     """Безопасно приводит значение к float для защиты от некорректных метаданных."""
     try:
@@ -37,7 +46,7 @@ def _recency_score(created_at: str) -> float:
 def build_rank_score(relevance_score: float, metadata: Dict[str, Any]) -> float:
     """
     Композитный score retrieval по факторам из спецификации:
-    relevance, importance, reliability, recency, frequency.
+    relevance, importance, reliability, recency, frequency, memory priority.
 
     Все коэффициенты берутся из env-конфига, чтобы избежать магических констант.
     """
@@ -46,6 +55,7 @@ def build_rank_score(relevance_score: float, metadata: Dict[str, Any]) -> float:
     reliability = max(0.0, min(1.0, _safe_float(metadata.get("reliability"), 0.5)))
     frequency = max(0.0, min(1.0, _safe_float(metadata.get("frequency"), 0.5)))
     recency = _recency_score(str(metadata.get("created_at", "")))
+    priority = MEMORY_PRIORITY_SCORES.get(str(metadata.get("priority", "normal")).strip().lower(), MEMORY_PRIORITY_SCORES["normal"])
 
     total = (
         relevance * settings.RANK_WEIGHT_RELEVANCE
@@ -53,6 +63,7 @@ def build_rank_score(relevance_score: float, metadata: Dict[str, Any]) -> float:
         + reliability * settings.RANK_WEIGHT_RELIABILITY
         + recency * settings.RANK_WEIGHT_RECENCY
         + frequency * settings.RANK_WEIGHT_FREQUENCY
+        + priority * settings.RANK_WEIGHT_PRIORITY
     )
     return round(max(0.0, min(1.0, total)), 4)
 

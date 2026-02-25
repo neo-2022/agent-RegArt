@@ -51,3 +51,29 @@ def test_blend_relevance_scores_clamps_invalid_values():
     """Проверяет защиту от выхода relevance за диапазон [0..1]."""
     blended = blend_relevance_scores(semantic_relevance=2.0, keyword_relevance=-1.0)
     assert 0.0 <= blended <= 1.0
+
+
+def test_rank_score_respects_memory_priority():
+    """Проверяет, что более высокий приоритет памяти повышает итоговый score."""
+    base_meta = {
+        "importance": 0.5,
+        "reliability": 0.5,
+        "frequency": 0.5,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    critical = build_rank_score(0.7, {**base_meta, "priority": "critical"})
+    archived = build_rank_score(0.7, {**base_meta, "priority": "archived"})
+    assert critical > archived
+
+
+def test_rank_score_uses_normal_priority_for_unknown_value():
+    """Неизвестный priority должен безопасно трактоваться как normal."""
+    meta_normal = {
+        "importance": 0.5,
+        "reliability": 0.5,
+        "frequency": 0.5,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "priority": "normal",
+    }
+    meta_unknown = {**meta_normal, "priority": "unexpected-priority"}
+    assert build_rank_score(0.6, meta_normal) == build_rank_score(0.6, meta_unknown)

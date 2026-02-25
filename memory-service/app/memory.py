@@ -736,7 +736,7 @@ class MemoryStore:
             if category:
                 where_filter = {"$and": [where_filter, {"category": category}]}
             
-            results = self.learnings_collection.get(where=where_filter)
+            results = self.learnings_collection.get(where=where_filter, include=["metadatas"])
             if not results or 'ids' not in results:
                 return 0
             

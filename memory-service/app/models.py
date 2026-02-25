@@ -31,7 +31,13 @@ class SearchRequest(BaseModel):
 
 
 class SearchResultItem(BaseModel):
-    """Структурированный результат поиска."""
+    """Структурированный результат поиска.
+    
+    Поле `id` содержит уникальный идентификатор документа из ChromaDB.
+    Используется в Graph Engine для создания связей между знаниями
+    (autoCreateGraphRelationships в agent-service).
+    """
+    id: str = Field("", description="Уникальный идентификатор документа в ChromaDB")
     text: str = Field(..., description="Текст найденного документа")
     score: float = Field(0.0, description="Оценка релевантности (0..1)")
     source: str = Field("facts", description="Источник: facts, files, learnings")

@@ -397,14 +397,16 @@ class MemoryStore:
                 docs = facts_res['documents'][0]
                 dists = facts_res.get('distances', [[]])[0]
                 metas = facts_res.get('metadatas', [[]])[0]
+                fact_ids = facts_res.get('ids', [[]])[0]
                 for i, doc in enumerate(docs):
                     dist = dists[i] if i < len(dists) else 1.0
                     semantic_relevance = max(0.0, 1.0 - dist)
                     keyword_relevance = self._keyword_relevance(query=query, text=doc)
                     relevance = blend_relevance_scores(semantic_relevance, keyword_relevance)
                     meta = metas[i] if i < len(metas) else {}
+                    doc_id = fact_ids[i] if i < len(fact_ids) else ""
                     score = build_rank_score(relevance, meta)
-                    results.append({"text": doc, "score": score, "source": "facts", "metadata": meta})
+                    results.append({"id": doc_id, "text": doc, "score": score, "source": "facts", "metadata": meta})
         
         if include_files and self.files_collection.count() > 0:
             files_where = self._build_workspace_where(workspace_id)
@@ -423,14 +425,16 @@ class MemoryStore:
                 docs = files_res['documents'][0]
                 dists = files_res.get('distances', [[]])[0]
                 metas = files_res.get('metadatas', [[]])[0]
+                file_ids = files_res.get('ids', [[]])[0]
                 for i, doc in enumerate(docs):
                     dist = dists[i] if i < len(dists) else 1.0
                     semantic_relevance = max(0.0, 1.0 - dist)
                     keyword_relevance = self._keyword_relevance(query=query, text=doc)
                     relevance = blend_relevance_scores(semantic_relevance, keyword_relevance)
                     meta = metas[i] if i < len(metas) else {}
+                    doc_id = file_ids[i] if i < len(file_ids) else ""
                     score = build_rank_score(relevance, meta)
-                    results.append({"text": doc, "score": score, "source": "files", "metadata": meta})
+                    results.append({"id": doc_id, "text": doc, "score": score, "source": "files", "metadata": meta})
         
         seen = set()
         unique: List[Dict[str, Any]] = []
@@ -1142,6 +1146,9 @@ class MemoryStore:
                 docs = results['documents'][0]
                 dists = results.get('distances', [[]])[0]
                 metas = results.get('metadatas', [[]])[0]
+                # ID документов из ChromaDB — нужны для Graph Engine
+                # (autoCreateGraphRelationships использует id для создания связей)
+                ids = results.get('ids', [[]])[0]
                 items: List[Dict[str, Any]] = []
                 for i, doc in enumerate(docs):
                     dist = dists[i] if i < len(dists) else 1.0
@@ -1149,9 +1156,10 @@ class MemoryStore:
                     keyword_relevance = self._keyword_relevance(query=query, text=doc)
                     relevance = blend_relevance_scores(semantic_relevance, keyword_relevance)
                     meta = metas[i] if i < len(metas) else {}
+                    doc_id = ids[i] if i < len(ids) else ""
                     if self._is_active_learning(meta):
                         score = build_rank_score(relevance, meta)
-                        items.append({"text": doc, "score": score, "source": "learnings", "metadata": meta})
+                        items.append({"id": doc_id, "text": doc, "score": score, "source": "learnings", "metadata": meta})
                 if min_priority:
                     threshold = resolve_priority_score(min_priority)
                     items = [

@@ -2598,6 +2598,19 @@ body {
     background: var(--sidebar-hover);
 }
 
+/* Шеврон-индикатор свёрнутости папки (▸ / ▾) */
+.rag-folder-chevron {
+    font-size: 0.7rem;
+    transition: transform var(--transition-fast);
+    display: inline-block;
+}
+
+/* Открытое состояние — шеврон повёрнут вниз */
+.rag-folder-chevron.open {
+    transform: rotate(90deg);
+}
+
+/* Совместимость с альтернативным классом toggle */
 .rag-folder-toggle {
     font-size: 0.7rem;
     transition: transform var(--transition-fast);
@@ -2608,8 +2621,15 @@ body {
     transform: rotate(90deg);
 }
 
+/* Контейнер файлов внутри папки — анимация раскрытия */
 .rag-folder-files {
+    overflow: hidden;
     animation: folderExpand var(--transition-normal) forwards;
+}
+
+/* Свёрнутое состояние — скрываем файлы с анимацией */
+.rag-folder-files.collapsed {
+    display: none;
 }
 
 @keyframes folderExpand {

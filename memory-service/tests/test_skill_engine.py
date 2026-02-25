@@ -5,6 +5,8 @@
 создание навыков из диалога, запись использования.
 """
 
+import uuid
+
 import pytest
 from unittest.mock import Mock
 from app.skill_engine import SkillEngine, SKILL_STATUS_ACTIVE, SKILL_STATUS_SUPERSEDED, SKILL_STATUS_DELETED
@@ -144,7 +146,8 @@ class TestSkillCreate:
         assert "id" in result
         assert result["version"] == 1
         assert result["status"] == "ok"
-        assert result["id"].startswith("skill-")
+        # ID должен быть валидным UUID (требование Qdrant)
+        uuid.UUID(result["id"])
 
     def test_create_skill_stores_metadata(self, skill_engine):
         """Метаданные навыка корректно сохраняются в коллекции."""

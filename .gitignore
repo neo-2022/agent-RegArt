@@ -39,3 +39,6 @@ agent-service/uploads/
 *.tmp
 *.zip
 memory-service/data/
+
+# Данные Qdrant (локальные тома docker-compose)
+data/qdrant/

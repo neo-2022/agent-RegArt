@@ -5,6 +5,8 @@
 валидация типов связей, создание противоречий.
 """
 
+import uuid
+
 import pytest
 from unittest.mock import Mock
 from app.graph_engine import GraphEngine
@@ -107,7 +109,8 @@ class TestRelationshipCreate:
         )
         assert "id" in result
         assert result["status"] == "ok"
-        assert result["id"].startswith("rel-")
+        # ID должен быть валидным UUID (требование Qdrant)
+        uuid.UUID(result["id"])
 
     def test_create_stores_metadata(self, graph_engine):
         """Метаданные связи корректно сохраняются."""

@@ -82,7 +82,7 @@ class GraphEngine:
         if source_id == target_id:
             raise ValueError("Нельзя создать связь узла с самим собой")
 
-        rel_id = f"rel-{uuid.uuid4().hex[:12]}"
+        rel_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
 
         # Описательный текст для embedding: позволяет искать связи семантически

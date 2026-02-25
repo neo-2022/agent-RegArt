@@ -88,7 +88,7 @@ class SkillEngine:
 
         Возвращает dict с id, version, status.
         """
-        skill_id = f"skill-{uuid.uuid4().hex[:12]}"
+        skill_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
         actual_confidence = confidence if confidence is not None else settings.SKILL_CONFIDENCE_DEFAULT
 
@@ -203,7 +203,7 @@ class SkillEngine:
 
         # Создаём новую версию
         new_version = int(old_meta.get("version", 1)) + 1
-        new_id = f"skill-{uuid.uuid4().hex[:12]}"
+        new_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
 
         # Мержим поля: берём новые значения или сохраняем старые

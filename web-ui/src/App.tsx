@@ -96,6 +96,38 @@ interface RagApiResponseItem {
   files?: Array<{ file_name?: string; chunks_count?: number }>;
 }
 
+// Навык агента из Skill Engine (Eternal RAG: раздел 5.3)
+interface SkillUiItem {
+  id: string;
+  goal: string;
+  steps: string[];
+  examples: string[];
+  constraints: string[];
+  sources: string[];
+  confidence: number;
+  version: number;
+  tags: string[];
+  status: string;
+  model_name: string;
+  workspace_id: string;
+  usage_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Связь между знаниями из Graph Engine (Eternal RAG: раздел 5.4)
+interface RelationshipUiItem {
+  id: string;
+  source_id: string;
+  target_id: string;
+  relationship_type: string;
+  source_type: string;
+  target_type: string;
+  metadata: Record<string, unknown>;
+  workspace_id: string;
+  created_at: string;
+}
+
 interface BrowserSpeechWindow extends Window {
   SpeechRecognition?: new () => SpeechRecognition;
   webkitSpeechRecognition?: new () => SpeechRecognition;
@@ -367,6 +399,26 @@ function App() {
   const showLogsPanel = systemPanelMode === SYSTEM_PANEL_MODES.logs;
   const showSettingsPanel = systemPanelMode === SYSTEM_PANEL_MODES.settings;
   const showFileViewerPanel = systemPanelMode === SYSTEM_PANEL_MODES.fileViewer;
+  const showSkillsPanel = systemPanelMode === SYSTEM_PANEL_MODES.skills;
+
+  // === Состояние Skill Engine (Eternal RAG: раздел 5.3) ===
+  const [skillsList, setSkillsList] = useState<SkillUiItem[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillSearchQuery, setSkillSearchQuery] = useState('');
+  const [skillSearchResults, setSkillSearchResults] = useState<SkillUiItem[]>([]);
+  const [skillSearching, setSkillSearching] = useState(false);
+  // Развёрнутый навык для просмотра деталей
+  const [expandedSkillId, setExpandedSkillId] = useState<string | null>(null);
+  // Форма создания навыка
+  const [skillFormOpen, setSkillFormOpen] = useState(false);
+  const [skillFormGoal, setSkillFormGoal] = useState('');
+  const [skillFormSteps, setSkillFormSteps] = useState('');
+  const [skillFormTags, setSkillFormTags] = useState('');
+  const [skillFormSaving, setSkillFormSaving] = useState(false);
+
+  // === Состояние Graph Engine (Eternal RAG: раздел 5.4) ===
+  const [graphRelationships, setGraphRelationships] = useState<RelationshipUiItem[]>([]);
+  const [graphLoading, setGraphLoading] = useState(false);
 
   // === Состояние сайдбара (collapse/expand) ===
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -412,6 +464,10 @@ function App() {
     }
     if (nextMode === SYSTEM_PANEL_MODES.logs) {
       fetchLogs();
+    }
+    if (nextMode === SYSTEM_PANEL_MODES.skills) {
+      fetchSkills();
+      fetchGraphRelationships();
     }
   };
 
@@ -782,6 +838,118 @@ function App() {
       await fetchRagFiles();
     } else if (type === 'fetchStats') {
       await fetchRagStats();
+    }
+  };
+
+  // === API: Skill Engine (CRUD, поиск, использование) ===
+
+  // Загрузка списка навыков из memory-service
+  const fetchSkills = async () => {
+    setSkillsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (currentWorkspaceId !== null) params.set('workspace_id', String(currentWorkspaceId));
+      const res = await axios.get(`${MEMORY_API}/skills?${params.toString()}`);
+      const data = res.data;
+      setSkillsList(Array.isArray(data?.skills) ? data.skills : []);
+    } catch (err) {
+      console.error('Failed to fetch skills', err);
+      setSkillsList([]);
+    } finally {
+      setSkillsLoading(false);
+    }
+  };
+
+  // Создание нового навыка через API
+  const createSkill = async (goal: string, steps: string[], tags: string[]) => {
+    setSkillFormSaving(true);
+    try {
+      await axios.post(`${MEMORY_API}/skills`, {
+        goal,
+        steps,
+        tags,
+        workspace_id: currentWorkspaceId !== null ? String(currentWorkspaceId) : undefined,
+      });
+      setSkillFormOpen(false);
+      setSkillFormGoal('');
+      setSkillFormSteps('');
+      setSkillFormTags('');
+      await fetchSkills();
+    } catch (err) {
+      console.error('Failed to create skill', err);
+    } finally {
+      setSkillFormSaving(false);
+    }
+  };
+
+  // Удаление навыка (soft delete)
+  const deleteSkill = async (skillId: string) => {
+    try {
+      await axios.delete(`${MEMORY_API}/skills/${skillId}`);
+      await fetchSkills();
+    } catch (err) {
+      console.error('Failed to delete skill', err);
+    }
+  };
+
+  // Семантический поиск навыков
+  const searchSkills = async (query: string) => {
+    if (!query.trim()) {
+      setSkillSearchResults([]);
+      return;
+    }
+    setSkillSearching(true);
+    try {
+      const res = await axios.post(`${MEMORY_API}/skills/search`, {
+        query,
+        top_k: 10,
+        workspace_id: currentWorkspaceId !== null ? String(currentWorkspaceId) : undefined,
+      });
+      setSkillSearchResults(Array.isArray(res.data?.results) ? res.data.results : []);
+    } catch (err) {
+      console.error('Failed to search skills', err);
+      setSkillSearchResults([]);
+    } finally {
+      setSkillSearching(false);
+    }
+  };
+
+  // Отметка использования навыка (повышает confidence)
+  const recordSkillUsage = async (skillId: string) => {
+    try {
+      await axios.post(`${MEMORY_API}/skills/${skillId}/usage`);
+      await fetchSkills();
+    } catch (err) {
+      console.error('Failed to record skill usage', err);
+    }
+  };
+
+  // === API: Graph Engine (связи между знаниями) ===
+
+  // Загрузка списка связей из memory-service
+  const fetchGraphRelationships = async () => {
+    setGraphLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (currentWorkspaceId !== null) params.set('workspace_id', String(currentWorkspaceId));
+      const res = await axios.get(`${MEMORY_API}/graph/relationships?${params.toString()}`);
+      const data = res.data;
+      setGraphRelationships(Array.isArray(data?.relationships) ? data.relationships : []);
+    } catch (err) {
+      console.error('Failed to fetch graph relationships', err);
+      setGraphRelationships([]);
+    } finally {
+      setGraphLoading(false);
+    }
+  };
+
+  // Удаление связи из графа
+  const deleteGraphRelationship = async (relId: string) => {
+    try {
+      await axios.delete(`${MEMORY_API}/graph/relationships/${relId}`);
+      await fetchGraphRelationships();
+    } catch (err) {
+      console.error('Failed to delete relationship', err);
     }
   };
 
@@ -1419,6 +1587,12 @@ function App() {
               onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.logs)}
             >
               Логи
+            </button>
+            <button
+              className={`agents-toggle ${showSkillsPanel ? 'open' : ''}`}
+              onClick={() => handleSystemPanelToggle(SYSTEM_PANEL_MODES.skills)}
+            >
+              Навыки
             </button>
             <button
               className={`agents-toggle ${showSettingsPanel ? 'open' : ''}`}
@@ -2110,6 +2284,236 @@ function App() {
             >
               Сбросить настройки
             </button>
+          </div>
+        </section>
+
+        {/* Панель навыков агента — Skill Engine + Graph Engine (Eternal RAG: раздел 5.3, 5.4) */}
+        <section className={`system-panel system-panel-skills ${showSkillsPanel ? 'open' : ''}`}>
+          <div className="logs-slide-header">
+            <h4 style={{ margin: 0 }}>Навыки агента</h4>
+            <button className="logs-close-btn" onClick={() => setSystemPanelMode(null)} title="Закрыть">&times;</button>
+          </div>
+          <div className="skills-panel-content">
+            {/* Поиск навыков */}
+            <div className="skills-search-row">
+              <input
+                type="text"
+                className="skills-search-input"
+                placeholder="Семантический поиск навыков..."
+                value={skillSearchQuery}
+                onChange={(e) => setSkillSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') searchSkills(skillSearchQuery); }}
+              />
+              <button
+                className="skills-search-btn"
+                onClick={() => searchSkills(skillSearchQuery)}
+                disabled={skillSearching || !skillSearchQuery.trim()}
+              >
+                {skillSearching ? '...' : 'Найти'}
+              </button>
+              <button
+                className="skills-add-btn"
+                onClick={() => setSkillFormOpen(!skillFormOpen)}
+                title={skillFormOpen ? 'Скрыть форму' : 'Добавить навык'}
+              >
+                {skillFormOpen ? '−' : '+'}
+              </button>
+            </div>
+
+            {/* Форма создания навыка */}
+            {skillFormOpen && (
+              <div className="skill-create-form">
+                <input
+                  type="text"
+                  className="skill-form-input"
+                  placeholder="Цель навыка (что делает)..."
+                  value={skillFormGoal}
+                  onChange={(e) => setSkillFormGoal(e.target.value)}
+                />
+                <textarea
+                  className="skill-form-textarea"
+                  placeholder="Шаги выполнения (каждый с новой строки)..."
+                  value={skillFormSteps}
+                  onChange={(e) => setSkillFormSteps(e.target.value)}
+                  rows={3}
+                />
+                <input
+                  type="text"
+                  className="skill-form-input"
+                  placeholder="Теги через запятую..."
+                  value={skillFormTags}
+                  onChange={(e) => setSkillFormTags(e.target.value)}
+                />
+                <button
+                  className="skill-form-save-btn"
+                  disabled={skillFormSaving || !skillFormGoal.trim()}
+                  onClick={() => {
+                    const steps = skillFormSteps.split('\n').map(s => s.trim()).filter(Boolean);
+                    const tags = skillFormTags.split(',').map(t => t.trim()).filter(Boolean);
+                    createSkill(skillFormGoal.trim(), steps, tags);
+                  }}
+                >
+                  {skillFormSaving ? 'Сохранение...' : 'Создать навык'}
+                </button>
+              </div>
+            )}
+
+            {/* Результаты поиска */}
+            {skillSearchResults.length > 0 && (
+              <div className="skills-search-results">
+                <div className="skills-section-title">Результаты поиска ({skillSearchResults.length})</div>
+                {skillSearchResults.map(skill => (
+                  <div key={skill.id} className="skill-card">
+                    <div className="skill-card-header" onClick={() => setExpandedSkillId(expandedSkillId === skill.id ? null : skill.id)}>
+                      <span className="skill-goal">{skill.goal}</span>
+                      <span className="skill-confidence" title={`Уверенность: ${Math.round(skill.confidence * 100)}%`}>
+                        {Math.round(skill.confidence * 100)}%
+                      </span>
+                    </div>
+                    {expandedSkillId === skill.id && (
+                      <div className="skill-card-details">
+                        {skill.steps.length > 0 && (
+                          <div className="skill-detail-section">
+                            <span className="skill-detail-label">Шаги:</span>
+                            <ol className="skill-steps-list">
+                              {skill.steps.map((step, i) => <li key={i}>{step}</li>)}
+                            </ol>
+                          </div>
+                        )}
+                        {skill.tags.length > 0 && (
+                          <div className="skill-tags-row">
+                            {skill.tags.map((tag, i) => <span key={i} className="skill-tag">{tag}</span>)}
+                          </div>
+                        )}
+                        <div className="skill-meta-row">
+                          <span>v{skill.version}</span>
+                          <span>Использований: {skill.usage_count}</span>
+                          {skill.model_name && <span>Модель: {skill.model_name}</span>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Список навыков */}
+            <div className="skills-section-title">
+              Все навыки ({skillsList.length})
+              <button className="skills-refresh-btn" onClick={fetchSkills} disabled={skillsLoading} title="Обновить">
+                {skillsLoading ? '...' : '\u21BB'}
+              </button>
+            </div>
+            {skillsLoading && skillsList.length === 0 ? (
+              <div className="skills-empty">Загрузка навыков...</div>
+            ) : skillsList.length === 0 ? (
+              <div className="skills-empty">Навыков пока нет. Добавьте первый навык или агент создаст их из диалога.</div>
+            ) : (
+              <div className="skills-list">
+                {skillsList.map(skill => (
+                  <div key={skill.id} className={`skill-card ${expandedSkillId === skill.id ? 'expanded' : ''}`}>
+                    <div className="skill-card-header" onClick={() => setExpandedSkillId(expandedSkillId === skill.id ? null : skill.id)}>
+                      <span className="skill-goal">{skill.goal}</span>
+                      <div className="skill-header-right">
+                        <span
+                          className="skill-confidence-bar"
+                          title={`Уверенность: ${Math.round(skill.confidence * 100)}%`}
+                        >
+                          <span
+                            className="skill-confidence-fill"
+                            style={{ width: `${Math.round(skill.confidence * 100)}%` }}
+                          />
+                        </span>
+                        <span className="skill-confidence-text">{Math.round(skill.confidence * 100)}%</span>
+                      </div>
+                    </div>
+                    {expandedSkillId === skill.id && (
+                      <div className="skill-card-details">
+                        {skill.steps.length > 0 && (
+                          <div className="skill-detail-section">
+                            <span className="skill-detail-label">Шаги:</span>
+                            <ol className="skill-steps-list">
+                              {skill.steps.map((step, i) => <li key={i}>{step}</li>)}
+                            </ol>
+                          </div>
+                        )}
+                        {skill.examples.length > 0 && (
+                          <div className="skill-detail-section">
+                            <span className="skill-detail-label">Примеры:</span>
+                            <ul className="skill-examples-list">
+                              {skill.examples.map((ex, i) => <li key={i}>{ex}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {skill.constraints.length > 0 && (
+                          <div className="skill-detail-section">
+                            <span className="skill-detail-label">Ограничения:</span>
+                            <ul className="skill-constraints-list">
+                              {skill.constraints.map((c, i) => <li key={i}>{c}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {skill.tags.length > 0 && (
+                          <div className="skill-tags-row">
+                            {skill.tags.map((tag, i) => <span key={i} className="skill-tag">{tag}</span>)}
+                          </div>
+                        )}
+                        <div className="skill-meta-row">
+                          <span>v{skill.version}</span>
+                          <span>Использований: {skill.usage_count}</span>
+                          {skill.model_name && <span>Модель: {skill.model_name}</span>}
+                          {skill.sources.length > 0 && <span>Источники: {skill.sources.length}</span>}
+                        </div>
+                        <div className="skill-actions-row">
+                          <button className="skill-action-btn skill-use-btn" onClick={() => recordSkillUsage(skill.id)} title="Отметить использование">
+                            Использовать
+                          </button>
+                          <button className="skill-action-btn skill-delete-btn" onClick={() => deleteSkill(skill.id)} title="Удалить навык">
+                            Удалить
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Секция графа знаний */}
+            <div className="skills-section-title" style={{ marginTop: '16px' }}>
+              Граф связей ({graphRelationships.length})
+              <button className="skills-refresh-btn" onClick={fetchGraphRelationships} disabled={graphLoading} title="Обновить">
+                {graphLoading ? '...' : '\u21BB'}
+              </button>
+            </div>
+            {graphRelationships.length === 0 ? (
+              <div className="skills-empty">Связей между знаниями пока нет.</div>
+            ) : (
+              <div className="graph-relationships-list">
+                {graphRelationships.map(rel => (
+                  <div key={rel.id} className="graph-rel-card">
+                    <div className="graph-rel-row">
+                      <span className={`graph-rel-type graph-rel-type-${rel.relationship_type}`}>
+                        {rel.relationship_type}
+                      </span>
+                      <span className="graph-rel-nodes">
+                        <span className="graph-node-id" title={rel.source_id}>{rel.source_id.slice(0, 8)}...</span>
+                        <span className="graph-rel-arrow">&rarr;</span>
+                        <span className="graph-node-id" title={rel.target_id}>{rel.target_id.slice(0, 8)}...</span>
+                      </span>
+                      <button
+                        className="graph-rel-delete-btn"
+                        onClick={() => deleteGraphRelationship(rel.id)}
+                        title="Удалить связь"
+                      >&times;</button>
+                    </div>
+                    {rel.source_type !== 'knowledge' && (
+                      <span className="graph-node-type">{rel.source_type} &rarr; {rel.target_type}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 

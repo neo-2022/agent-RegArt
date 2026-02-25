@@ -32,6 +32,8 @@ export const SYSTEM_PANEL_MODES = {
   settings: 'settings',
   /** Просмотр файла — inline-панель вместо overlay-модалки (UI_UX_Design_Spec) */
   fileViewer: 'fileViewer',
+  /** Панель управления навыками агента (Eternal RAG: раздел 5.3) */
+  skills: 'skills',
 } as const;
 
 export type SystemPanelMode = (typeof SYSTEM_PANEL_MODES)[keyof typeof SYSTEM_PANEL_MODES];

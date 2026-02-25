@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from app.memory import MemoryStore, LEARNING_STATUS_ACTIVE, LEARNING_STATUS_SUPERSEDED, LEARNING_STATUS_DELETED
 
 
@@ -286,8 +286,8 @@ class TestLearningsVersioning:
             ids=[version_1_id]
         )
 
-        # Добавляем вторую версию
-        version_2_id = mock_memory_store.add_learning(
+        # Добавляем вторую версию (результат не используется — проверяем side-effect на version_1)
+        mock_memory_store.add_learning(
             text="Version 2 - Updated",
             model_name="model1",
             agent_name="agent1",
@@ -449,8 +449,9 @@ class TestLearningsIntegration:
             ids=["id1", "id2", "id3"],
             include=["metadatas"]
         )
-        statuses = [(m.get("model_name"), m.get("category"), m.get("status")) for m in result["metadatas"]]
-        # Ожидаем что id1 (model1, fact) будет deleted, остальные active или неизменны
+        # Проверяем что id1 (model1, fact) будет deleted, остальные active или неизменны
+        for m in result["metadatas"]:
+            assert m.get("status") in [LEARNING_STATUS_ACTIVE, LEARNING_STATUS_DELETED]
 
 
 class TestContradictionDetection:

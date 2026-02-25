@@ -36,7 +36,7 @@ func Load() *Config {
 		MemoryServiceURL:  getEnv("MEMORY_SERVICE_URL", "http://localhost:8001"),
 		ToolsServiceURL:   getEnv("TOOLS_SERVICE_URL", "http://localhost:8082"),
 		BrowserServiceURL: getEnv("BROWSER_SERVICE_URL", "http://localhost:8084"),
-		OllamaURL:         getEnv("OLLAMA_URL", "http://localhost:11434"),
+		OllamaURL:         getEnv("OLLAMA_URL", "http://127.0.0.1:11434"),
 		UploadsDir:        getEnv("UPLOADS_DIR", "./uploads"),
 		SkillsDir:         getEnv("SKILLS_DIR", "./skills"),
 	}

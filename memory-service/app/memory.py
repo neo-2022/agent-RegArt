@@ -186,6 +186,87 @@ class MemoryStore:
             return None
         return {"workspace_id": workspace_id}
 
+    def _detect_contradictions(
+        self,
+        text: str,
+        embedding: list,
+        model_name: str,
+        workspace_id: str,
+        exclude_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Обнаружение противоречий (Eternal RAG: раздел 8).
+
+        При добавлении нового знания сравниваем его embedding с существующими знаниями
+        той же модели. Если семантическая близость высокая (превышает порог
+        CONTRADICTION_SIMILARITY_THRESHOLD), но тексты различаются — фиксируем
+        потенциальное противоречие.
+
+        Edge-cases:
+        - пустая коллекция — возвращаем пустой список;
+        - знание с exclude_id (текущая запись) пропускается;
+        - неактивные знания (superseded/deleted) игнорируются;
+        - ошибки поиска не блокируют добавление знания.
+
+        Returns:
+            Список противоречий: [{"id", "text", "similarity", "learning_key"}]
+        """
+        if self.learnings_collection.count() == 0:
+            return []
+
+        threshold = settings.CONTRADICTION_SIMILARITY_THRESHOLD
+        top_k = settings.CONTRADICTION_TOP_K
+
+        try:
+            where_filter: Dict[str, Any] = {"model_name": model_name}
+            if workspace_id:
+                where_filter = {"$and": [{"model_name": model_name}, {"workspace_id": workspace_id}]}
+
+            results = self.learnings_collection.query(
+                query_embeddings=[embedding],
+                n_results=top_k,
+                include=["documents", "distances", "metadatas"],
+                where=where_filter,
+            )
+            if not results or "documents" not in results or not results["documents"]:
+                return []
+
+            docs = results["documents"][0]
+            dists = results.get("distances", [[]])[0]
+            metas = results.get("metadatas", [[]])[0]
+            ids = results.get("ids", [[]])[0]
+
+            contradictions: List[Dict[str, Any]] = []
+            normalized_text = text.strip().lower()
+
+            for i, doc in enumerate(docs):
+                doc_id = ids[i] if i < len(ids) else ""
+                # Пропускаем текущую запись
+                if exclude_id and doc_id == exclude_id:
+                    continue
+
+                meta = metas[i] if i < len(metas) else {}
+                # Игнорируем неактивные знания
+                if not self._is_active_learning(meta):
+                    continue
+
+                dist = dists[i] if i < len(dists) else 1.0
+                similarity = max(0.0, 1.0 - dist)
+
+                # Высокая семантическая близость, но текст отличается — противоречие
+                if similarity >= threshold and doc.strip().lower() != normalized_text:
+                    contradictions.append({
+                        "id": doc_id,
+                        "text": doc,
+                        "similarity": round(similarity, 4),
+                        "learning_key": str(meta.get("learning_key", "")),
+                    })
+
+            return contradictions
+        except Exception as e:
+            logger.warning(f"Ошибка при детекции противоречий (не блокирует добавление): {e}")
+            return []
+
     @staticmethod
     def _keyword_relevance(query: str, text: str) -> float:
         """
@@ -430,6 +511,62 @@ class MemoryStore:
             logger.error(f"Ошибка удаления файла {file_name}: {e}")
             return 0
 
+    def rename_file(self, old_name: str, new_name: str) -> int:
+        """
+        Переименование файла в RAG-базе знаний.
+
+        Обновляет метаданные file_name у всех чанков файла.
+        Не затрагивает содержимое и embeddings — только имя.
+
+        Args:
+            old_name: Текущее имя файла
+            new_name: Новое имя файла
+
+        Returns:
+            Количество обновлённых чанков
+        """
+        if not old_name or not new_name or not new_name.strip():
+            logger.warning("Попытка переименования с пустым именем")
+            return 0
+
+        try:
+            results = self.files_collection.get(
+                where={"file_name": old_name},
+                include=["metadatas"],
+            )
+            if not results or "ids" not in results or not results["ids"]:
+                # Пробуем альтернативный ключ metadata (filename)
+                results = self.files_collection.get(
+                    where={"filename": old_name},
+                    include=["metadatas"],
+                )
+            if not results or "ids" not in results or not results["ids"]:
+                return 0
+
+            ids = results["ids"]
+            metas = results.get("metadatas", [])
+            updated_metas = []
+            for idx, doc_id in enumerate(ids):
+                meta = dict(metas[idx]) if idx < len(metas) and isinstance(metas[idx], dict) else {}
+                meta["file_name"] = new_name.strip()
+                # Обновляем и альтернативный ключ, если он был
+                if "filename" in meta:
+                    meta["filename"] = new_name.strip()
+                updated_metas.append(meta)
+
+            self.files_collection.update(ids=ids, metadatas=updated_metas)
+
+            self._add_audit_log(
+                event_type="file_renamed",
+                details={"old_name": old_name, "new_name": new_name.strip(), "chunks_updated": len(ids)},
+            )
+
+            logger.info(f"Переименован файл «{old_name}» → «{new_name.strip()}» ({len(ids)} чанков)")
+            return len(ids)
+        except Exception as e:
+            logger.error(f"Ошибка переименования файла {old_name}: {e}")
+            return 0
+
     def delete_file_chunks(self, file_id: str) -> int:
         """
         Удаление всех фрагментов, принадлежащих указанному файлу.
@@ -511,6 +648,17 @@ class MemoryStore:
                 metadatas=[latest_meta],
             )
 
+        # === Детекция противоречий (Eternal RAG: раздел 8) ===
+        # Ищем семантически похожие знания с отличающимся текстом.
+        # Ошибки детекции не блокируют добавление знания.
+        contradictions = self._detect_contradictions(
+            text=text,
+            embedding=embedding,
+            model_name=model_name,
+            workspace_id=normalized_workspace,
+            exclude_id=previous_version_id,
+        )
+
         # Метаданные знания — привязка к модели, агенту и категории + versioning.
         learning_metadata = {
             "model_name": model_name,
@@ -523,6 +671,9 @@ class MemoryStore:
             "created_at": self._utc_now_iso(),
             "conflict_detected": conflict_detected,
             "previous_version_id": previous_version_id or "",
+            # Семантические противоречия с другими знаниями
+            "contradictions_count": len(contradictions),
+            "contradictions_json": json.dumps(contradictions, ensure_ascii=False) if contradictions else "",
         }
         if metadata:
             learning_metadata.update(metadata)
@@ -542,12 +693,19 @@ class MemoryStore:
             details={
                 "version": next_version,
                 "conflict_detected": conflict_detected,
+                "contradictions_count": len(contradictions),
                 "previous_version_id": previous_version_id or "",
             },
         )
 
+        if contradictions:
+            logger.info(
+                f"Обнаружено {len(contradictions)} противоречий для знания модели {model_name}"
+            )
+
         logger.info(
-            f"Добавлено знание для модели {model_name} (категория: {category}, версия: {next_version}, конфликт: {conflict_detected})"
+            f"Добавлено знание для модели {model_name} (категория: {category}, версия: {next_version}, "
+            f"конфликт: {conflict_detected}, противоречий: {len(contradictions)})"
         )
         return learning_id
     
@@ -772,6 +930,26 @@ class MemoryStore:
         except Exception as e:
             logger.error(f"Ошибка удаления знаний модели {model_name}: {e}")
             return 0
+
+    def get_embedding_status(self) -> Dict[str, Any]:
+        """
+        Возвращает статус модели эмбеддингов для мониторинга в UI.
+
+        Информация включает имя модели, размерность вектора, версию и
+        количество документов по коллекциям. Используется UI-индикатором
+        состояния эмбеддингов (Eternal RAG: раздел 5.8 Monitoring Engine).
+        """
+        return {
+            "model_name": settings.EMBEDDING_MODEL,
+            "model_version": settings.EMBEDDING_MODEL_VERSION,
+            "vector_size": self._vector_size,
+            "status": "loaded",
+            "collections": {
+                "facts": self.facts_collection.count(),
+                "files": self.files_collection.count(),
+                "learnings": self.learnings_collection.count(),
+            },
+        }
 
     def get_stats(self) -> Dict[str, int]:
         """Получение статистики по коллекциям."""

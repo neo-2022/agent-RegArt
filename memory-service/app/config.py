@@ -71,5 +71,13 @@ class Settings:
     # Интервал проверки TTL/переиндексации (в секундах)
     REINDEX_CHECK_INTERVAL = int(os.getenv("REINDEX_CHECK_INTERVAL", "3600"))
 
+    # === Детекция противоречий (Eternal RAG: раздел 8) ===
+    # Порог косинусной близости для поиска потенциальных противоречий.
+    # При добавлении нового знания ищутся семантически похожие записи;
+    # если similarity >= порога, а текст отличается, фиксируется противоречие.
+    CONTRADICTION_SIMILARITY_THRESHOLD = float(os.getenv("CONTRADICTION_SIMILARITY_THRESHOLD", "0.85"))
+    # Максимум кандидатов для проверки на противоречие
+    CONTRADICTION_TOP_K = int(os.getenv("CONTRADICTION_TOP_K", "3"))
+
 
 settings = Settings()

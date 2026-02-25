@@ -451,3 +451,322 @@ class TestLearningsIntegration:
         )
         statuses = [(m.get("model_name"), m.get("category"), m.get("status")) for m in result["metadatas"]]
         # Ожидаем что id1 (model1, fact) будет deleted, остальные active или неизменны
+
+
+class TestContradictionDetection:
+    """Тесты для детекции противоречий (Eternal RAG: раздел 8)."""
+
+    def test_empty_collection_returns_no_contradictions(self, mock_memory_store):
+        """Пустая коллекция → нет противоречий."""
+        result = mock_memory_store._detect_contradictions(
+            text="some text",
+            embedding=[0.1] * 384,
+            model_name="model1",
+            workspace_id="",
+        )
+        assert result == []
+
+    def test_high_similarity_different_text_detected(self, mock_memory_store):
+        """Высокая семантическая близость, но разный текст → противоречие."""
+        # Подготавливаем данные в коллекции
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Python — интерпретируемый язык"],
+            metadatas=[{
+                "model_name": "model1",
+                "workspace_id": "",
+                "status": LEARNING_STATUS_ACTIVE,
+                "learning_key": "model1::general",
+            }],
+            ids=["existing-1"],
+        )
+
+        # Мокируем query, чтобы вернуть высокое сходство (distance=0.05 → similarity=0.95)
+        mock_memory_store.learnings_collection.query = Mock(return_value={
+            "documents": [["Python — интерпретируемый язык"]],
+            "distances": [[0.05]],
+            "metadatas": [[{
+                "model_name": "model1",
+                "status": LEARNING_STATUS_ACTIVE,
+                "learning_key": "model1::general",
+            }]],
+            "ids": [["existing-1"]],
+        })
+
+        result = mock_memory_store._detect_contradictions(
+            text="Python — компилируемый язык",
+            embedding=[0.1] * 384,
+            model_name="model1",
+            workspace_id="",
+        )
+
+        assert len(result) == 1
+        assert result[0]["id"] == "existing-1"
+        assert result[0]["similarity"] >= 0.85
+
+    def test_same_text_no_contradiction(self, mock_memory_store):
+        """Высокая близость и идентичный текст → НЕ противоречие."""
+        text = "Python — интерпретируемый язык"
+
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=[text],
+            metadatas=[{
+                "model_name": "model1",
+                "workspace_id": "",
+                "status": LEARNING_STATUS_ACTIVE,
+                "learning_key": "model1::general",
+            }],
+            ids=["existing-1"],
+        )
+
+        mock_memory_store.learnings_collection.query = Mock(return_value={
+            "documents": [[text]],
+            "distances": [[0.0]],
+            "metadatas": [[{
+                "model_name": "model1",
+                "status": LEARNING_STATUS_ACTIVE,
+                "learning_key": "model1::general",
+            }]],
+            "ids": [["existing-1"]],
+        })
+
+        result = mock_memory_store._detect_contradictions(
+            text=text,
+            embedding=[0.1] * 384,
+            model_name="model1",
+            workspace_id="",
+        )
+
+        assert len(result) == 0
+
+    def test_low_similarity_no_contradiction(self, mock_memory_store):
+        """Низкая семантическая близость → нет противоречий."""
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Погода в Москве"],
+            metadatas=[{
+                "model_name": "model1",
+                "workspace_id": "",
+                "status": LEARNING_STATUS_ACTIVE,
+            }],
+            ids=["existing-1"],
+        )
+
+        mock_memory_store.learnings_collection.query = Mock(return_value={
+            "documents": [["Погода в Москве"]],
+            "distances": [[0.8]],  # similarity = 0.2 < threshold
+            "metadatas": [[{
+                "model_name": "model1",
+                "status": LEARNING_STATUS_ACTIVE,
+            }]],
+            "ids": [["existing-1"]],
+        })
+
+        result = mock_memory_store._detect_contradictions(
+            text="Рецепт борща",
+            embedding=[0.9] * 384,
+            model_name="model1",
+            workspace_id="",
+        )
+
+        assert len(result) == 0
+
+    def test_inactive_learning_ignored(self, mock_memory_store):
+        """Неактивные знания (superseded/deleted) не учитываются."""
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Old knowledge"],
+            metadatas=[{
+                "model_name": "model1",
+                "workspace_id": "",
+                "status": LEARNING_STATUS_DELETED,
+            }],
+            ids=["deleted-1"],
+        )
+
+        mock_memory_store.learnings_collection.query = Mock(return_value={
+            "documents": [["Old knowledge"]],
+            "distances": [[0.01]],
+            "metadatas": [[{
+                "model_name": "model1",
+                "status": LEARNING_STATUS_DELETED,
+            }]],
+            "ids": [["deleted-1"]],
+        })
+
+        result = mock_memory_store._detect_contradictions(
+            text="New knowledge",
+            embedding=[0.1] * 384,
+            model_name="model1",
+            workspace_id="",
+        )
+
+        assert len(result) == 0
+
+    def test_exclude_id_skipped(self, mock_memory_store):
+        """Запись с exclude_id (текущая версия) пропускается."""
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Same entity"],
+            metadatas=[{
+                "model_name": "model1",
+                "workspace_id": "",
+                "status": LEARNING_STATUS_ACTIVE,
+            }],
+            ids=["self-id"],
+        )
+
+        mock_memory_store.learnings_collection.query = Mock(return_value={
+            "documents": [["Same entity"]],
+            "distances": [[0.01]],
+            "metadatas": [[{
+                "model_name": "model1",
+                "status": LEARNING_STATUS_ACTIVE,
+            }]],
+            "ids": [["self-id"]],
+        })
+
+        result = mock_memory_store._detect_contradictions(
+            text="Updated entity",
+            embedding=[0.1] * 384,
+            model_name="model1",
+            workspace_id="",
+            exclude_id="self-id",
+        )
+
+        assert len(result) == 0
+
+    def test_query_error_returns_empty(self, mock_memory_store):
+        """Ошибка при поиске не блокирует добавление знания."""
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["x"],
+            metadatas=[{"model_name": "m"}],
+            ids=["id1"],
+        )
+        mock_memory_store.learnings_collection.query = Mock(side_effect=RuntimeError("DB error"))
+
+        result = mock_memory_store._detect_contradictions(
+            text="anything",
+            embedding=[0.1] * 384,
+            model_name="m",
+            workspace_id="",
+        )
+
+        assert result == []
+
+
+class TestFileRename:
+    """Тесты для переименования файлов в RAG-базе."""
+
+    def test_rename_updates_metadata(self, mock_memory_store):
+        """Переименование обновляет file_name во всех чанках."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 2,
+            documents=["chunk1", "chunk2"],
+            metadatas=[
+                {"file_name": "old.txt", "chunk": 0},
+                {"file_name": "old.txt", "chunk": 1},
+            ],
+            ids=["c1", "c2"],
+        )
+
+        result = mock_memory_store.rename_file("old.txt", "new.txt")
+        assert result == 2
+
+        # Проверяем, что метаданные обновились
+        data = mock_memory_store.files_collection.get(ids=["c1", "c2"], include=["metadatas"])
+        for meta in data["metadatas"]:
+            assert meta["file_name"] == "new.txt"
+
+    def test_rename_nonexistent_returns_zero(self, mock_memory_store):
+        """Переименование несуществующего файла возвращает 0."""
+        result = mock_memory_store.rename_file("no_such_file.txt", "new.txt")
+        assert result == 0
+
+    def test_rename_empty_names_returns_zero(self, mock_memory_store):
+        """Пустые имена не допускаются."""
+        assert mock_memory_store.rename_file("", "new.txt") == 0
+        assert mock_memory_store.rename_file("old.txt", "") == 0
+        assert mock_memory_store.rename_file("old.txt", "   ") == 0
+
+    def test_rename_strips_whitespace(self, mock_memory_store):
+        """Пробелы в новом имени обрезаются."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "old.txt"}],
+            ids=["c1"],
+        )
+
+        result = mock_memory_store.rename_file("old.txt", "  new.txt  ")
+        assert result == 1
+
+        data = mock_memory_store.files_collection.get(ids=["c1"], include=["metadatas"])
+        assert data["metadatas"][0]["file_name"] == "new.txt"
+
+    def test_rename_creates_audit_log(self, mock_memory_store):
+        """Переименование создаёт запись аудита."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "old.txt"}],
+            ids=["c1"],
+        )
+
+        mock_memory_store.rename_file("old.txt", "new.txt")
+
+        # Проверяем, что аудит-лог создан
+        assert mock_memory_store.audit_collection.count() == 1
+
+
+class TestEmbeddingStatus:
+    """Тесты для эндпоинта статуса модели эмбеддингов."""
+
+    def test_returns_model_info(self, mock_memory_store):
+        """Проверяет корректность возвращаемых полей."""
+        mock_memory_store._vector_size = 384
+
+        with patch("app.memory.settings") as mock_settings:
+            mock_settings.EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+            mock_settings.EMBEDDING_MODEL_VERSION = "1"
+
+            status = mock_memory_store.get_embedding_status()
+
+            assert status["model_name"] == "all-MiniLM-L6-v2"
+            assert status["model_version"] == "1"
+            assert status["vector_size"] == 384
+            assert status["status"] == "loaded"
+            assert "collections" in status
+            assert "facts" in status["collections"]
+            assert "files" in status["collections"]
+            assert "learnings" in status["collections"]
+
+    def test_collections_counts_match(self, mock_memory_store):
+        """Количество документов в статусе совпадает с реальным."""
+        mock_memory_store._vector_size = 384
+
+        # Добавляем данные в коллекции
+        mock_memory_store.facts_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["fact1"],
+            metadatas=[{}],
+            ids=["f1"],
+        )
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 2,
+            documents=["chunk1", "chunk2"],
+            metadatas=[{}, {}],
+            ids=["c1", "c2"],
+        )
+
+        with patch("app.memory.settings") as mock_settings:
+            mock_settings.EMBEDDING_MODEL = "test"
+            mock_settings.EMBEDDING_MODEL_VERSION = "1"
+
+            status = mock_memory_store.get_embedding_status()
+
+            assert status["collections"]["facts"] == 1
+            assert status["collections"]["files"] == 2
+            assert status["collections"]["learnings"] == 0

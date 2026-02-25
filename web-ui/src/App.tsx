@@ -318,6 +318,18 @@ function App() {
   const [promptSaveStatus, setPromptSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [promptSaveError, setPromptSaveError] = useState('');
 
+  // === RAG: inline rename, multi-select, embedding status ===
+  // Имя файла, который сейчас редактируется (inline rename)
+  const [ragRenamingFile, setRagRenamingFile] = useState<string | null>(null);
+  // Новое имя для переименовываемого файла
+  const [ragRenameValue, setRagRenameValue] = useState('');
+  // Множество выбранных файлов (multi-select) — полный путь folder/file_name
+  const [ragSelectedFiles, setRagSelectedFiles] = useState<Set<string>>(new Set());
+  // Статус модели эмбеддингов для индикатора
+  const [embeddingStatus, setEmbeddingStatus] = useState<{model_name: string; status: string; vector_size: number; collections: {facts: number; files: number; learnings: number}} | null>(null);
+  // Последняя неудачная операция для кнопки retry
+  const [ragLastFailedOp, setRagLastFailedOp] = useState<{type: string; args: unknown[]} | null>(null);
+
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
   const [logLevelFilter, setLogLevelFilter] = useState<string>('all');
   const [logServiceFilter, setLogServiceFilter] = useState<string>('all');
@@ -396,6 +408,7 @@ function App() {
     if (nextMode === SYSTEM_PANEL_MODES.rag) {
       fetchRagStats();
       fetchRagFiles();
+      fetchEmbeddingStatus();
     }
     if (nextMode === SYSTEM_PANEL_MODES.logs) {
       fetchLogs();
@@ -705,10 +718,70 @@ function App() {
   const deleteRagFile = async (fileName: string) => {
     try {
       await axios.delete(`${RAG_API}/delete?name=${encodeURIComponent(fileName)}`);
+      // Убираем из выбранных, если файл был выделен
+      setRagSelectedFiles(prev => { const next = new Set(prev); next.delete(fileName); return next; });
       fetchRagFiles();
       fetchRagStats();
+      setRagLastFailedOp(null);
     } catch (err) {
       console.error('Failed to delete RAG file', err);
+      setRagLastFailedOp({ type: 'delete', args: [fileName] });
+    }
+  };
+
+  // Переименование файла в RAG-базе (PATCH /rag/rename)
+  const renameRagFile = async (oldName: string, newName: string) => {
+    if (!newName.trim()) return;
+    try {
+      await axios.patch(`${RAG_API}/rename`, { old_name: oldName, new_name: newName.trim() });
+      setRagRenamingFile(null);
+      setRagRenameValue('');
+      fetchRagFiles();
+      setRagLastFailedOp(null);
+    } catch (err) {
+      console.error('Failed to rename RAG file', err);
+      setRagLastFailedOp({ type: 'rename', args: [oldName, newName] });
+    }
+  };
+
+  // Удаление нескольких выбранных файлов (multi-select batch delete)
+  const deleteSelectedRagFiles = async () => {
+    if (ragSelectedFiles.size === 0) return;
+    for (const fileName of ragSelectedFiles) {
+      try {
+        await axios.delete(`${RAG_API}/delete?name=${encodeURIComponent(fileName)}`);
+      } catch (err) {
+        console.error('Failed to delete selected RAG file', fileName, err);
+      }
+    }
+    setRagSelectedFiles(new Set());
+    fetchRagFiles();
+    fetchRagStats();
+  };
+
+  // Загрузка статуса эмбеддингов (для индикатора в RAG-панели)
+  const fetchEmbeddingStatus = async () => {
+    try {
+      const res = await axios.get(`${MEMORY_API}/embeddings/status`);
+      setEmbeddingStatus(res.data);
+    } catch (err) {
+      console.error('Failed to fetch embedding status', err);
+    }
+  };
+
+  // Повтор последней неудачной операции
+  const retryLastFailedOp = async () => {
+    if (!ragLastFailedOp) return;
+    const { type, args } = ragLastFailedOp;
+    setRagLastFailedOp(null);
+    if (type === 'delete' && typeof args[0] === 'string') {
+      await deleteRagFile(args[0]);
+    } else if (type === 'rename' && typeof args[0] === 'string' && typeof args[1] === 'string') {
+      await renameRagFile(args[0], args[1]);
+    } else if (type === 'fetchFiles') {
+      await fetchRagFiles();
+    } else if (type === 'fetchStats') {
+      await fetchRagStats();
     }
   };
 
@@ -1731,6 +1804,20 @@ function App() {
                 Фактов: {ragStats.facts_count} | Файлов: {ragStats.files_count}
               </div>
             )}
+            {/* Индикатор статуса модели эмбеддингов (Eternal RAG: раздел 5.8) */}
+            {embeddingStatus && (
+              <div className="rag-embedding-status" style={{fontSize: '0.75rem', color: 'var(--icon-color)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                <span style={{width: '8px', height: '8px', borderRadius: '50%', background: embeddingStatus.status === 'loaded' ? '#4caf50' : '#ff6b6b', display: 'inline-block', flexShrink: 0}} title={`Статус: ${embeddingStatus.status}`} />
+                <span>{embeddingStatus.model_name} (dim={embeddingStatus.vector_size})</span>
+              </div>
+            )}
+            {/* Кнопка повтора при неудачной операции */}
+            {ragLastFailedOp && (
+              <div style={{fontSize: '0.78rem', color: '#ff6b6b', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px'}}>
+                <span>Операция не удалась.</span>
+                <button className="provider-save-btn" style={{fontSize: '0.75rem', padding: '2px 8px'}} onClick={retryLastFailedOp}>Повторить</button>
+              </div>
+            )}
             <div style={{display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '8px'}}>
               <button
                 className="provider-save-btn"
@@ -1804,6 +1891,14 @@ function App() {
                   <option value="chunks">По кол-ву</option>
                 </select>
               </div>
+              {/* Панель массовых действий: кнопка удаления выделенных файлов */}
+              {ragSelectedFiles.size > 0 && (
+                <div className="rag-bulk-actions" style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontSize: '0.78rem'}}>
+                  <span style={{color: 'var(--icon-color)'}}>Выбрано: {ragSelectedFiles.size}</span>
+                  <button className="provider-save-btn" style={{fontSize: '0.75rem', padding: '2px 8px', background: '#ff6b6b', borderColor: '#ff6b6b'}} onClick={deleteSelectedRagFiles}>Удалить выбранные</button>
+                  <button className="provider-save-btn" style={{fontSize: '0.75rem', padding: '2px 8px'}} onClick={() => setRagSelectedFiles(new Set())}>Снять выделение</button>
+                </div>
+              )}
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>
               {ragFiles.length > 0 ? (
                 <div className="rag-file-list">
@@ -1841,14 +1936,74 @@ function App() {
                         }} title="Удалить папку">✕</button>
                       </div>
                       <div className={`rag-folder-files ${collapsedFolders.has(folder.folder) ? 'collapsed' : ''}`}>
-                        {folder.files.slice(0, 10).map((rf, fileIdx: number) => (
-                          <div key={fileIdx} className="rag-file-item">
-                            <span className="rag-file-icon">📄</span>
-                            <span className="rag-file-name">{rf.file_name}</span>
-                            <span className="rag-file-chunks">{rf.chunks_count} фр.</span>
-                            <button className="rag-file-delete" onClick={() => deleteRagFile(folder.folder + '/' + rf.file_name)} title="Удалить">✕</button>
-                          </div>
-                        ))}
+                        {folder.files.slice(0, 10).map((rf, fileIdx: number) => {
+                          const fullPath = folder.folder + '/' + rf.file_name;
+                          const isRenaming = ragRenamingFile === fullPath;
+                          const isSelected = ragSelectedFiles.has(fullPath);
+                          return (
+                            <div key={fileIdx} className={`rag-file-item ${isSelected ? 'rag-file-selected' : ''}`}>
+                              {/* Чекбокс multi-select (спецификация UI: раздел 3.4) */}
+                              <input
+                                type="checkbox"
+                                className="rag-file-checkbox"
+                                checked={isSelected}
+                                onChange={() => {
+                                  setRagSelectedFiles((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(fullPath)) { next.delete(fullPath); } else { next.add(fullPath); }
+                                    return next;
+                                  });
+                                }}
+                                title="Выбрать файл"
+                              />
+                              <span className="rag-file-icon">📄</span>
+                              {/* Inline rename: показываем input при редактировании, иначе имя файла */}
+                              {isRenaming ? (
+                                <input
+                                  className="rag-rename-input"
+                                  type="text"
+                                  value={ragRenameValue}
+                                  onChange={(e) => setRagRenameValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && ragRenameValue.trim()) {
+                                      renameRagFile(fullPath, ragRenameValue.trim());
+                                      setRagRenamingFile(null);
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setRagRenamingFile(null);
+                                    }
+                                  }}
+                                  onBlur={() => setRagRenamingFile(null)}
+                                  autoFocus
+                                  style={{flex: 1, padding: '1px 4px', borderRadius: '4px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.78rem'}}
+                                />
+                              ) : (
+                                <span
+                                  className="rag-file-name"
+                                  onDoubleClick={() => {
+                                    // Двойной клик запускает inline rename
+                                    setRagRenamingFile(fullPath);
+                                    setRagRenameValue(rf.file_name);
+                                  }}
+                                  title="Двойной клик для переименования"
+                                >{rf.file_name}</span>
+                              )}
+                              <span className="rag-file-chunks">{rf.chunks_count} фр.</span>
+                              {/* Кнопка переименования */}
+                              {!isRenaming && (
+                                <button
+                                  className="rag-file-rename"
+                                  onClick={() => {
+                                    setRagRenamingFile(fullPath);
+                                    setRagRenameValue(rf.file_name);
+                                  }}
+                                  title="Переименовать"
+                                >✎</button>
+                              )}
+                              <button className="rag-file-delete" onClick={() => deleteRagFile(fullPath)} title="Удалить">✕</button>
+                            </div>
+                          );
+                        })}
                         {folder.files.length > 10 && (
                           <div className="rag-more-files">... и ещё {folder.files.length - 10} файлов</div>
                         )}

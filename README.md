@@ -598,6 +598,7 @@ MIT License
 - `POST /search` поддерживает `min_priority` для фильтрации памяти по минимальному приоритету (`critical|pinned|reinforced|normal|archived`);
 - `POST /learnings` сохраняет `workspace_id` в метаданных знания;
 - `POST /learnings/search` и `DELETE /learnings/{model_name}` поддерживают `workspace_id` и работают в границах workspace.
+- `POST /learnings/search` также поддерживает `min_priority` для фильтрации знаний по минимальному приоритету.
 
 ## Learning version history API
 

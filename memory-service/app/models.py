@@ -122,6 +122,7 @@ class LearningSearchRequest(BaseModel):
     workspace_id: Optional[str] = Field(None, description="Идентификатор workspace для изоляции памяти", min_length=1)
     top_k: Optional[int] = Field(5, description="Количество результатов", ge=1, le=20)
     category: Optional[str] = Field(None, description="Фильтр по категории знания")
+    min_priority: Optional[str] = Field(None, description="Минимальный приоритет знаний: critical|pinned|reinforced|normal|archived")
 
 
 class LearningSearchResponse(BaseModel):

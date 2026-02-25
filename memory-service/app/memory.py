@@ -541,7 +541,8 @@ class MemoryStore:
     
     def search_learnings(self, query: str, model_name: str,
                          top_k: int = 5, category: Optional[str] = None,
-                         workspace_id: Optional[str] = None) -> List[Dict[str, Any]]:
+                         workspace_id: Optional[str] = None,
+                         min_priority: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Поиск релевантных знаний для конкретной модели LLM.
         Возвращает структурированные результаты: text, score, source, metadata.
@@ -575,11 +576,19 @@ class MemoryStore:
                 items: List[Dict[str, Any]] = []
                 for i, doc in enumerate(docs):
                     dist = dists[i] if i < len(dists) else 1.0
-                    relevance = max(0.0, 1.0 - dist)
+                    semantic_relevance = max(0.0, 1.0 - dist)
+                    keyword_relevance = self._keyword_relevance(query=query, text=doc)
+                    relevance = blend_relevance_scores(semantic_relevance, keyword_relevance)
                     meta = metas[i] if i < len(metas) else {}
                     if self._is_active_learning(meta):
                         score = build_rank_score(relevance, meta)
                         items.append({"text": doc, "score": score, "source": "learnings", "metadata": meta})
+                if min_priority:
+                    threshold = resolve_priority_score(min_priority)
+                    items = [
+                        item for item in items
+                        if resolve_priority_score((item.get("metadata") or {}).get("priority", "normal")) >= threshold
+                    ]
                 items.sort(key=lambda x: x["score"], reverse=True)
                 self._record_search_metrics(start_ts=start_ts, results_count=len(items), is_error=False)
                 return items

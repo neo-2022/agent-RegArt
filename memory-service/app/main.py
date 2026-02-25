@@ -238,6 +238,7 @@ async def search_learnings(request: models.LearningSearchRequest):
             top_k=request.top_k,
             category=request.category,
             workspace_id=request.workspace_id,
+            min_priority=request.min_priority,
         )
         return models.LearningSearchResponse(
             results=results,

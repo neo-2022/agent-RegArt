@@ -370,3 +370,36 @@ def test_search_min_priority_filter(client):
     data = response.json()
     assert data["count"] >= 1
     assert all(item["metadata"].get("priority") == "critical" for item in data["results"])
+
+
+def test_search_learnings_min_priority_filter(client):
+    """Проверяет min_priority фильтрацию в /learnings/search."""
+    model_name = f"prio-learnings-{uuid.uuid4()}"
+    client.post("/learnings", json={
+        "text": "archive learning sample",
+        "model_name": model_name,
+        "agent_name": "admin",
+        "category": "fact",
+        "workspace_id": "prio-l",
+        "metadata": {"priority": "archived"},
+    })
+    client.post("/learnings", json={
+        "text": "critical learning sample",
+        "model_name": model_name,
+        "agent_name": "admin",
+        "category": "fact",
+        "workspace_id": "prio-l",
+        "metadata": {"priority": "critical"},
+    })
+
+    resp = client.post("/learnings/search", json={
+        "query": "learning sample",
+        "model_name": model_name,
+        "workspace_id": "prio-l",
+        "top_k": 10,
+        "min_priority": "critical",
+    })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] >= 1
+    assert all(item["metadata"].get("priority") == "critical" for item in data["results"])

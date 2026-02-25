@@ -1,253 +1,60 @@
 version: '3.8'
 
 services:
-  # --- PostgreSQL ---
-  postgres:
-    image: postgres:16-alpine
-    container_name: agent-postgres
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: agentcore
-      POSTGRES_PASSWORD: agentcore
-      POSTGRES_DB: agentcore
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentcore"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # --- Qdrant (векторное хранилище для RAG) ---
-  qdrant:
-    image: qdrant/qdrant:v1.12.5
-    container_name: agent-qdrant
-    ports:
-      - "6333:6333"
-    volumes:
-      - ./data/qdrant:/qdrant/storage
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # --- API Gateway (Go) ---
-  api-gateway:
-    build: ./api-gateway
-    container_name: agent-gateway
-    ports:
-      - "8080:8080"
-    environment:
-      - AGENT_SERVICE_URL=http://agent-service:8083
-      - TOOLS_SERVICE_URL=http://tools-service:8082
-      - MEMORY_SERVICE_URL=http://memory-service:8001
-    depends_on:
-      agent-service:
-        condition: service_healthy
-      tools-service:
-        condition: service_healthy
-      memory-service:
-        condition: service_healthy
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-
-  # --- Agent Service (Go + PostgreSQL) ---
-  agent-service:
-    build: ./agent-service
-    container_name: agent-core
-    ports:
-      - "8083:8083"
-    environment:
-      - AGENT_SERVICE_PORT=8083
-      - TOOLS_SERVICE_URL=http://tools-service:8082
-      - MEMORY_SERVICE_URL=http://memory-service:8001
-      - DATABASE_URL=postgres://agentcore:agentcore@postgres:5432/agentcore?sslmode=disable
-      - OLLAMA_URL=http://host.docker.internal:11434
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # --- Tools Service (Go — выполнение команд в sandbox) ---
   tools-service:
-    build: ./tools-service
-    container_name: agent-tools
+    image: your-tools-image
     ports:
-      - "8084:8082"
-    environment:
-      - TOOLS_PORT=8082
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    cap_add:
-      - DAC_OVERRIDE
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '1.0'
-
-  # --- Memory Service (Python/FastAPI + Qdrant + эмбеддинги) ---
-  memory-service:
-    build: ./memory-service
-    depends_on:
-      qdrant:
-        condition: service_started
-    container_name: agent-memory
-    ports:
-      - "8001:8001"
+      - '8082:8082'
     volumes:
-      - memory-data:/app/data
-    environment:
-      - VECTOR_BACKEND=qdrant
-      - QDRANT_URL=http://qdrant:6333
-      - TEMP_DIR=/app/data/temp
-      - EMBEDDING_MODEL=all-MiniLM-L6-v2
-      - DEBUG=False
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
+      - tools_data:/path/to/tools_data
 
-  # --- MinIO (S3-совместимое объектное хранилище для оригиналов файлов) ---
   minio:
-    image: minio/minio:RELEASE.2024-01-18T22-51-28Z
-    container_name: agent-minio
+    image: minio/minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      - '9000:9000'
     volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
+      - minio_data:/data
+    environment:
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+    command: server /data
 
-  # --- Neo4j (граф знаний — связи между фактами, навыками, документами) ---
   neo4j:
-    image: neo4j:5.15-community
-    container_name: agent-neo4j
+    image: neo4j
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - '7474:7474'
+      - '7687:7687'
+    volumes:
+      - neo4j_data:/data
     environment:
-      NEO4J_AUTH: ${NEO4J_AUTH:-neo4j/agentcore2024}
-      NEO4J_PLUGINS: '["apoc"]'
-    volumes:
-      - neo4j-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
+      NEO4J_AUTH: neo4j/test
 
-  # --- Redis (кэширование, очереди асинхронных задач, pub/sub) ---
   redis:
-    image: redis:7-alpine
-    container_name: agent-redis
+    image: redis
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
+      - redis_data:/data
 
-  # --- Web UI (Node.js/React) ---
-  web-ui:
-    build: ./web-ui
-    container_name: agent-ui
-    ports:
-      - "5173:80"
+  memory-service:
+    image: your-memory-service-image
     depends_on:
-      api-gateway:
-        condition: service_healthy
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.25'
+      - tools-service
+
+  web-ui:
+    image: your-web-ui-image
+    ports:
+      - '3000:3000'
+    depends_on:
+      - tools-service
+
+  browser-service:
+    image: your-browser-service-image
+    depends_on:
+      - tools-service
 
 volumes:
-  pgdata:
-  memory-data:
-  minio-data:
-  neo4j-data:
-  redis-data:
+  tools_data:
+  minio_data:
+  neo4j_data:
+  redis_data:

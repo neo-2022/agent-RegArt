@@ -730,11 +730,13 @@ class MemoryStore:
             Количество удалённых знаний
         """
         try:
+            # Используем плоский dict для простых AND-условий —
+            # Qdrant поддерживает несколько ключей в одном where-фильтре как неявный AND
             where_filter: Dict[str, Any] = {"model_name": model_name}
             if workspace_id:
-                where_filter = {"$and": [where_filter, {"workspace_id": workspace_id}]}
+                where_filter["workspace_id"] = workspace_id
             if category:
-                where_filter = {"$and": [where_filter, {"category": category}]}
+                where_filter["category"] = category
             
             results = self.learnings_collection.get(where=where_filter, include=["metadatas"])
             if not results or 'ids' not in results:

@@ -8,9 +8,10 @@ tools-service/agent-tools
 tools-service/server
 browser-service/server
 
-# Игнорируем базы данных и временные файлы Chroma
+# Игнорируем базы данных
 *.sqlite3
 *.sqlite3-*
+*.db
 memory-service/data/chroma/
 
 # Python cache
@@ -33,7 +34,8 @@ agent-service/uploads/
 !web-ui/public/avatars/*.png
 !favicon.png
 
-# Игнорируем логи и временные файлы
+# Игнорируем логи, архивы и временные файлы
 *.log
 *.tmp
+*.zip
 memory-service/data/

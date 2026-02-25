@@ -8,7 +8,7 @@
 - [x] Валидация переменных окружения при старте
 - [x] `.env.example` с документацией всех переменных
 - [x] Makefile для сборки, тестов, линтинга
-- [x] Docker Compose для полного стека (PostgreSQL + ChromaDB + сервисы)
+- [x] Docker Compose для полного стека (PostgreSQL + Qdrant + сервисы)
 - [ ] Unit-тесты для ключевых пакетов (repository, models, llm)
 - [ ] Интеграционные тесты memory-service (FastAPI TestClient)
 
@@ -20,8 +20,16 @@
 - [x] tools-service: удалены опасные команды из AllowedCommands (rm, chmod, chown, sudo, bash, sh)
 - [x] tools-service: лимит размера файлов (MaxFileSize 10MB)
 - [x] memory-service: size limits на входные данные (MAX_TEXT_LENGTH, MAX_QUERY_LENGTH)
-- [x] memory-service: embedding_model_version в метаданных коллекций ChromaDB
+- [x] memory-service: embedding_model_version в метаданных коллекций Qdrant
 - [x] memory-service: предупреждение при смене модели эмбеддингов
+- [x] memory-service: Skill Engine (CRUD навыков, семантический поиск)
+- [x] memory-service: Graph Engine (узлы, связи, авто-связи relates_to)
+- [x] memory-service: семантическое обнаружение противоречий
+- [x] memory-service: TTL и политика переиндексации
+- [x] web-ui: Premium UI (ModelPopover, PromptPanel, Soft Depth CSS)
+- [x] web-ui: RAG File Explorer (pin, soft-delete, move, rename, content search)
+- [x] web-ui: Skills Panel (создание, поиск, просмотр навыков)
+- [x] docker-compose: MinIO, Neo4j, Redis добавлены в стек
 - [x] api-gateway: request-id middleware (X-Request-ID)
 - [x] api-gateway: panic recovery middleware
 - [x] api-gateway: timeout middleware (60s / 300s для /chat)

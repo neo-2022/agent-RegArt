@@ -96,6 +96,22 @@ interface RagApiResponseItem {
   files?: Array<{ file_name?: string; chunks_count?: number }>;
 }
 
+// Элемент списка противоречий из memory-service
+interface ContradictionItem {
+  original_text: string;
+  conflicting_text: string;
+  similarity: number;
+  detected_at: string;
+}
+
+// Результат семантического поиска по содержимому файлов
+interface ContentSearchResult {
+  file_name: string;
+  chunk_text: string;
+  score: number;
+  metadata: Record<string, unknown>;
+}
+
 interface BrowserSpeechWindow extends Window {
   SpeechRecognition?: new () => SpeechRecognition;
   webkitSpeechRecognition?: new () => SpeechRecognition;
@@ -329,6 +345,27 @@ function App() {
   const [embeddingStatus, setEmbeddingStatus] = useState<{model_name: string; status: string; vector_size: number; collections: {facts: number; files: number; learnings: number}} | null>(null);
   // Последняя неудачная операция для кнопки retry
   const [ragLastFailedOp, setRagLastFailedOp] = useState<{type: string; args: unknown[]} | null>(null);
+
+  // === RAG: расширенные операции (move, soft-delete, pin, content-search, contradictions) ===
+  // Закреплённые файлы (pinned) — показываются первыми, не удаляются по TTL
+  const [ragPinnedFiles, setRagPinnedFiles] = useState<Set<string>>(new Set());
+  // Мягко удалённые файлы — показываются отдельно с возможностью восстановления
+  const [ragDeletedFiles, setRagDeletedFiles] = useState<string[]>([]);
+  // Флаг показа удалённых файлов
+  const [showDeletedFiles, setShowDeletedFiles] = useState(false);
+  // Активный/выделенный файл для предпросмотра
+  const [ragActiveFile, setRagActiveFile] = useState<string | null>(null);
+  // Предпросмотр файла: метаданные
+  const [ragFilePreview, setRagFilePreview] = useState<{name: string; chunks: number; folder: string; pinned: boolean} | null>(null);
+  // Семантический поиск по содержимому
+  const [ragContentSearchQuery, setRagContentSearchQuery] = useState('');
+  const [ragContentSearchResults, setRagContentSearchResults] = useState<ContentSearchResult[]>([]);
+  const [ragContentSearching, setRagContentSearching] = useState(false);
+  // Список обнаруженных противоречий
+  const [ragContradictions, setRagContradictions] = useState<ContradictionItem[]>([]);
+  const [showContradictions, setShowContradictions] = useState(false);
+  // Перемещение файла: целевая папка
+  const [ragMoveTarget, setRagMoveTarget] = useState<{file: string; open: boolean}>({file: '', open: false});
 
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
   const [logLevelFilter, setLogLevelFilter] = useState<string>('all');
@@ -744,21 +781,6 @@ function App() {
     }
   };
 
-  // Удаление нескольких выбранных файлов (multi-select batch delete)
-  const deleteSelectedRagFiles = async () => {
-    if (ragSelectedFiles.size === 0) return;
-    for (const fileName of ragSelectedFiles) {
-      try {
-        await axios.delete(`${RAG_API}/delete?name=${encodeURIComponent(fileName)}`);
-      } catch (err) {
-        console.error('Failed to delete selected RAG file', fileName, err);
-      }
-    }
-    setRagSelectedFiles(new Set());
-    fetchRagFiles();
-    fetchRagStats();
-  };
-
   // Загрузка статуса эмбеддингов (для индикатора в RAG-панели)
   const fetchEmbeddingStatus = async () => {
     try {
@@ -778,11 +800,112 @@ function App() {
       await deleteRagFile(args[0]);
     } else if (type === 'rename' && typeof args[0] === 'string' && typeof args[1] === 'string') {
       await renameRagFile(args[0], args[1]);
+    } else if (type === 'softDelete' && typeof args[0] === 'string') {
+      await softDeleteRagFile(args[0]);
+    } else if (type === 'move' && typeof args[0] === 'string' && typeof args[1] === 'string') {
+      await moveRagFile(args[0], args[1]);
     } else if (type === 'fetchFiles') {
       await fetchRagFiles();
     } else if (type === 'fetchStats') {
       await fetchRagStats();
     }
+  };
+
+  // === Расширенные RAG-операции (Eternal RAG Architecture) ===
+
+  // Мягкое удаление файла — пометка deleted_at вместо физического удаления.
+  // Файл остаётся в базе, но исключается из поиска. Можно восстановить через restoreRagFile.
+  const softDeleteRagFile = async (fileName: string) => {
+    try {
+      await axios.post(`${RAG_API}/soft-delete`, { name: fileName });
+      setRagSelectedFiles(prev => { const next = new Set(prev); next.delete(fileName); return next; });
+      fetchRagFiles();
+      fetchRagStats();
+      setRagLastFailedOp(null);
+    } catch (err) {
+      console.error('Failed to soft-delete RAG file', err);
+      setRagLastFailedOp({ type: 'softDelete', args: [fileName] });
+    }
+  };
+
+  // Восстановление мягко удалённого файла
+  const restoreRagFile = async (fileName: string) => {
+    try {
+      await axios.post(`${RAG_API}/restore`, { name: fileName });
+      setRagDeletedFiles(prev => prev.filter(f => f !== fileName));
+      fetchRagFiles();
+      fetchRagStats();
+    } catch (err) {
+      console.error('Failed to restore RAG file', err);
+    }
+  };
+
+  // Закрепление/открепление файла (pinned — показывается первым, не удаляется по TTL)
+  const pinRagFile = async (fileName: string, pinned: boolean) => {
+    try {
+      if (pinned) {
+        await axios.post(`${RAG_API}/pin`, { name: fileName });
+        setRagPinnedFiles(prev => new Set([...prev, fileName]));
+      } else {
+        await axios.delete(`${RAG_API}/pin?name=${encodeURIComponent(fileName)}`);
+        setRagPinnedFiles(prev => { const next = new Set(prev); next.delete(fileName); return next; });
+      }
+    } catch (err) {
+      console.error('Failed to pin/unpin RAG file', err);
+    }
+  };
+
+  // Перемещение файла между папками
+  const moveRagFile = async (fileName: string, targetFolder: string) => {
+    try {
+      await axios.post(`${RAG_API}/move`, { name: fileName, target_folder: targetFolder });
+      setRagMoveTarget({ file: '', open: false });
+      fetchRagFiles();
+    } catch (err) {
+      console.error('Failed to move RAG file', err);
+      setRagLastFailedOp({ type: 'move', args: [fileName, targetFolder] });
+    }
+  };
+
+  // Семантический поиск по содержимому файлов (content search)
+  const searchRagContents = async (query: string) => {
+    if (!query.trim()) { setRagContentSearchResults([]); return; }
+    setRagContentSearching(true);
+    try {
+      const res = await axios.post(`${RAG_API}/content-search`, { query: query.trim(), top_k: 10 });
+      setRagContentSearchResults(res.data?.results || []);
+    } catch (err) {
+      console.error('Failed to search RAG contents', err);
+      setRagContentSearchResults([]);
+    } finally {
+      setRagContentSearching(false);
+    }
+  };
+
+  // Получение списка обнаруженных противоречий из memory-service
+  const fetchContradictions = async () => {
+    try {
+      const res = await axios.get(`${RAG_API}/contradictions?top_k=50`);
+      setRagContradictions(res.data?.contradictions || []);
+    } catch (err) {
+      console.error('Failed to fetch contradictions', err);
+      setRagContradictions([]);
+    }
+  };
+
+  // Массовое мягкое удаление выбранных файлов
+  const softDeleteSelectedRagFiles = async () => {
+    if (ragSelectedFiles.size === 0) return;
+    for (const fileName of ragSelectedFiles) {
+      try {
+        await axios.post(`${RAG_API}/soft-delete`, { name: fileName });
+      } catch (err) {
+        console.error('Failed to soft-delete selected RAG file', fileName, err);
+      }
+    }
+    setRagSelectedFiles(new Set());
+    fetchRagFiles();
+    fetchRagStats();
   };
 
   const fetchLogs = async () => {
@@ -1891,12 +2014,77 @@ function App() {
                   <option value="chunks">По кол-ву</option>
                 </select>
               </div>
-              {/* Панель массовых действий: кнопка удаления выделенных файлов */}
+              {/* Панель массовых действий: мягкое удаление и снятие выделения */}
               {ragSelectedFiles.size > 0 && (
-                <div className="rag-bulk-actions" style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontSize: '0.78rem'}}>
+                <div className="rag-bulk-actions" style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontSize: '0.78rem', flexWrap: 'wrap'}}>
                   <span style={{color: 'var(--icon-color)'}}>Выбрано: {ragSelectedFiles.size}</span>
-                  <button className="provider-save-btn" style={{fontSize: '0.75rem', padding: '2px 8px', background: '#ff6b6b', borderColor: '#ff6b6b'}} onClick={deleteSelectedRagFiles}>Удалить выбранные</button>
+                  <button className="provider-save-btn" style={{fontSize: '0.75rem', padding: '2px 8px', background: '#ff6b6b', borderColor: '#ff6b6b'}} onClick={softDeleteSelectedRagFiles} title="Мягкое удаление — файлы можно восстановить">В корзину</button>
                   <button className="provider-save-btn" style={{fontSize: '0.75rem', padding: '2px 8px'}} onClick={() => setRagSelectedFiles(new Set())}>Снять выделение</button>
+                </div>
+              )}
+              {/* Семантический поиск по содержимому файлов (Eternal RAG: content search) */}
+              <div style={{display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px'}}>
+                <input
+                  type="text"
+                  placeholder="Поиск по содержимому (семантический)..."
+                  value={ragContentSearchQuery}
+                  onChange={e => setRagContentSearchQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') searchRagContents(ragContentSearchQuery); }}
+                  style={{flex: 1, padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.78rem'}}
+                />
+                <button
+                  className="provider-save-btn"
+                  style={{fontSize: '0.75rem', padding: '2px 8px'}}
+                  onClick={() => searchRagContents(ragContentSearchQuery)}
+                  disabled={ragContentSearching}
+                >
+                  {ragContentSearching ? '...' : 'Найти'}
+                </button>
+              </div>
+              {/* Результаты семантического поиска по содержимому */}
+              {ragContentSearchResults.length > 0 && (
+                <div className="rag-content-search-results" style={{marginBottom: '8px', maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--input-border)', borderRadius: '6px', padding: '6px'}}>
+                  <div style={{fontSize: '0.75rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Найдено совпадений: {ragContentSearchResults.length}</div>
+                  {ragContentSearchResults.map((result, i) => (
+                    <div key={i} className="rag-content-result" style={{padding: '4px 6px', borderBottom: '1px solid var(--input-border)', fontSize: '0.75rem', cursor: 'pointer'}} onClick={() => { setRagActiveFile(result.file_name); setRagFilePreview({ name: result.file_name, chunks: 0, folder: '', pinned: false }); }}>
+                      <div style={{fontWeight: 500, color: 'var(--text-color)'}}>{result.file_name}</div>
+                      <div style={{color: 'var(--icon-color)', marginTop: '2px'}}>{result.chunk_text.substring(0, 120)}...</div>
+                      <div style={{color: '#7f8c8d', fontSize: '0.7rem'}}>Релевантность: {(result.score * 100).toFixed(1)}%</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Кнопка показа противоречий (Eternal RAG: contradiction detection) */}
+              <div style={{display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '6px'}}>
+                <button
+                  className="provider-save-btn"
+                  style={{fontSize: '0.75rem', padding: '2px 8px'}}
+                  onClick={() => { setShowContradictions(!showContradictions); if (!showContradictions) fetchContradictions(); }}
+                >
+                  {showContradictions ? 'Скрыть противоречия' : 'Проверить противоречия'}
+                </button>
+                <button
+                  className="provider-save-btn"
+                  style={{fontSize: '0.75rem', padding: '2px 8px'}}
+                  onClick={() => setShowDeletedFiles(!showDeletedFiles)}
+                >
+                  {showDeletedFiles ? 'Скрыть корзину' : 'Корзина'}
+                </button>
+              </div>
+              {/* Список обнаруженных противоречий */}
+              {showContradictions && (
+                <div className="rag-contradictions-panel" style={{marginBottom: '8px', maxHeight: '250px', overflowY: 'auto', border: '1px solid #ff9800', borderRadius: '6px', padding: '8px', background: 'rgba(255, 152, 0, 0.05)'}}>
+                  <div style={{fontSize: '0.78rem', fontWeight: 600, color: '#ff9800', marginBottom: '6px'}}>Обнаруженные противоречия</div>
+                  {ragContradictions.length === 0 ? (
+                    <div style={{fontSize: '0.75rem', color: 'var(--icon-color)', fontStyle: 'italic'}}>Противоречий не обнаружено</div>
+                  ) : ragContradictions.map((c, i) => (
+                    <div key={i} style={{padding: '6px', borderBottom: '1px solid var(--input-border)', fontSize: '0.75rem'}}>
+                      <div style={{color: '#e74c3c', fontWeight: 500}}>Конфликт (сходство: {(c.similarity * 100).toFixed(1)}%)</div>
+                      <div style={{marginTop: '2px', color: 'var(--text-color)'}}>Оригинал: {c.original_text.substring(0, 100)}...</div>
+                      <div style={{marginTop: '2px', color: '#ff6b6b'}}>Конфликт: {c.conflicting_text.substring(0, 100)}...</div>
+                      <div style={{marginTop: '2px', color: '#7f8c8d', fontSize: '0.7rem'}}>Обнаружено: {c.detected_at}</div>
+                    </div>
+                  ))}
                 </div>
               )}
               <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', marginBottom: '4px', fontWeight: 500}}>Файлы в базе знаний:</div>
@@ -1936,12 +2124,20 @@ function App() {
                         }} title="Удалить папку">✕</button>
                       </div>
                       <div className={`rag-folder-files ${collapsedFolders.has(folder.folder) ? 'collapsed' : ''}`}>
-                        {folder.files.slice(0, 10).map((rf, fileIdx: number) => {
+                        {/* Сортировка: закреплённые (pinned) файлы показываются первыми */}
+                        {[...folder.files].sort((a, b) => {
+                          const aPinned = ragPinnedFiles.has(folder.folder + '/' + a.file_name) ? 1 : 0;
+                          const bPinned = ragPinnedFiles.has(folder.folder + '/' + b.file_name) ? 1 : 0;
+                          return bPinned - aPinned;
+                        }).slice(0, 10).map((rf, fileIdx: number) => {
                           const fullPath = folder.folder + '/' + rf.file_name;
                           const isRenaming = ragRenamingFile === fullPath;
                           const isSelected = ragSelectedFiles.has(fullPath);
+                          const isPinned = ragPinnedFiles.has(fullPath);
+                          const isActive = ragActiveFile === fullPath;
+                          const isMoving = ragMoveTarget.file === fullPath && ragMoveTarget.open;
                           return (
-                            <div key={fileIdx} className={`rag-file-item ${isSelected ? 'rag-file-selected' : ''}`}>
+                            <div key={fileIdx} className={`rag-file-item ${isSelected ? 'rag-file-selected' : ''} ${isActive ? 'rag-file-active' : ''} ${isPinned ? 'rag-file-pinned' : ''}`}>
                               {/* Чекбокс multi-select (спецификация UI: раздел 3.4) */}
                               <input
                                 type="checkbox"
@@ -1956,7 +2152,8 @@ function App() {
                                 }}
                                 title="Выбрать файл"
                               />
-                              <span className="rag-file-icon">📄</span>
+                              {/* Индикатор закреплённого файла */}
+                              <span className="rag-file-icon">{isPinned ? '📌' : '📄'}</span>
                               {/* Inline rename: показываем input при редактировании, иначе имя файла */}
                               {isRenaming ? (
                                 <input
@@ -1965,6 +2162,8 @@ function App() {
                                   value={ragRenameValue}
                                   onChange={(e) => setRagRenameValue(e.target.value)}
                                   onKeyDown={(e) => {
+                                    // stopPropagation предотвращает закрытие панели по Escape
+                                    e.stopPropagation();
                                     if (e.key === 'Enter' && ragRenameValue.trim()) {
                                       renameRagFile(fullPath, ragRenameValue.trim());
                                       setRagRenamingFile(null);
@@ -1980,15 +2179,32 @@ function App() {
                               ) : (
                                 <span
                                   className="rag-file-name"
+                                  onClick={() => {
+                                    // Клик выделяет файл и показывает предпросмотр
+                                    setRagActiveFile(fullPath);
+                                    setRagFilePreview({ name: rf.file_name, chunks: rf.chunks_count, folder: folder.folder, pinned: isPinned });
+                                  }}
                                   onDoubleClick={() => {
                                     // Двойной клик запускает inline rename
                                     setRagRenamingFile(fullPath);
                                     setRagRenameValue(rf.file_name);
                                   }}
-                                  title="Двойной клик для переименования"
+                                  title="Клик — предпросмотр, двойной клик — переименование"
                                 >{rf.file_name}</span>
                               )}
                               <span className="rag-file-chunks">{rf.chunks_count} фр.</span>
+                              {/* Кнопка закрепления/открепления */}
+                              <button
+                                className="rag-file-pin"
+                                onClick={() => pinRagFile(fullPath, !isPinned)}
+                                title={isPinned ? 'Открепить' : 'Закрепить'}
+                              >{isPinned ? '★' : '☆'}</button>
+                              {/* Кнопка перемещения в другую папку */}
+                              <button
+                                className="rag-file-move"
+                                onClick={() => setRagMoveTarget({ file: fullPath, open: !isMoving })}
+                                title="Переместить"
+                              >↷</button>
                               {/* Кнопка переименования */}
                               {!isRenaming && (
                                 <button
@@ -2000,7 +2216,24 @@ function App() {
                                   title="Переименовать"
                                 >✎</button>
                               )}
-                              <button className="rag-file-delete" onClick={() => deleteRagFile(fullPath)} title="Удалить">✕</button>
+                              {/* Мягкое удаление (soft delete) вместо физического */}
+                              <button className="rag-file-delete" onClick={() => softDeleteRagFile(fullPath)} title="В корзину">✕</button>
+                              {/* Inline-выбор целевой папки для перемещения */}
+                              {isMoving && (
+                                <div className="rag-move-dropdown" style={{position: 'absolute', right: 0, top: '100%', background: 'var(--input-bg)', border: '1px solid var(--input-border)', borderRadius: '6px', padding: '4px', zIndex: 10, minWidth: '120px', boxShadow: '0 2px 8px rgba(0,0,0,0.3)'}}>
+                                  {ragFiles.filter(f => f.folder !== folder.folder).map(f => (
+                                    <div
+                                      key={f.folder}
+                                      className="rag-move-option"
+                                      style={{padding: '3px 6px', cursor: 'pointer', fontSize: '0.75rem', borderRadius: '4px'}}
+                                      onClick={() => moveRagFile(fullPath, f.folder)}
+                                    >📁 {f.folder}</div>
+                                  ))}
+                                  {ragFiles.filter(f => f.folder !== folder.folder).length === 0 && (
+                                    <div style={{padding: '3px 6px', fontSize: '0.75rem', color: 'var(--icon-color)', fontStyle: 'italic'}}>Нет других папок</div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -2013,6 +2246,44 @@ function App() {
                 </div>
               ) : (
                 <div style={{fontSize: '0.8rem', color: 'var(--icon-color)', fontStyle: 'italic', padding: '8px 0'}}>Нет загруженных файлов. Нажмите «Загрузить файл» для добавления.</div>
+              )}
+              {/* Корзина: мягко удалённые файлы с возможностью восстановления */}
+              {showDeletedFiles && (
+                <div className="rag-deleted-section" style={{marginTop: '8px', border: '1px solid #e74c3c', borderRadius: '6px', padding: '8px', background: 'rgba(231, 76, 60, 0.05)'}}>
+                  <div style={{fontSize: '0.78rem', fontWeight: 600, color: '#e74c3c', marginBottom: '4px'}}>Корзина (удалённые файлы)</div>
+                  {ragDeletedFiles.length === 0 ? (
+                    <div style={{fontSize: '0.75rem', color: 'var(--icon-color)', fontStyle: 'italic'}}>Корзина пуста</div>
+                  ) : ragDeletedFiles.map((file, i) => (
+                    <div key={i} style={{display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0', fontSize: '0.75rem'}}>
+                      <span style={{opacity: 0.5}}>📄</span>
+                      <span style={{flex: 1, color: 'var(--icon-color)', textDecoration: 'line-through'}}>{file}</span>
+                      <button
+                        className="provider-save-btn"
+                        style={{fontSize: '0.7rem', padding: '1px 6px'}}
+                        onClick={() => restoreRagFile(file)}
+                      >Восстановить</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Предпросмотр метаданных выбранного файла */}
+              {ragFilePreview && (
+                <div className="rag-file-preview" style={{marginTop: '8px', border: '1px solid var(--input-border)', borderRadius: '6px', padding: '8px', background: 'rgba(255,255,255,0.03)'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px'}}>
+                    <div style={{fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-color)'}}>Предпросмотр</div>
+                    <button
+                      className="rag-file-delete"
+                      onClick={() => { setRagFilePreview(null); setRagActiveFile(null); }}
+                      title="Закрыть предпросмотр"
+                    >✕</button>
+                  </div>
+                  <div style={{fontSize: '0.75rem', color: 'var(--icon-color)'}}>
+                    <div>Имя: <span style={{color: 'var(--text-color)'}}>{ragFilePreview.name}</span></div>
+                    {ragFilePreview.folder && <div>Папка: <span style={{color: 'var(--text-color)'}}>{ragFilePreview.folder}</span></div>}
+                    <div>Фрагментов: <span style={{color: 'var(--text-color)'}}>{ragFilePreview.chunks}</span></div>
+                    <div>Закреплён: <span style={{color: ragFilePreview.pinned ? '#4caf50' : 'var(--text-color)'}}>{ragFilePreview.pinned ? 'Да' : 'Нет'}</span></div>
+                  </div>
+                </div>
               )}
             </div>
           </div>

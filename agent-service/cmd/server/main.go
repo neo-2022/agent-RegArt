@@ -2620,6 +2620,191 @@ var supportedExtensions = map[string]bool{
 	".log": true,
 }
 
+// fetchRAGFromMemory — получение RAG-контекста из memory-service вместо ChromaDB.
+// Выполняет семантический поиск по базе знаний memory-service для обогащения
+// контекста модели при обработке чат-запроса.
+func fetchRAGFromMemory(query string, topK int) (string, []Source) {
+	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
+
+	reqBody := map[string]interface{}{
+		"query":         query,
+		"top_k":         topK,
+		"include_files": true,
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		slog.Error("Ошибка сериализации RAG запроса к memory-service", slog.String("ошибка", err.Error()))
+		return "", nil
+	}
+
+	resp, err := http.Post(memoryURL+"/search", "application/json", bytes.NewReader(data))
+	if err != nil {
+		slog.Warn("memory-service недоступен для RAG поиска, fallback на ChromaDB", slog.String("ошибка", err.Error()))
+		return "", nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("memory-service вернул ошибку при RAG поиске", slog.Int("статус", resp.StatusCode))
+		return "", nil
+	}
+
+	var result struct {
+		Results []struct {
+			Text     string                 `json:"text"`
+			Score    float64                `json:"score"`
+			Source   string                 `json:"source"`
+			Metadata map[string]interface{} `json:"metadata"`
+		} `json:"results"`
+		Count int `json:"count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		slog.Error("Ошибка декодирования RAG ответа от memory-service", slog.String("ошибка", err.Error()))
+		return "", nil
+	}
+
+	if len(result.Results) == 0 {
+		return "", nil
+	}
+
+	var sources []Source
+	ragContext := "\n\n=== База знаний (RAG — memory-service) ===\n"
+	for i, r := range result.Results {
+		title := r.Source
+		if fn, ok := r.Metadata["file_name"]; ok {
+			title = fmt.Sprintf("%v", fn)
+		}
+		ragContext += fmt.Sprintf("[%d] %s: %s\n", i+1, title, truncate(r.Text, 150))
+		sources = append(sources, Source{
+			Title:   title,
+			Content: truncate(r.Text, 100),
+			Score:   i + 1,
+		})
+	}
+	ragContext += "Используй эту информацию из базы знаний для более точных ответов.\n"
+	return ragContext, sources
+}
+
+// proxyToMemoryService — вспомогательная функция для проксирования запросов к memory-service.
+// Используется новыми RAG-обработчиками (move, soft-delete, restore, pin, content-search, contradictions).
+func proxyToMemoryService(w http.ResponseWriter, method string, path string, body []byte) {
+	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
+	url := memoryURL + path
+
+	var req *http.Request
+	var err error
+	if body != nil {
+		req, err = http.NewRequest(method, url, bytes.NewReader(body))
+	} else {
+		req, err = http.NewRequest(method, url, nil)
+	}
+	if err != nil {
+		slog.Error("Ошибка создания запроса к memory-service", slog.String("ошибка", err.Error()))
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Ошибка запроса к memory-service", slog.String("путь", path), slog.String("ошибка", err.Error()))
+		http.Error(w, `{"error":"memory-service unavailable"}`, http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// ragMoveHandler — перемещение файла между папками в RAG-базе
+func ragMoveHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "POST", "/files/move", body)
+}
+
+// ragSoftDeleteHandler — мягкое удаление файла (пометка deleted_at)
+func ragSoftDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "PATCH", "/files/soft-delete", body)
+}
+
+// ragRestoreHandler — восстановление мягко удалённого файла
+func ragRestoreHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost && r.Method != http.MethodPatch {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "PATCH", "/files/restore", body)
+}
+
+// ragPinHandler — закрепление/открепление файла
+func ragPinHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method == http.MethodPost {
+		body, _ := io.ReadAll(r.Body)
+		proxyToMemoryService(w, "POST", "/files/pin", body)
+		return
+	}
+	if r.Method == http.MethodDelete {
+		name := r.URL.Query().Get("name")
+		proxyToMemoryService(w, "DELETE", "/files/pin?name="+name, nil)
+		return
+	}
+	apierror.MethodNotAllowed(w, cid)
+}
+
+// ragRenameHandler — переименование файла в RAG-базе
+func ragRenameHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPatch && r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "PATCH", "/files/rename", body)
+}
+
+// ragContentSearchHandler — семантический поиск по содержимому файлов
+func ragContentSearchHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "POST", "/files/content-search", body)
+}
+
+// ragContradictionsHandler — получение списка обнаруженных противоречий
+func ragContradictionsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodGet {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	topK := r.URL.Query().Get("top_k")
+	path := "/contradictions"
+	if topK != "" {
+		path += "?top_k=" + topK
+	}
+	proxyToMemoryService(w, "GET", path, nil)
+}
+
 // ragAddFolderHandler — обработчик для рекурсивной загрузки папки в RAG
 func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
 	cid := r.Header.Get("X-Request-ID")
@@ -3634,13 +3819,22 @@ func main() {
 	http.HandleFunc("/autoskill/promote", requestIDMiddleware(autoskillPromoteHandler))
 	http.HandleFunc("/autoskill/rollback", requestIDMiddleware(autoskillRollbackHandler))
 
-	// RAG эндпоинты
+	// RAG эндпоинты — основные операции с документами
 	http.HandleFunc("/rag/add", requestIDMiddleware(ragAddHandler))
 	http.HandleFunc("/rag/add-folder", requestIDMiddleware(ragAddFolderHandler))
 	http.HandleFunc("/rag/search", requestIDMiddleware(ragSearchHandler))
 	http.HandleFunc("/rag/files", requestIDMiddleware(ragFilesHandler))
 	http.HandleFunc("/rag/stats", requestIDMiddleware(ragStatsHandler))
 	http.HandleFunc("/rag/delete", requestIDMiddleware(ragDeleteHandler))
+
+	// RAG эндпоинты — расширенные операции (проксирование в memory-service)
+	http.HandleFunc("/rag/move", requestIDMiddleware(ragMoveHandler))
+	http.HandleFunc("/rag/soft-delete", requestIDMiddleware(ragSoftDeleteHandler))
+	http.HandleFunc("/rag/restore", requestIDMiddleware(ragRestoreHandler))
+	http.HandleFunc("/rag/pin", requestIDMiddleware(ragPinHandler))
+	http.HandleFunc("/rag/rename", requestIDMiddleware(ragRenameHandler))
+	http.HandleFunc("/rag/content-search", requestIDMiddleware(ragContentSearchHandler))
+	http.HandleFunc("/rag/contradictions", requestIDMiddleware(ragContradictionsHandler))
 
 	for _, dir := range []string{
 		filepath.Join(".", "uploads"),

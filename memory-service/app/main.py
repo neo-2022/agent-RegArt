@@ -175,6 +175,159 @@ async def rename_file(request: models.FileRenameRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/files/move", response_model=models.FileMoveResponse, tags=["Files"])
+async def move_file(request: models.FileMoveRequest):
+    """
+    Переместить файл между папками в RAG-базе знаний.
+
+    Обновляет путь в метаданных file_name у всех чанков файла.
+    Содержимое и embeddings не затрагиваются.
+    """
+    try:
+        old_path, new_path, chunks = memory_store.move_file(request.file_name, request.target_folder)
+        if chunks == 0:
+            raise HTTPException(status_code=404, detail=f"Файл '{request.file_name}' не найден")
+        return models.FileMoveResponse(
+            old_path=old_path,
+            new_path=new_path,
+            chunks_updated=chunks,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при перемещении файла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/files/soft-delete", response_model=models.FileSoftDeleteResponse, tags=["Files"])
+async def soft_delete_file(request: models.FileSoftDeleteRequest):
+    """
+    Мягкое удаление файла — пометка deleted_at вместо физического удаления.
+
+    Файл остаётся в коллекции, но исключается из поиска и списков.
+    Можно восстановить через PATCH /files/restore.
+    """
+    try:
+        chunks = memory_store.soft_delete_file(request.file_name)
+        if chunks == 0:
+            raise HTTPException(status_code=404, detail=f"Файл '{request.file_name}' не найден")
+        return models.FileSoftDeleteResponse(
+            file_name=request.file_name,
+            chunks_marked=chunks,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при мягком удалении файла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/files/restore", response_model=models.FileRestoreResponse, tags=["Files"])
+async def restore_file(request: models.FileRestoreRequest):
+    """
+    Восстановить мягко удалённый файл.
+
+    Снимает пометку deleted_at и возвращает файл в активное состояние.
+    """
+    try:
+        chunks = memory_store.restore_file(request.file_name)
+        if chunks == 0:
+            raise HTTPException(status_code=404, detail=f"Файл '{request.file_name}' не найден или не удалён")
+        return models.FileRestoreResponse(
+            file_name=request.file_name,
+            chunks_restored=chunks,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при восстановлении файла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/files/pin", response_model=models.FilePinResponse, tags=["Files"])
+async def pin_file(request: models.FilePinRequest):
+    """
+    Закрепить файл — показывается первым в списке, не удаляется по TTL.
+    """
+    try:
+        chunks = memory_store.pin_file(request.file_name, pinned=True)
+        if chunks == 0:
+            raise HTTPException(status_code=404, detail=f"Файл '{request.file_name}' не найден")
+        return models.FilePinResponse(
+            file_name=request.file_name,
+            pinned=True,
+            chunks_updated=chunks,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при закреплении файла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/files/pin", response_model=models.FilePinResponse, tags=["Files"])
+async def unpin_file(name: str):
+    """
+    Открепить файл — возвращает обычный приоритет.
+    """
+    try:
+        chunks = memory_store.pin_file(name, pinned=False)
+        if chunks == 0:
+            raise HTTPException(status_code=404, detail=f"Файл '{name}' не найден")
+        return models.FilePinResponse(
+            file_name=name,
+            pinned=False,
+            chunks_updated=chunks,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при откреплении файла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/files/content-search", response_model=models.FileContentSearchResponse, tags=["Files"])
+async def search_file_contents(request: models.FileContentSearchRequest):
+    """
+    Семантический поиск по содержимому файлов RAG-базы.
+
+    Находит наиболее релевантные фрагменты файлов по запросу.
+    Исключает мягко удалённые файлы из результатов.
+    """
+    try:
+        results = memory_store.search_file_contents(
+            query=request.query,
+            top_k=request.top_k,
+            folder=request.folder,
+        )
+        return models.FileContentSearchResponse(
+            results=results,
+            count=len(results),
+            query=request.query,
+        )
+    except Exception as e:
+        logger.exception("Ошибка при поиске по содержимому файлов")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/contradictions", response_model=models.ContradictionsResponse, tags=["Learnings"])
+async def get_contradictions(top_k: int = 50):
+    """
+    Получить список обнаруженных противоречий между знаниями.
+
+    Используется для отображения конфликтов в UI (Eternal RAG: раздел 8).
+    """
+    try:
+        items = memory_store.list_contradictions(top_k=top_k)
+        return models.ContradictionsResponse(
+            contradictions=items,
+            count=len(items),
+        )
+    except Exception as e:
+        logger.exception("Ошибка получения списка противоречий")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/files", tags=["Files"])
 async def delete_file_by_name(name: str):
     """

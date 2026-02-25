@@ -1378,6 +1378,89 @@ body {
     padding: 4px 0;
 }
 
+/* === RAG: активный файл (highlight при клике для предпросмотра) === */
+.rag-file-active {
+    background: rgba(76, 175, 80, 0.1) !important;
+    border-left: 2px solid #4caf50;
+}
+
+/* === RAG: закреплённый файл (pinned) — мягкое свечение === */
+.rag-file-pinned {
+    border-right: 2px solid #ff9800;
+}
+
+/* === RAG: кнопка закрепления/открепления (pin/unpin) === */
+.rag-file-pin {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 2px 3px;
+    border-radius: 4px;
+    opacity: 0.4;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.rag-file-pin:hover {
+    opacity: 1;
+    color: #ff9800;
+}
+
+.rag-file-pinned .rag-file-pin {
+    opacity: 1;
+    color: #ff9800;
+}
+
+/* === RAG: кнопка перемещения файла между папками === */
+.rag-file-move {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 2px 3px;
+    border-radius: 4px;
+    opacity: 0.4;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+}
+
+.rag-file-move:hover {
+    opacity: 1;
+    color: var(--accent, #7c5cfc);
+    background: rgba(124, 92, 252, 0.1);
+}
+
+/* === RAG: dropdown выбора папки для перемещения === */
+.rag-move-dropdown {
+    animation: ragDropdownFadeIn 0.15s ease;
+}
+
+.rag-move-option:hover {
+    background: rgba(124, 92, 252, 0.12) !important;
+}
+
+@keyframes ragDropdownFadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* === RAG: элемент файла — relative для dropdown === */
+.rag-file-item {
+    position: relative;
+}
+
+/* === RAG: результат семантического поиска по содержимому === */
+.rag-content-result:hover {
+    background: rgba(124, 92, 252, 0.06);
+}
+
+.rag-content-result:last-child {
+    border-bottom: none !important;
+}
+
 .system-panel {
     width: 0;
     min-width: 0;

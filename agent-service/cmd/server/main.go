@@ -517,6 +517,15 @@ func chatHandler(w http.ResponseWriter, r *http.Request) {
 		slog.Info("Знания добавлены в контекст", slog.Int("количество", len(learnings)), slog.String("модель", agent.LLMModel))
 	}
 
+	// === Skill Engine: получение релевантных навыков (Eternal RAG: раздел 5.3) ===
+	// Навыки — структурированные знания (цель, шаги, ограничения),
+	// которые помогают модели решать задачи точнее и последовательнее.
+	skillsTopK := 3
+	skillContext := fetchRelevantSkills(lastMsg, skillsTopK)
+	if skillContext != "" {
+		systemPrompt += skillContext
+	}
+
 	// Добавляем RAG контекст к системному промпту
 	if ragContext != "" {
 		systemPrompt += ragContext
@@ -1576,6 +1585,105 @@ func fetchModelLearnings(modelName string, query string) []string {
 	return texts
 }
 
+// fetchRelevantSkills — получение релевантных навыков из Skill Engine.
+// Вызывается в chat pipeline перед запросом к LLM для обогащения контекста.
+// Навыки содержат цель, шаги, примеры и ограничения — структурированные знания,
+// которые помогают модели решать задачи точнее.
+//
+// Параметры:
+//   - query: текст запроса пользователя для семантического поиска
+//   - topK: максимум навыков для возврата
+//
+// Возвращает: отформатированную строку с навыками для вставки в системный промпт
+func fetchRelevantSkills(query string, topK int) string {
+	memoryURL := getEnv("MEMORY_SERVICE_URL", "http://localhost:8001")
+
+	reqBody := map[string]interface{}{
+		"query": query,
+		"top_k": topK,
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		slog.Error("[SKILL-FETCH] ошибка сериализации", slog.String("ошибка", err.Error()))
+		return ""
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(memoryURL+"/skills/search", "application/json", bytes.NewReader(data))
+	if err != nil {
+		slog.Warn("[SKILL-FETCH] memory-service недоступен", slog.String("ошибка", err.Error()))
+		return ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("[SKILL-FETCH] ошибка ответа", slog.Int("статус", resp.StatusCode))
+		return ""
+	}
+
+	var result struct {
+		Results []struct {
+			Goal        string   `json:"goal"`
+			Steps       []string `json:"steps"`
+			Examples    []string `json:"examples"`
+			Constraints []string `json:"constraints"`
+			Confidence  float64  `json:"confidence"`
+			Relevance   float64  `json:"relevance"`
+			ID          string   `json:"id"`
+		} `json:"results"`
+		Count int `json:"count"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		slog.Error("[SKILL-FETCH] ошибка декодирования", slog.String("ошибка", err.Error()))
+		return ""
+	}
+
+	if len(result.Results) == 0 {
+		return ""
+	}
+
+	// Форматируем навыки для добавления в системный промпт
+	skillContext := "\n\n=== Навыки агента (Skill Engine) ===\n"
+	for i, s := range result.Results {
+		skillContext += fmt.Sprintf("[Навык %d] %s (confidence: %.0f%%)\n", i+1, s.Goal, s.Confidence*100)
+		if len(s.Steps) > 0 {
+			skillContext += "  Шаги: "
+			for j, step := range s.Steps {
+				if j > 0 {
+					skillContext += " → "
+				}
+				skillContext += step
+			}
+			skillContext += "\n"
+		}
+		if len(s.Constraints) > 0 {
+			skillContext += "  Ограничения: " + strings.Join(s.Constraints, "; ") + "\n"
+		}
+		// Фиксируем использование навыка асинхронно
+		go recordSkillUsage(memoryURL, s.ID)
+	}
+	skillContext += "Применяй эти навыки при решении задач пользователя.\n"
+
+	slog.Info("[SKILL-FETCH] навыки найдены", slog.Int("количество", len(result.Results)))
+	return skillContext
+}
+
+// recordSkillUsage — асинхронная фиксация использования навыка.
+// Увеличивает usage_count и confidence навыка в memory-service.
+func recordSkillUsage(memoryURL, skillID string) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("POST", memoryURL+"/skills/"+skillID+"/usage", nil)
+	if err != nil {
+		return
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Warn("[SKILL-USAGE] ошибка записи", slog.String("skill_id", skillID), slog.String("ошибка", err.Error()))
+		return
+	}
+	defer resp.Body.Close()
+}
+
 // extractAndStoreLearnings — извлечение и сохранение знаний из диалога.
 // Вызывается асинхронно (в горутине) после каждого успешного ответа от LLM.
 //
@@ -1588,6 +1696,8 @@ func fetchModelLearnings(modelName string, query string) []string {
 //     - skill: успешные подходы к решению задач
 //     - general: прочие полезные знания
 //  3. Формирование текста знания и отправка в memory-service
+//  4. Для категории "skill" — дополнительно создаёт навык через Skill Engine
+//  5. Создание связей в Graph Engine между новым и существующими знаниями
 //
 // Знания привязываются к конкретной модели (modelName), а не к агенту,
 // потому что при смене агента модель сохраняет свои знания.
@@ -1631,10 +1741,128 @@ func extractAndStoreLearnings(modelName, agentName, userMsg, assistantResp strin
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		slog.Info("Знание сохранено", slog.String("модель", modelName), slog.String("категория", category))
-	} else {
+	if resp.StatusCode != http.StatusOK {
 		slog.Warn("memory-service вернул ошибку при сохранении знания", slog.Int("статус", resp.StatusCode))
+		return
+	}
+
+	// Декодируем ответ для получения ID знания (нужен для связей в графе)
+	var learningResp struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&learningResp); err != nil {
+		slog.Warn("Ошибка декодирования ответа learning", slog.String("ошибка", err.Error()))
+	}
+
+	slog.Info("Знание сохранено", slog.String("модель", modelName), slog.String("категория", category), slog.String("id", learningResp.ID))
+
+	// === Автоматическое создание навыка из диалога (Eternal RAG: раздел 7) ===
+	// Если категория — "skill", создаём структурированный навык через Skill Engine.
+	// Навык содержит цель, шаги, примеры — извлечённые из текста диалога.
+	if category == "skill" {
+		go createSkillFromDialog(memoryURL, userMsg+"\n"+assistantResp, modelName)
+	}
+
+	// === Автоматическое создание связей в Graph Engine ===
+	// Если знание связано с противоречием, создаём связь "contradicts" в графе.
+	// Это позволяет обходить граф знаний и находить конфликтующие факты.
+	if learningResp.ID != "" {
+		go autoCreateGraphRelationships(memoryURL, learningResp.ID, learningText, modelName)
+	}
+}
+
+// createSkillFromDialog — создание навыка из текста диалога через Skill Engine.
+// Вызывается асинхронно когда extractAndStoreLearnings обнаруживает категорию "skill".
+func createSkillFromDialog(memoryURL, dialogText, modelName string) {
+	reqBody := map[string]interface{}{
+		"dialog_text": dialogText,
+		"model_name":  modelName,
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		slog.Error("[SKILL-CREATE] ошибка сериализации", slog.String("ошибка", err.Error()))
+		return
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Post(memoryURL+"/skills/from-dialog", "application/json", bytes.NewReader(data))
+	if err != nil {
+		slog.Warn("[SKILL-CREATE] ошибка создания навыка", slog.String("ошибка", err.Error()))
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		slog.Info("[SKILL-CREATE] навык создан из диалога", slog.String("модель", modelName))
+	} else {
+		slog.Warn("[SKILL-CREATE] ошибка ответа", slog.Int("статус", resp.StatusCode))
+	}
+}
+
+// autoCreateGraphRelationships — автоматическое создание связей в графе знаний.
+// После сохранения нового знания ищем похожие существующие знания
+// и создаём связи "relates_to" между ними (Eternal RAG: раздел 5.4).
+func autoCreateGraphRelationships(memoryURL, learningID, learningText, modelName string) {
+	// Ищем похожие знания для создания связей
+	reqBody := map[string]interface{}{
+		"query":      learningText,
+		"model_name": modelName,
+		"top_k":      3,
+	}
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(memoryURL+"/learnings/search", "application/json", bytes.NewReader(data))
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	var searchResult struct {
+		Results []struct {
+			ID    string  `json:"id"`
+			Score float64 `json:"score"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&searchResult); err != nil {
+		return
+	}
+
+	// Создаём связи "relates_to" к похожим знаниям (score > 0.7, исключая само знание)
+	minRelateScore := 0.7
+	for _, r := range searchResult.Results {
+		if r.ID == learningID || r.Score < minRelateScore {
+			continue
+		}
+		relBody := map[string]interface{}{
+			"source_id":         learningID,
+			"target_id":         r.ID,
+			"relationship_type": "relates_to",
+			"source_type":       "knowledge",
+			"target_type":       "knowledge",
+			"metadata": map[string]interface{}{
+				"auto_created": true,
+				"similarity":   r.Score,
+			},
+		}
+		relData, err := json.Marshal(relBody)
+		if err != nil {
+			continue
+		}
+		relResp, err := client.Post(memoryURL+"/graph/relationships", "application/json", bytes.NewReader(relData))
+		if err != nil {
+			slog.Warn("[GRAPH-AUTO] ошибка создания связи", slog.String("ошибка", err.Error()))
+			continue
+		}
+		relResp.Body.Close()
+		slog.Info("[GRAPH-AUTO] связь создана", slog.String("source", learningID), slog.String("target", r.ID))
 	}
 }
 
@@ -2815,6 +3043,172 @@ func ragDeletedFilesHandler(w http.ResponseWriter, r *http.Request) {
 	proxyToMemoryService(w, "GET", "/files/deleted", nil)
 }
 
+// === Proxy-обработчики для Skill Engine (Eternal RAG: раздел 5.3) ===
+// Проксируют запросы от web-ui к memory-service для управления навыками.
+
+// skillsListHandler — получение списка / создание навыков
+func skillsListHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	switch r.Method {
+	case http.MethodGet:
+		// Передаём query-параметры (workspace_id, skill_status)
+		query := r.URL.RawQuery
+		path := "/skills"
+		if query != "" {
+			path += "?" + query
+		}
+		proxyToMemoryService(w, "GET", path, nil)
+	case http.MethodPost:
+		body, _ := io.ReadAll(r.Body)
+		proxyToMemoryService(w, "POST", "/skills", body)
+	default:
+		apierror.MethodNotAllowed(w, cid)
+	}
+}
+
+// skillByIDHandler — CRUD операции над конкретным навыком (/skills/{id})
+func skillByIDHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	// Извлекаем ID из пути: /skills/{id}
+	skillID := strings.TrimPrefix(r.URL.Path, "/skills/")
+	// Убираем суффикс /usage если есть (отдельный обработчик)
+	if strings.HasSuffix(skillID, "/usage") {
+		skillUsageHandler(w, r)
+		return
+	}
+	if skillID == "" {
+		http.Error(w, `{"error":"skill_id required"}`, http.StatusBadRequest)
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		proxyToMemoryService(w, "GET", "/skills/"+skillID, nil)
+	case http.MethodPut:
+		body, _ := io.ReadAll(r.Body)
+		proxyToMemoryService(w, "PUT", "/skills/"+skillID, body)
+	case http.MethodDelete:
+		proxyToMemoryService(w, "DELETE", "/skills/"+skillID, nil)
+	default:
+		apierror.MethodNotAllowed(w, cid)
+	}
+}
+
+// skillSearchHandler — семантический поиск навыков
+func skillSearchHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "POST", "/skills/search", body)
+}
+
+// skillFromDialogHandler — создание навыка из диалога
+func skillFromDialogHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "POST", "/skills/from-dialog", body)
+}
+
+// skillUsageHandler — фиксация использования навыка
+func skillUsageHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	// Путь: /skills/{id}/usage → извлекаем ID
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/skills/"), "/")
+	if len(parts) < 2 || parts[0] == "" {
+		http.Error(w, `{"error":"skill_id required"}`, http.StatusBadRequest)
+		return
+	}
+	proxyToMemoryService(w, "POST", "/skills/"+parts[0]+"/usage", nil)
+}
+
+// === Proxy-обработчики для Graph Engine (Eternal RAG: раздел 5.4) ===
+// Проксируют запросы от web-ui к memory-service для управления графом знаний.
+
+// graphRelationshipsHandler — список / создание связей
+func graphRelationshipsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	switch r.Method {
+	case http.MethodGet:
+		query := r.URL.RawQuery
+		path := "/graph/relationships"
+		if query != "" {
+			path += "?" + query
+		}
+		proxyToMemoryService(w, "GET", path, nil)
+	case http.MethodPost:
+		body, _ := io.ReadAll(r.Body)
+		proxyToMemoryService(w, "POST", "/graph/relationships", body)
+	default:
+		apierror.MethodNotAllowed(w, cid)
+	}
+}
+
+// graphRelationshipByIDHandler — удаление связи по ID
+func graphRelationshipByIDHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	relID := strings.TrimPrefix(r.URL.Path, "/graph/relationships/")
+	if relID == "" {
+		http.Error(w, `{"error":"relationship_id required"}`, http.StatusBadRequest)
+		return
+	}
+	if r.Method != http.MethodDelete {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	proxyToMemoryService(w, "DELETE", "/graph/relationships/"+relID, nil)
+}
+
+// graphNeighborsHandler — получение соседних узлов
+func graphNeighborsHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodGet {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	nodeID := strings.TrimPrefix(r.URL.Path, "/graph/neighbors/")
+	if nodeID == "" {
+		http.Error(w, `{"error":"node_id required"}`, http.StatusBadRequest)
+		return
+	}
+	query := r.URL.RawQuery
+	path := "/graph/neighbors/" + nodeID
+	if query != "" {
+		path += "?" + query
+	}
+	proxyToMemoryService(w, "GET", path, nil)
+}
+
+// graphTraverseHandler — обход графа знаний (BFS)
+func graphTraverseHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodPost {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	body, _ := io.ReadAll(r.Body)
+	proxyToMemoryService(w, "POST", "/graph/traverse", body)
+}
+
+// embeddingStatusHandler — статус модели эмбеддингов
+func embeddingStatusHandler(w http.ResponseWriter, r *http.Request) {
+	cid := r.Header.Get("X-Request-ID")
+	if r.Method != http.MethodGet {
+		apierror.MethodNotAllowed(w, cid)
+		return
+	}
+	proxyToMemoryService(w, "GET", "/embeddings/status", nil)
+}
+
 // ragAddFolderHandler — обработчик для рекурсивной загрузки папки в RAG
 func ragAddFolderHandler(w http.ResponseWriter, r *http.Request) {
 	cid := r.Header.Get("X-Request-ID")
@@ -3846,6 +4240,21 @@ func main() {
 	http.HandleFunc("/rag/content-search", requestIDMiddleware(ragContentSearchHandler))
 	http.HandleFunc("/rag/contradictions", requestIDMiddleware(ragContradictionsHandler))
 	http.HandleFunc("/rag/deleted-files", requestIDMiddleware(ragDeletedFilesHandler))
+
+	// Skill Engine эндпоинты — проксирование в memory-service (Eternal RAG: раздел 5.3)
+	http.HandleFunc("/skills", requestIDMiddleware(skillsListHandler))
+	http.HandleFunc("/skills/search", requestIDMiddleware(skillSearchHandler))
+	http.HandleFunc("/skills/from-dialog", requestIDMiddleware(skillFromDialogHandler))
+	http.HandleFunc("/skills/", requestIDMiddleware(skillByIDHandler))
+
+	// Graph Engine эндпоинты — проксирование в memory-service (Eternal RAG: раздел 5.4)
+	http.HandleFunc("/graph/relationships", requestIDMiddleware(graphRelationshipsHandler))
+	http.HandleFunc("/graph/relationships/", requestIDMiddleware(graphRelationshipByIDHandler))
+	http.HandleFunc("/graph/neighbors/", requestIDMiddleware(graphNeighborsHandler))
+	http.HandleFunc("/graph/traverse", requestIDMiddleware(graphTraverseHandler))
+
+	// Статус эмбеддингов — проксирование в memory-service
+	http.HandleFunc("/embeddings/status", requestIDMiddleware(embeddingStatusHandler))
 
 	for _, dir := range []string{
 		filepath.Join(".", "uploads"),

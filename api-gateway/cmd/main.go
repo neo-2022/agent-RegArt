@@ -208,6 +208,18 @@ func main() {
 		{Path: "/autoskill/", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
 		// Системные логи (проксируется на agent-service)
 		{Path: "/logs", Target: agentTarget, Methods: []string{"GET", "POST", "PATCH"}, Strip: false},
+		// Skill Engine — управление навыками (проксируется на agent-service → memory-service)
+		{Path: "/skills/search", Target: agentTarget, Methods: []string{"POST"}, Strip: false},
+		{Path: "/skills/from-dialog", Target: agentTarget, Methods: []string{"POST"}, Strip: false},
+		{Path: "/skills/", Target: agentTarget, Methods: []string{"GET", "POST", "PUT", "DELETE"}, Strip: false},
+		{Path: "/skills", Target: agentTarget, Methods: []string{"GET", "POST"}, Strip: false},
+		// Graph Engine — граф знаний (проксируется на agent-service → memory-service)
+		{Path: "/graph/relationships/", Target: agentTarget, Methods: []string{"DELETE"}, Strip: false},
+		{Path: "/graph/relationships", Target: agentTarget, Methods: []string{"GET", "POST"}, Strip: false},
+		{Path: "/graph/neighbors/", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
+		{Path: "/graph/traverse", Target: agentTarget, Methods: []string{"POST"}, Strip: false},
+		// Статус эмбеддингов (проксируется на agent-service → memory-service)
+		{Path: "/embeddings/status", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
 		// Проверка здоровья через memory-service
 		{Path: "/health", Target: memoryTarget, Methods: []string{"GET"}, Strip: false},
 	}

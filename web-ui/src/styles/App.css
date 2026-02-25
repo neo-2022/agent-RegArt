@@ -1434,8 +1434,27 @@ body {
 }
 
 /* === RAG: dropdown выбора папки для перемещения === */
+/* overflow: visible нужен, чтобы dropdown не обрезался parent-контейнером */
 .rag-move-dropdown {
     animation: ragDropdownFadeIn 0.15s ease;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 100;
+    min-width: 140px;
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--input-border, #333);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    padding: 4px 0;
+}
+
+.rag-move-option {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--text-primary, #e0e0e0);
+    transition: background 0.12s ease;
 }
 
 .rag-move-option:hover {
@@ -1447,9 +1466,10 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* === RAG: элемент файла — relative для dropdown === */
+/* === RAG: элемент файла — relative для dropdown, overflow: visible для dropdown === */
 .rag-file-item {
     position: relative;
+    overflow: visible !important;
 }
 
 /* === RAG: результат семантического поиска по содержимому === */

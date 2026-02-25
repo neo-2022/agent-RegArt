@@ -34,6 +34,9 @@ export default defineConfig({
       '/logs': apiTarget,
       '/rag': apiTarget,
       '/rag/add-folder': apiTarget,
+      '/skills': apiTarget,         // Skill Engine (PR #21)
+      '/graph': apiTarget,          // Graph Engine (PR #21)
+      '/embeddings': apiTarget,     // Статус эмбеддингов (PR #21)
     },
   },
 })

@@ -178,7 +178,7 @@ func main() {
 		Strip   bool     // Удалять ли префикс пути при проксировании
 	}{
 		// Маршруты с удалением префикса — для сервисов с собственной маршрутизацией
-		{Path: "/memory/", Target: memoryTarget, Methods: []string{"GET", "POST", "DELETE"}, Strip: true},
+		{Path: "/memory/", Target: memoryTarget, Methods: []string{"GET", "POST", "PATCH", "DELETE"}, Strip: true},
 		{Path: "/tools/", Target: toolsTarget, Methods: []string{"GET", "POST", "DELETE"}, Strip: true},
 		{Path: "/agents/", Target: agentTarget, Methods: []string{"GET", "POST", "DELETE"}, Strip: true},
 		// Маршруты без удаления префикса — точные пути agent-service
@@ -202,7 +202,7 @@ func main() {
 		// Статика аватаров: без удаления префикса, чтобы /uploads/... шёл как есть
 		{Path: "/uploads/", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
 		// RAG — база знаний (проксируется на agent-service)
-		{Path: "/rag/", Target: agentTarget, Methods: []string{"GET", "POST", "DELETE"}, Strip: false},
+		{Path: "/rag/", Target: agentTarget, Methods: []string{"GET", "POST", "PATCH", "DELETE"}, Strip: false},
 		// Метрики сценариев и auto-skill паттерны (проксируется на agent-service)
 		{Path: "/scenario-metrics", Target: agentTarget, Methods: []string{"GET"}, Strip: false},
 		{Path: "/autoskill/", Target: agentTarget, Methods: []string{"GET"}, Strip: false},

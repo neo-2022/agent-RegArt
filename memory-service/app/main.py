@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+import shutil
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -114,7 +115,8 @@ async def search(request: models.SearchRequest):
             query=request.query,
             top_k=request.top_k,
             agent_name=request.agent_name,
-            include_files=request.include_files
+            include_files=request.include_files,
+            workspace_id=request.workspace_id,
         )
         return models.SearchResponse(results=results, count=len(results))
     except Exception as e:
@@ -203,9 +205,17 @@ async def add_learning(request: models.LearningAddRequest):
             model_name=request.model_name,
             agent_name=request.agent_name,
             category=request.category,
-            metadata=request.metadata
+            metadata=request.metadata,
+            workspace_id=request.workspace_id,
         )
-        return models.LearningAddResponse(id=learning_id)
+        learning_meta = memory_store.get_learning_metadata(learning_id)
+        return models.LearningAddResponse(
+            id=learning_id,
+            version=int(learning_meta.get("version", 1)),
+            learning_key=str(learning_meta.get("learning_key", "")),
+            conflict_detected=bool(learning_meta.get("conflict_detected", False)),
+            previous_version_id=learning_meta.get("previous_version_id"),
+        )
     except Exception as e:
         logger.exception("Ошибка при добавлении знания")
         raise HTTPException(status_code=500, detail=str(e))
@@ -225,7 +235,8 @@ async def search_learnings(request: models.LearningSearchRequest):
             query=request.query,
             model_name=request.model_name,
             top_k=request.top_k,
-            category=request.category
+            category=request.category,
+            workspace_id=request.workspace_id,
         )
         return models.LearningSearchResponse(
             results=results,
@@ -254,7 +265,7 @@ async def get_learning_stats():
 
 
 @app.delete("/learnings/{model_name}", tags=["Learnings"])
-async def delete_learnings(model_name: str, category: str = None):
+async def delete_learnings(model_name: str, category: str = None, workspace_id: str = None):
     """
     Удалить знания конкретной модели.
     
@@ -262,10 +273,69 @@ async def delete_learnings(model_name: str, category: str = None):
     например, при смене модели на агенте.
     """
     try:
-        deleted = memory_store.delete_model_learnings(model_name, category)
+        deleted = memory_store.delete_model_learnings(model_name, category, workspace_id)
         return {"deleted_count": deleted, "model_name": model_name, "status": "ok"}
     except Exception as e:
         logger.exception("Ошибка удаления знаний")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/learnings/versions/{model_name}", response_model=models.LearningVersionsResponse, tags=["Learnings"])
+async def get_learning_versions(model_name: str, category: str = None, workspace_id: str = None):
+    """Получить историю версий знаний модели с фильтрами по категории/workspace."""
+    try:
+        versions = memory_store.list_learning_versions(
+            model_name=model_name,
+            category=category,
+            workspace_id=workspace_id,
+        )
+        return models.LearningVersionsResponse(
+            model_name=model_name,
+            category=category,
+            workspace_id=workspace_id,
+            versions=versions,
+            count=len(versions),
+        )
+    except Exception as e:
+        logger.exception("Ошибка получения истории версий знаний")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/audit/logs", response_model=models.AuditLogsResponse, tags=["Maintenance"])
+async def get_audit_logs(top_k: int = 100, workspace_id: str = None, model_name: str = None):
+    """Получить аудит операций памяти с фильтрами по workspace/model."""
+    try:
+        logs = memory_store.list_audit_logs(top_k=top_k, workspace_id=workspace_id, model_name=model_name)
+        return models.AuditLogsResponse(logs=logs, count=len(logs))
+    except Exception as e:
+        logger.exception("Ошибка получения audit logs")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/metrics/retrieval", response_model=models.RetrievalMetricsResponse, tags=["Maintenance"])
+async def get_retrieval_metrics():
+    """Получить агрегированные метрики retrieval (latency/errors/объём выдачи)."""
+    try:
+        metrics = memory_store.get_retrieval_metrics()
+        return models.RetrievalMetricsResponse(**metrics)
+    except Exception as e:
+        logger.exception("Ошибка получения retrieval metrics")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/backup/checks", response_model=models.BackupChecksResponse, tags=["Maintenance"])
+async def get_backup_checks():
+    """Проверка базовой готовности backup/recovery по чек-листу Eternal RAG."""
+    try:
+        return models.BackupChecksResponse(
+            pg_dump_available=shutil.which("pg_dump") is not None,
+            qdrant_snapshot_enabled=settings.QDRANT_SNAPSHOT_ENABLED,
+            neo4j_backup_enabled=settings.NEO4J_BACKUP_ENABLED,
+            minio_versioning_enabled=settings.MINIO_VERSIONING_ENABLED,
+            restore_test_enabled=settings.RESTORE_TEST_ENABLED,
+        )
+    except Exception as e:
+        logger.exception("Ошибка проверки backup checks")
         raise HTTPException(status_code=500, detail=str(e))
 
 

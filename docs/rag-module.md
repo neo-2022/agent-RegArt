@@ -134,3 +134,24 @@ context := engine.BuildContext(query, docs)
 - `rag_retrieved_docs_count` - количество найденных документов
 - `rag_embedding_compute_ms` - время вычисления эмбеддингов
 - `rag_multi_hop_count` - количество multi-hop итераций
+
+## Ranking factors (реализовано)
+
+В retrieval memory-service добавлено композитное ранжирование по факторам:
+
+- `relevance` — семантическая близость (из distance);
+- `importance` — метаданные записи (0..1);
+- `reliability` — метаданные записи (0..1);
+- `recency` — свежесть `created_at` относительно окна `RECENCY_WINDOW_DAYS`;
+- `frequency` — метаданные записи (0..1).
+
+Итоговый score вычисляется как взвешенная сумма, все веса задаются через env:
+
+- `RANK_WEIGHT_RELEVANCE`
+- `RANK_WEIGHT_IMPORTANCE`
+- `RANK_WEIGHT_RELIABILITY`
+- `RANK_WEIGHT_RECENCY`
+- `RANK_WEIGHT_FREQUENCY`
+
+Реализация: `memory-service/app/ranking.py`.
+Тесты: `memory-service/tests/test_ranking.py`.

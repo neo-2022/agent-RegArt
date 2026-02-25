@@ -9,8 +9,8 @@ class Settings:
     # Базовая директория проекта
     BASE_DIR = Path(__file__).parent.parent
     
-    # Директория для хранения данных ChromaDB
-    CHROMA_DIR = os.getenv("CHROMA_DIR", str(BASE_DIR / "data" / "chroma"))
+    # Директория для хранения данных векторного backend (Qdrant local storage)
+    QDRANT_PATH = os.getenv("QDRANT_PATH", str(BASE_DIR / "data" / "qdrant"))
     
     # Директория для временных файлов (при обработке)
     TEMP_DIR = os.getenv("TEMP_DIR", str(BASE_DIR / "data" / "temp"))
@@ -20,8 +20,8 @@ class Settings:
     EMBEDDING_MODEL_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "1")
 
     # Backend векторного хранилища (этап миграции Eternal RAG):
-    # chroma — текущая реализация; qdrant — целевой backend следующих этапов.
-    VECTOR_BACKEND = resolve_vector_backend(os.getenv("VECTOR_BACKEND", "chroma"))
+    # qdrant — целевой и текущий backend.
+    VECTOR_BACKEND = resolve_vector_backend(os.getenv("VECTOR_BACKEND", "qdrant"))
     
     # Размер чанков при разбиении текста
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))

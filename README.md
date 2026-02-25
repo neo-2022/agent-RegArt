@@ -578,8 +578,8 @@ MIT License
 
 ## Конфигурация векторного backend (этап миграции Eternal RAG)
 
-- `VECTOR_BACKEND=chroma|qdrant` — выбор backend векторного слоя memory-service.
-- На текущем этапе runtime поддерживает `chroma`; значение `qdrant` валидируется в конфиге и останавливает сервис с явной ошибкой до внедрения адаптера.
+- `VECTOR_BACKEND=qdrant` — backend векторного слоя memory-service.
+- Runtime memory-service использует Qdrant как основной backend хранения векторов.
 
 ## Memory-service: versioning, soft delete и conflict detection
 

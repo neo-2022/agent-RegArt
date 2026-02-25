@@ -7,14 +7,13 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import List, Dict, Optional, Any
 
-import chromadb
-from chromadb.config import Settings as ChromaSettings
-from chromadb.errors import NotFoundError
+from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 
 from .config import settings
+from .qdrant_store import ensure_collection
 from .ranking import build_rank_score
-from .vector_backend import VECTOR_BACKEND_CHROMA, VECTOR_BACKEND_QDRANT
+from .vector_backend import VECTOR_BACKEND_QDRANT
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -28,43 +27,36 @@ LEARNING_STATUS_DELETED = "deleted"
 class MemoryStore:
     """
     Класс для работы с долговременной памятью (RAG).
-    На текущем этапе поддерживается backend `chroma`; `qdrant` зарезервирован как целевой
-    backend миграции Eternal RAG и валидируется на уровне конфигурации.
+    Использует Qdrant как backend векторного хранилища для Eternal RAG.
     """
     
     def __init__(self):
         """Инициализация клиента ChromaDB и модели эмбеддингов."""
         # Создаём директорию для данных, если её нет
-        os.makedirs(settings.CHROMA_DIR, exist_ok=True)
+        os.makedirs(settings.QDRANT_PATH, exist_ok=True)
         os.makedirs(settings.TEMP_DIR, exist_ok=True)
 
-        # Явно фиксируем поддерживаемые backend-режимы хранения векторов.
-        # Это нужно для безопасной поэтапной миграции на целевой стек Eternal RAG:
-        # - chroma продолжает обслуживать текущий runtime без регрессии;
-        # - qdrant валиден в конфиге, но пока блокируется ранней ошибкой,
-        #   чтобы не создавать иллюзию "рабочей" миграции без реализации адаптера.
-        if settings.VECTOR_BACKEND == VECTOR_BACKEND_QDRANT:
+        # Поддерживаем только Qdrant backend (целевая архитектура Eternal RAG).
+        if settings.VECTOR_BACKEND != VECTOR_BACKEND_QDRANT:
             raise RuntimeError(
-                "VECTOR_BACKEND=qdrant пока не поддержан в runtime memory-service. "
-                "Требуется реализация адаптера Qdrant storage layer."
+                f"Неподдерживаемый VECTOR_BACKEND: {settings.VECTOR_BACKEND}. "
+                "Для текущей версии memory-service доступен только qdrant."
             )
-        if settings.VECTOR_BACKEND != VECTOR_BACKEND_CHROMA:
-            raise RuntimeError(f"Неподдерживаемый VECTOR_BACKEND: {settings.VECTOR_BACKEND}")
 
-        # Инициализация ChromaDB клиента
-        self.client = chromadb.PersistentClient(
-            path=settings.CHROMA_DIR,
-            settings=ChromaSettings(anonymized_telemetry=False)
-        )
-        
-        # Создаём или получаем коллекции
-        self.facts_collection = self._get_or_create_collection("agent_memory_facts")
-        self.files_collection = self._get_or_create_collection("agent_memory_files")
-        # Коллекция для обучения агентов — хранит знания, извлечённые из диалогов.
-        # Каждое знание привязано к конкретной модели LLM через метаданные (model_name).
-        # Это позволяет каждой модели накапливать свою уникальную базу знаний.
-        self.learnings_collection = self._get_or_create_collection("agent_learnings")
-        self.audit_collection = self._get_or_create_collection("agent_memory_audit")
+        # Инициализация Qdrant в локальном persistent-режиме.
+        self.client = QdrantClient(path=settings.QDRANT_PATH)
+
+        # Загружаем модель эмбеддингов и определяем размер вектора для коллекций.
+        logger.info(f"Загрузка модели эмбеддингов: {settings.EMBEDDING_MODEL}")
+        self.encoder = SentenceTransformer(settings.EMBEDDING_MODEL)
+        vector_size = int(self.encoder.get_sentence_embedding_dimension())
+
+        # Создаём или получаем коллекции.
+        self.facts_collection = ensure_collection(self.client, "agent_memory_facts", vector_size)
+        self.files_collection = ensure_collection(self.client, "agent_memory_files", vector_size)
+        self.learnings_collection = ensure_collection(self.client, "agent_learnings", vector_size)
+        self.audit_collection = ensure_collection(self.client, "agent_memory_audit", vector_size)
+
         self._metrics_lock = Lock()
         self._retrieval_metrics: Dict[str, float] = {
             "search_requests_total": 0,
@@ -73,35 +65,8 @@ class MemoryStore:
             "search_results_total": 0,
         }
         
-        # Загружаем модель эмбеддингов
-        logger.info(f"Загрузка модели эмбеддингов: {settings.EMBEDDING_MODEL}")
-        self.encoder = SentenceTransformer(settings.EMBEDDING_MODEL)
         logger.info("Модель эмбеддингов загружена")
     
-    def _get_or_create_collection(self, name: str):
-        """Вспомогательный метод для получения или создания коллекции."""
-        collection_meta = {
-            "hnsw:space": "cosine",
-            "embedding_model": settings.EMBEDDING_MODEL,
-            "embedding_model_version": settings.EMBEDDING_MODEL_VERSION,
-        }
-        try:
-            col = self.client.get_collection(name)
-            existing_model = (col.metadata or {}).get("embedding_model", "")
-            if existing_model and existing_model != settings.EMBEDDING_MODEL:
-                logger.warning(
-                    f"Коллекция {name}: модель эмбеддингов изменилась "
-                    f"({existing_model} -> {settings.EMBEDDING_MODEL}). "
-                    f"Векторы могут быть несовместимы. Рекомендуется переиндексация."
-                )
-            return col
-        except (ValueError, NotFoundError):
-            logger.info(f"Создание новой коллекции: {name}")
-            return self.client.create_collection(
-                name=name,
-                metadata=collection_meta
-            )
-
     @staticmethod
     def _utc_now_iso() -> str:
         """Возвращает текущее UTC-время в ISO-формате для версионирования метаданных."""

@@ -38,7 +38,7 @@
 
 ### Долговременная память (RAG)
 
-- Векторная база данных ChromaDB для хранения фактов
+- Хранилище памяти memory-service (Eternal RAG) для фактов, чанков файлов и знаний
 - Семантический поиск по смыслу (не по ключевым словам)
 - Индексация файлов из локальной файловой системы
 - Автоматическое разбиение больших файлов на чанки
@@ -49,7 +49,7 @@
 - Модель накапливает свою базу знаний
 - После успешных взаимодействий извлекаются ключевые факты и паттерны
 - Перед каждым запросом подгружаются релевантные знания из базы
-- Знания хранятся в ChromaDB с привязкой к конкретной модели
+- Знания хранятся в memory-service с versioning/soft-delete и изоляцией по workspace
 - Статистика обучения доступна через API
 
 ### Облачное хранилище — Яндекс.Диск
@@ -116,8 +116,8 @@
 | Python/FastAPI  |  |     Go          |  |        Go               |
 | :8001           |  | :8082           |  | :8083                   |
 |                 |  |                 |  |                         |
-| ChromaDB        |  | Команды         |  | Агент Admin             |
-| Sentence-       |  | Файлы           |  | LLM провайдеры:         |
+| Storage layer   |  | Команды         |  | Агент Admin             |
+| Embeddings/RAG  |  | Файлы           |  | LLM провайдеры:         |
 |  transformers   |  | Система         |  |   Ollama, YandexGPT,    |
 | RAG-поиск       |  | Яндекс.Диск    |  |   GigaChat              |
 | Обучение        |  | Приложения      |  | PostgreSQL              |
@@ -139,7 +139,7 @@
 
 #### memory-service (Python/FastAPI, порт 8001)
 
-Векторная память и обучение агента. ChromaDB + sentence-transformers (`all-MiniLM-L6-v2`).
+Долговременная память и обучение агента по концепции Eternal RAG (versioning, workspace isolation, audit, retrieval ranking).
 
 | Эндпоинт | Описание |
 |-----------|----------|
@@ -289,12 +289,11 @@
 git clone https://github.com/neo-2022/agent-RegArt.git
 cd agent-RegArt
 cp .env.example .env   # отредактируйте при необходимости
-docker compose up -d   # PostgreSQL + ChromaDB + memory-service
+docker compose up -d   # PostgreSQL + memory-service (+ остальные сервисы по конфигу)
 ```
 
 Docker Compose поднимает:
 - **PostgreSQL** (порт 5432) — хранение чатов, агентов, провайдеров
-- **ChromaDB** (порт 8000) — векторное хранилище для RAG
 - **memory-service** (порт 8001) — API памяти и обучения
 
 Остальные сервисы (agent-service, tools-service, api-gateway, web-ui) запускаются локально — см. раздел «Сборка и запуск» ниже.
@@ -451,7 +450,7 @@ agent-RegArt/
 |   +-- cmd/server/          # HTTP-обработчики (вкл. Яндекс.Диск)
 |   +-- internal/executor/   # Выполнение команд, файлы, система
 +-- memory-service/          # Сервис памяти (Python/FastAPI)
-|   +-- app/                 # FastAPI, ChromaDB, обучение
+|   +-- app/                 # FastAPI, память/обучение, retrieval, аудит и метрики
 +-- api-gateway/             # API Gateway (Go)
 |   +-- cmd/main.go          # Маршрутизация + CORS
 +-- browser-service/         # Браузерный микросервис (Go)

@@ -38,7 +38,7 @@
 
 ### Долговременная память (RAG)
 
-- Векторная база данных ChromaDB для хранения фактов
+- Хранилище памяти memory-service (Eternal RAG) для фактов, чанков файлов и знаний
 - Семантический поиск по смыслу (не по ключевым словам)
 - Индексация файлов из локальной файловой системы
 - Автоматическое разбиение больших файлов на чанки
@@ -49,7 +49,7 @@
 - Модель накапливает свою базу знаний
 - После успешных взаимодействий извлекаются ключевые факты и паттерны
 - Перед каждым запросом подгружаются релевантные знания из базы
-- Знания хранятся в ChromaDB с привязкой к конкретной модели
+- Знания хранятся в memory-service с versioning/soft-delete и изоляцией по workspace
 - Статистика обучения доступна через API
 
 ### Облачное хранилище — Яндекс.Диск
@@ -116,8 +116,8 @@
 | Python/FastAPI  |  |     Go          |  |        Go               |
 | :8001           |  | :8082           |  | :8083                   |
 |                 |  |                 |  |                         |
-| ChromaDB        |  | Команды         |  | Агент Admin             |
-| Sentence-       |  | Файлы           |  | LLM провайдеры:         |
+| Storage layer   |  | Команды         |  | Агент Admin             |
+| Embeddings/RAG  |  | Файлы           |  | LLM провайдеры:         |
 |  transformers   |  | Система         |  |   Ollama, YandexGPT,    |
 | RAG-поиск       |  | Яндекс.Диск    |  |   GigaChat              |
 | Обучение        |  | Приложения      |  | PostgreSQL              |
@@ -139,7 +139,7 @@
 
 #### memory-service (Python/FastAPI, порт 8001)
 
-Векторная память и обучение агента. ChromaDB + sentence-transformers (`all-MiniLM-L6-v2`).
+Долговременная память и обучение агента по концепции Eternal RAG (versioning, workspace isolation, audit, retrieval ranking).
 
 | Эндпоинт | Описание |
 |-----------|----------|
@@ -289,12 +289,11 @@
 git clone https://github.com/neo-2022/agent-RegArt.git
 cd agent-RegArt
 cp .env.example .env   # отредактируйте при необходимости
-docker compose up -d   # PostgreSQL + ChromaDB + memory-service
+docker compose up -d   # PostgreSQL + memory-service (+ остальные сервисы по конфигу)
 ```
 
 Docker Compose поднимает:
 - **PostgreSQL** (порт 5432) — хранение чатов, агентов, провайдеров
-- **ChromaDB** (порт 8000) — векторное хранилище для RAG
 - **memory-service** (порт 8001) — API памяти и обучения
 
 Остальные сервисы (agent-service, tools-service, api-gateway, web-ui) запускаются локально — см. раздел «Сборка и запуск» ниже.
@@ -451,7 +450,7 @@ agent-RegArt/
 |   +-- cmd/server/          # HTTP-обработчики (вкл. Яндекс.Диск)
 |   +-- internal/executor/   # Выполнение команд, файлы, система
 +-- memory-service/          # Сервис памяти (Python/FastAPI)
-|   +-- app/                 # FastAPI, ChromaDB, обучение
+|   +-- app/                 # FastAPI, память/обучение, retrieval, аудит и метрики
 +-- api-gateway/             # API Gateway (Go)
 |   +-- cmd/main.go          # Маршрутизация + CORS
 +-- browser-service/         # Браузерный микросервис (Go)
@@ -568,3 +567,72 @@ MIT License
 
 ## Модели
 Система автоматически загружает модели из `agent-service/models`. Подробнее в [документации](docs/ru/models-setup.md).
+
+## Strict engineering execution по UI/UX и Eternal RAG
+
+Для поэтапной отработки требований из спецификаций UI/UX и Eternal RAG добавлен отдельный baseline-документ:
+
+- `docs/strict-engineering-execution-plan.md`
+
+Документ фиксирует карту соответствия требований текущим подсистемам, приоритетный backlog, quality gates и критерии готовности программы работ.
+
+## Конфигурация векторного backend (этап миграции Eternal RAG)
+
+- `VECTOR_BACKEND=chroma|qdrant` — выбор backend векторного слоя memory-service.
+- На текущем этапе runtime поддерживает `chroma`; значение `qdrant` валидируется в конфиге и останавливает сервис с явной ошибкой до внедрения адаптера.
+
+## Memory-service: versioning, soft delete и conflict detection
+
+В блоке обучения (`/learnings`) реализован baseline долговременной устойчивости памяти:
+
+- каждое знание хранится с `learning_key` и `version`;
+- при обновлении создаётся новая версия, предыдущая переводится в `superseded`;
+- удаление знаний выполняется как soft delete (`status=deleted`), без hard delete;
+- поиск возвращает только активные версии знаний.
+
+## Workspace isolation (memory-service)
+
+Для retrieval и learnings добавлена фильтрация `workspace_id`:
+
+- `POST /search` поддерживает `workspace_id` и ограничивает выборку фактами/файлами только этого workspace;
+- `POST /learnings` сохраняет `workspace_id` в метаданных знания;
+- `POST /learnings/search` и `DELETE /learnings/{model_name}` поддерживают `workspace_id` и работают в границах workspace.
+
+## Learning version history API
+
+Для аудита эволюции знаний добавлен эндпоинт:
+
+- `GET /learnings/versions/{model_name}`
+  - опциональные фильтры: `category`, `workspace_id`;
+  - возвращает список версий (`version`, `status`, `text`, `metadata`) в порядке убывания версии.
+
+## Audit logs API (memory-service)
+
+Для контроля и расследования изменений памяти добавлен API аудита:
+
+- `GET /audit/logs`
+  - параметры: `top_k`, `workspace_id`, `model_name`;
+  - возвращает события (`event_type`, `model_name`, `workspace_id`, `learning_id`, `created_at`, `details`).
+
+## Retrieval metrics API (memory-service)
+
+Для мониторинга производительности retrieval добавлен endpoint:
+
+- `GET /metrics/retrieval`
+  - `search_requests_total`
+  - `search_errors_total`
+  - `search_results_total`
+  - `search_latency_ms_avg`
+
+## Backup checks API (memory-service)
+
+Для операционной готовности добавлен endpoint:
+
+- `GET /backup/checks`
+  - `pg_dump_available`
+  - `qdrant_snapshot_enabled`
+  - `neo4j_backup_enabled`
+  - `minio_versioning_enabled`
+  - `restore_test_enabled`
+
+Флаги (`*_enabled`) управляются через env в `memory-service/app/config.py`.

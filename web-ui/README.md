@@ -1,73 +1,63 @@
-# React + TypeScript + Vite
+# Web UI (React + TypeScript + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Фронтенд Agent Core NG на React/Vite.
 
-Currently, two official plugins are available:
+## Запуск и проверка
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Установка зависимостей: `npm install`
+- Dev-режим: `npm run dev`
+- Тесты: `npm run test`
+- Сборка: `npm run build`
 
-## React Compiler
+## Базовая архитектура UI/UX
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+В текущей итерации реализован baseline трёхзонного интерфейса **без overlay-перекрытий**:
 
-## Expanding the ESLint configuration
+- левая панель (чаты и пространства),
+- центральная область (диалог),
+- правая системная панель (RAG / Логи / Настройки).
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Ключевые модули:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- токены ширин/анимаций: `src/config/uiLayout.ts`;
+- модель состояний RAG-панели: `src/config/ragPanelState.ts`;
+- пользовательские UI-настройки: `src/config/uiPreferences.ts`.
+- централизованные фильтры логов: `src/config/logFilters.ts`. (значения фильтра + русские подписи в UI).
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Тестовое покрытие UI-конфигов
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- `src/config/uiLayout.test.ts`
+- `src/config/ragPanelState.test.ts`
+- `src/config/uiPreferences.test.ts`
+- `src/config/logFilters.test.ts`
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Настройки интерфейса (persisted)
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Сохраняются в localStorage:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- `compactSidebar`
+- `reducedMotion`
+- `inferenceProfile` (`economy | standard | deep`) — явный индикатор баланса скорость/качество/расход.
+
+## Валидация API на границе клиента
+
+Для исключения падений вида `*.map/find is not a function` добавлены нормализаторы ответов API:
+
+- `src/config/workspaceApi.ts` — `GET /workspaces`
+- `src/config/modelsApi.ts` — `GET /models`
+- `src/config/providersApi.ts` — `GET /providers`
+- `src/config/agentsApi.ts` — `GET /agents/`
+
+Поддерживаются формы:
+
+- «чистый» массив,
+- объект-обёртка с массивом в одном из ключей (`workspaces|items|data` для workspaces, `models|items|data` для models, `providers|items|data` для providers, `agents|items|data` для agents).
+
+Невалидные элементы отфильтровываются, а необязательные поля приводятся к безопасным дефолтам.
+
+Тесты:
+
+- `src/config/workspaceApi.test.ts`
+- `src/config/modelsApi.test.ts`
+- `src/config/providersApi.test.ts`
+- `src/config/agentsApi.test.ts`

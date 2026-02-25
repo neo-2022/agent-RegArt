@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-import pytest
 
 from app.ranking import build_rank_score, blend_relevance_scores, resolve_priority_score, MEMORY_PRIORITY_SCORES
 

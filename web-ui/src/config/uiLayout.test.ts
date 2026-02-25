@@ -27,12 +27,13 @@ describe('toggleSystemPanelMode', () => {
 });
 
 describe('SYSTEM_PANEL_MODES', () => {
-  it('содержит все 4 режима панели (rag, logs, settings, fileViewer)', () => {
+  it('содержит все 5 режимов панели (rag, logs, settings, fileViewer, skills)', () => {
     expect(SYSTEM_PANEL_MODES.rag).toBe('rag');
     expect(SYSTEM_PANEL_MODES.logs).toBe('logs');
     expect(SYSTEM_PANEL_MODES.settings).toBe('settings');
     expect(SYSTEM_PANEL_MODES.fileViewer).toBe('fileViewer');
-    expect(Object.keys(SYSTEM_PANEL_MODES)).toHaveLength(4);
+    expect(SYSTEM_PANEL_MODES.skills).toBe('skills');
+    expect(Object.keys(SYSTEM_PANEL_MODES)).toHaveLength(5);
   });
 });
 

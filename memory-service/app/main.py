@@ -5,7 +5,6 @@ import shutil
 import uuid
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from typing import List
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -600,6 +599,267 @@ async def get_embedding_status():
         return models.EmbeddingStatusResponse(**status)
     except Exception as e:
         logger.exception("Ошибка получения статуса эмбеддингов")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Skill Engine (Eternal RAG: раздел 5.3) ===
+# API для управления навыками агента: CRUD, поиск, версионирование.
+# Навыки хранятся в Qdrant и индексируются для семантического retrieval.
+
+
+@app.post("/skills", response_model=models.SkillCreateResponse, tags=["Skills"])
+async def create_skill(request: models.SkillCreateRequest):
+    """
+    Создать новый навык агента.
+
+    Навык индексируется в Qdrant для семантического поиска.
+    Confidence по умолчанию берётся из конфигурации SKILL_CONFIDENCE_DEFAULT.
+    """
+    try:
+        result = memory_store.skill_engine.create_skill(
+            goal=request.goal,
+            steps=request.steps,
+            examples=request.examples,
+            constraints=request.constraints,
+            sources=request.sources,
+            confidence=request.confidence,
+            tags=request.tags,
+            model_name=request.model_name,
+            workspace_id=request.workspace_id,
+        )
+        return models.SkillCreateResponse(**result)
+    except Exception as e:
+        logger.exception("Ошибка при создании навыка")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/skills", response_model=models.SkillListResponse, tags=["Skills"])
+async def list_skills(workspace_id: str = None, skill_status: str = "active"):
+    """Получить список навыков с фильтрацией по workspace и статусу."""
+    try:
+        skills = memory_store.skill_engine.list_skills(
+            workspace_id=workspace_id,
+            status=skill_status,
+        )
+        return models.SkillListResponse(skills=skills, count=len(skills))
+    except Exception as e:
+        logger.exception("Ошибка при получении списка навыков")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/skills/{skill_id}", response_model=models.SkillItem, tags=["Skills"])
+async def get_skill(skill_id: str):
+    """Получить навык по ID."""
+    try:
+        skill = memory_store.skill_engine.get_skill(skill_id)
+        if skill is None:
+            raise HTTPException(status_code=404, detail=f"Навык '{skill_id}' не найден")
+        return models.SkillItem(**skill)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при получении навыка")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/skills/{skill_id}", response_model=models.SkillCreateResponse, tags=["Skills"])
+async def update_skill(skill_id: str, request: models.SkillUpdateRequest):
+    """
+    Обновить навык (создаёт новую версию).
+
+    Старая версия помечается как superseded, создаётся новая запись
+    с увеличенным номером версии.
+    """
+    try:
+        result = memory_store.skill_engine.update_skill(
+            skill_id=skill_id,
+            goal=request.goal,
+            steps=request.steps,
+            examples=request.examples,
+            constraints=request.constraints,
+            sources=request.sources,
+            confidence=request.confidence,
+            tags=request.tags,
+        )
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"Навык '{skill_id}' не найден или удалён")
+        return models.SkillCreateResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при обновлении навыка")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/skills/{skill_id}", tags=["Skills"])
+async def delete_skill(skill_id: str):
+    """Мягкое удаление навыка (помечает как deleted)."""
+    try:
+        deleted = memory_store.skill_engine.delete_skill(skill_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Навык '{skill_id}' не найден или уже удалён")
+        return {"status": "ok", "message": "Навык удалён"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при удалении навыка")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/skills/search", response_model=models.SkillSearchResponse, tags=["Skills"])
+async def search_skills(request: models.SkillSearchRequest):
+    """
+    Семантический поиск навыков по запросу.
+
+    Ищет активные навыки с confidence >= min_confidence.
+    Используется agent-service для автоматического применения навыков.
+    """
+    try:
+        results = memory_store.skill_engine.search_skills(
+            query=request.query,
+            top_k=request.top_k,
+            min_confidence=request.min_confidence,
+            workspace_id=request.workspace_id,
+        )
+        return models.SkillSearchResponse(results=results, count=len(results))
+    except Exception as e:
+        logger.exception("Ошибка при поиске навыков")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/skills/from-dialog", response_model=models.SkillCreateResponse, tags=["Skills"])
+async def create_skill_from_dialog(request: models.SkillFromDialogRequest):
+    """
+    Извлечь навык из текста диалога (Eternal RAG: раздел 7).
+
+    Используется для автоматического создания навыков из успешных диалогов.
+    """
+    try:
+        result = memory_store.skill_engine.create_from_dialog(
+            dialog_text=request.dialog_text,
+            model_name=request.model_name,
+            workspace_id=request.workspace_id,
+        )
+        return models.SkillCreateResponse(**result)
+    except Exception as e:
+        logger.exception("Ошибка при создании навыка из диалога")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/skills/{skill_id}/usage", tags=["Skills"])
+async def record_skill_usage(skill_id: str):
+    """
+    Зафиксировать использование навыка.
+
+    Увеличивает usage_count и плавно повышает confidence.
+    """
+    try:
+        success = memory_store.skill_engine.record_usage(skill_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Навык '{skill_id}' не найден или неактивен")
+        return {"status": "ok", "message": "Использование зафиксировано"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при фиксации использования навыка")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# === Graph Engine (Eternal RAG: раздел 5.4) ===
+# API для управления графом знаний: связи, соседи, обход.
+
+
+@app.post("/graph/relationships", response_model=models.RelationshipCreateResponse, tags=["Graph"])
+async def create_relationship(request: models.RelationshipCreateRequest):
+    """
+    Создать связь между узлами графа знаний.
+
+    Типы связей: relates_to, contradicts, depends_on, supersedes, derived_from.
+    """
+    try:
+        result = memory_store.graph_engine.create_relationship(
+            source_id=request.source_id,
+            target_id=request.target_id,
+            relationship_type=request.relationship_type,
+            source_type=request.source_type,
+            target_type=request.target_type,
+            metadata=request.metadata,
+            workspace_id=request.workspace_id,
+        )
+        return models.RelationshipCreateResponse(**result)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.exception("Ошибка при создании связи")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/graph/relationships", response_model=models.RelationshipListResponse, tags=["Graph"])
+async def list_relationships(workspace_id: str = None, relationship_type: str = None):
+    """Получить список связей с фильтрацией."""
+    try:
+        rels = memory_store.graph_engine.list_relationships(
+            workspace_id=workspace_id,
+            relationship_type=relationship_type,
+        )
+        return models.RelationshipListResponse(relationships=rels, count=len(rels))
+    except Exception as e:
+        logger.exception("Ошибка при получении списка связей")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/graph/neighbors/{node_id}", response_model=models.RelationshipListResponse, tags=["Graph"])
+async def get_neighbors(node_id: str, relationship_type: str = None, max_results: int = 20):
+    """
+    Получить связи узла (все, где node_id — source или target).
+
+    Используется для визуализации графа знаний в UI.
+    """
+    try:
+        neighbors = memory_store.graph_engine.get_neighbors(
+            node_id=node_id,
+            relationship_type=relationship_type,
+            max_results=max_results,
+        )
+        return models.RelationshipListResponse(relationships=neighbors, count=len(neighbors))
+    except Exception as e:
+        logger.exception("Ошибка при получении соседей узла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/graph/relationships/{rel_id}", tags=["Graph"])
+async def delete_relationship(rel_id: str):
+    """Удалить связь из графа знаний."""
+    try:
+        deleted = memory_store.graph_engine.delete_relationship(rel_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Связь '{rel_id}' не найдена")
+        return {"status": "ok", "message": "Связь удалена"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при удалении связи")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/graph/traverse", response_model=models.GraphTraversalResponse, tags=["Graph"])
+async def traverse_graph(request: models.GraphTraversalRequest):
+    """
+    Обход графа знаний в ширину (BFS) от стартового узла.
+
+    Возвращает все связанные узлы до max_depth с их связями.
+    Используется для формирования полного контекста при retrieval.
+    """
+    try:
+        result = memory_store.graph_engine.traverse(
+            start_node_id=request.start_node_id,
+            max_depth=request.max_depth,
+            relationship_types=request.relationship_types,
+            max_nodes=request.max_nodes,
+        )
+        return models.GraphTraversalResponse(**result)
+    except Exception as e:
+        logger.exception("Ошибка при обходе графа")
         raise HTTPException(status_code=500, detail=str(e))
 
 

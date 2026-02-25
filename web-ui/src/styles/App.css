@@ -3138,6 +3138,452 @@ body {
 }
 
 /* ==========================================================================
+   Панель навыков агента — Skill Engine + Graph Engine
+   (Eternal RAG Architecture: разделы 5.3, 5.4)
+   ========================================================================== */
+
+/* Контент панели навыков */
+.skills-panel-content {
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Строка поиска навыков */
+.skills-search-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.skills-search-input {
+    flex: 1;
+    padding: 6px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-size: 0.85rem;
+}
+
+.skills-search-input:focus {
+    outline: none;
+    border-color: var(--input-focus-border);
+}
+
+.skills-search-btn,
+.skills-add-btn {
+    padding: 6px 12px;
+    background: var(--button-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.skills-search-btn:hover:not(:disabled),
+.skills-add-btn:hover {
+    background: var(--button-hover-bg);
+    border-color: var(--input-focus-border);
+}
+
+.skills-search-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.skills-add-btn {
+    font-size: 1.1rem;
+    font-weight: 600;
+    min-width: 36px;
+}
+
+/* Форма создания навыка */
+.skill-create-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(59, 130, 246, 0.05);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.skill-form-input {
+    padding: 6px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-size: 0.85rem;
+}
+
+.skill-form-input:focus {
+    outline: none;
+    border-color: var(--input-focus-border);
+}
+
+.skill-form-textarea {
+    padding: 6px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    color: var(--text-color);
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.skill-form-textarea:focus {
+    outline: none;
+    border-color: var(--input-focus-border);
+}
+
+.skill-form-save-btn {
+    padding: 8px 16px;
+    background: #3b82f6;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: background 0.15s;
+}
+
+.skill-form-save-btn:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.skill-form-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Заголовки секций */
+.skills-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--icon-color);
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.skills-refresh-btn {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+}
+
+.skills-refresh-btn:hover:not(:disabled) {
+    color: var(--text-color);
+    background: var(--button-hover-bg);
+}
+
+.skills-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Пустое состояние */
+.skills-empty {
+    font-size: 0.8rem;
+    color: var(--icon-color);
+    padding: 12px;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Карточка навыка */
+.skill-card {
+    background: var(--sidebar-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.skill-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.skill-card.expanded {
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.skill-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: pointer;
+    gap: 8px;
+}
+
+.skill-goal {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-color);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.skill-header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* Полоска уверенности (confidence bar) */
+.skill-confidence-bar {
+    display: inline-block;
+    width: 40px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.skill-confidence-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #3b82f6, #10b981);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+
+.skill-confidence-text {
+    font-size: 0.7rem;
+    color: var(--icon-color);
+    min-width: 28px;
+    text-align: right;
+}
+
+.skill-confidence {
+    font-size: 0.75rem;
+    color: #10b981;
+    font-weight: 600;
+}
+
+/* Детали навыка (развёрнутая карточка) */
+.skill-card-details {
+    padding: 0 12px 12px;
+    border-top: 1px solid var(--input-border);
+}
+
+.skill-detail-section {
+    margin-top: 8px;
+}
+
+.skill-detail-label {
+    font-size: 0.75rem;
+    color: var(--icon-color);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.skill-steps-list,
+.skill-examples-list,
+.skill-constraints-list {
+    margin: 4px 0 0;
+    padding-left: 20px;
+    font-size: 0.8rem;
+    color: var(--text-color);
+}
+
+.skill-steps-list li,
+.skill-examples-list li,
+.skill-constraints-list li {
+    margin-bottom: 2px;
+}
+
+/* Теги навыка */
+.skill-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.skill-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 500;
+}
+
+/* Мета-информация навыка */
+.skill-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 8px;
+    font-size: 0.7rem;
+    color: var(--icon-color);
+}
+
+/* Кнопки действий навыка */
+.skill-actions-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.skill-action-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.skill-use-btn {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.skill-use-btn:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: #10b981;
+}
+
+.skill-delete-btn {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.skill-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+}
+
+/* Секция графа знаний */
+.graph-relationships-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.graph-rel-card {
+    background: var(--sidebar-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+    padding: 8px 10px;
+}
+
+.graph-rel-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Типы связей — цветовая кодировка */
+.graph-rel-type {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.graph-rel-type-relates_to {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+}
+
+.graph-rel-type-contradicts {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.graph-rel-type-depends_on {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.graph-rel-type-supersedes {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+}
+
+.graph-rel-type-derived_from {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+}
+
+.graph-rel-nodes {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.graph-node-id {
+    font-size: 0.7rem;
+    color: var(--icon-color);
+    font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.graph-rel-arrow {
+    color: var(--icon-color);
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+.graph-rel-delete-btn {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.graph-rel-delete-btn:hover {
+    opacity: 1;
+    color: #ef4444;
+}
+
+.graph-node-type {
+    font-size: 0.65rem;
+    color: var(--icon-color);
+    margin-top: 4px;
+    display: block;
+}
+
+/* ==========================================================================
    Поддержка prefers-reduced-motion (accessibility).
    Отключает анимации для пользователей с соответствующей настройкой ОС.
    ========================================================================== */

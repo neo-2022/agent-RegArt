@@ -36,3 +36,4 @@ agent-service/uploads/
 # Игнорируем логи и временные файлы
 *.log
 *.tmp
+memory-service/data/

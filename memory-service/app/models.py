@@ -229,6 +229,160 @@ class EmbeddingStatusResponse(BaseModel):
     collections: Dict[str, int] = Field(default_factory=dict, description="Количество документов по коллекциям")
 
 
+# === Модели Skill Engine (Eternal RAG: раздел 5.3, 7) ===
+# Навыки агента: цель, шаги, примеры, ограничения, источники,
+# confidence и version. Индексируются в Qdrant для семантического поиска.
+
+class SkillCreateRequest(BaseModel):
+    """Запрос на создание навыка агента."""
+    goal: str = Field(..., description="Цель навыка (что делает)", min_length=1, max_length=MAX_TEXT_LENGTH)
+    steps: List[str] = Field(default_factory=list, description="Шаги выполнения")
+    examples: List[str] = Field(default_factory=list, description="Примеры применения")
+    constraints: List[str] = Field(default_factory=list, description="Ограничения и условия")
+    sources: List[str] = Field(default_factory=list, description="Источники знания")
+    confidence: Optional[float] = Field(None, description="Уровень уверенности (0.0-1.0)", ge=0.0, le=1.0)
+    tags: List[str] = Field(default_factory=list, description="Теги для поиска")
+    model_name: Optional[str] = Field(None, description="Модель, создавшая навык")
+    workspace_id: Optional[str] = Field(None, description="Рабочее пространство")
+
+
+class SkillItem(BaseModel):
+    """Представление навыка в ответах API."""
+    id: str = Field(..., description="Уникальный идентификатор")
+    goal: str = Field(..., description="Цель навыка")
+    steps: List[str] = Field(default_factory=list)
+    examples: List[str] = Field(default_factory=list)
+    constraints: List[str] = Field(default_factory=list)
+    sources: List[str] = Field(default_factory=list)
+    confidence: float = Field(0.5, description="Уровень уверенности")
+    version: int = Field(1, description="Версия навыка")
+    tags: List[str] = Field(default_factory=list)
+    status: str = Field("active", description="Статус: active / superseded / deleted")
+    model_name: str = Field("", description="Модель-создатель")
+    workspace_id: str = Field("", description="Рабочее пространство")
+    usage_count: int = Field(0, description="Количество применений")
+    created_at: str = Field("", description="Дата создания")
+    updated_at: str = Field("", description="Дата обновления")
+    relevance: Optional[float] = Field(None, description="Релевантность из семантического поиска (0.0-1.0)")
+
+
+class SkillCreateResponse(BaseModel):
+    """Ответ на создание навыка."""
+    id: str
+    version: int = 1
+    status: str = "ok"
+    message: str = "Навык создан"
+
+
+class SkillUpdateRequest(BaseModel):
+    """Запрос на обновление навыка (создаёт новую версию)."""
+    goal: Optional[str] = Field(None, description="Новая цель", max_length=MAX_TEXT_LENGTH)
+    steps: Optional[List[str]] = Field(None, description="Новые шаги")
+    examples: Optional[List[str]] = Field(None, description="Новые примеры")
+    constraints: Optional[List[str]] = Field(None, description="Новые ограничения")
+    sources: Optional[List[str]] = Field(None, description="Новые источники")
+    confidence: Optional[float] = Field(None, description="Новый confidence", ge=0.0, le=1.0)
+    tags: Optional[List[str]] = Field(None, description="Новые теги")
+
+
+class SkillSearchRequest(BaseModel):
+    """Запрос на семантический поиск навыков."""
+    query: str = Field(..., description="Поисковый запрос", min_length=1, max_length=MAX_QUERY_LENGTH)
+    top_k: int = Field(5, description="Максимум результатов", ge=1, le=20)
+    min_confidence: Optional[float] = Field(None, description="Минимальный confidence", ge=0.0, le=1.0)
+    tags: Optional[List[str]] = Field(None, description="Фильтр по тегам")
+    workspace_id: Optional[str] = Field(None, description="Фильтр по workspace")
+
+
+class SkillSearchResponse(BaseModel):
+    """Ответ на поиск навыков."""
+    results: List[SkillItem] = Field(default_factory=list)
+    count: int
+
+
+class SkillListResponse(BaseModel):
+    """Ответ со списком навыков."""
+    skills: List[SkillItem] = Field(default_factory=list)
+    count: int
+
+
+class SkillFromDialogRequest(BaseModel):
+    """Запрос на создание навыка из диалога (Eternal RAG: раздел 7)."""
+    dialog_text: str = Field(..., description="Текст диалога для извлечения навыка", min_length=1, max_length=MAX_TEXT_LENGTH)
+    model_name: Optional[str] = Field(None, description="Модель-источник")
+    workspace_id: Optional[str] = Field(None, description="Рабочее пространство")
+
+
+# === Модели Graph Engine (Eternal RAG: раздел 5.4) ===
+# Связи между знаниями: документами, навыками, фактами.
+# Типы: relates_to, contradicts, depends_on, supersedes, derived_from.
+
+class RelationshipCreateRequest(BaseModel):
+    """Запрос на создание связи между узлами графа знаний."""
+    source_id: str = Field(..., description="ID узла-источника", min_length=1)
+    target_id: str = Field(..., description="ID узла-цели", min_length=1)
+    relationship_type: str = Field(..., description="Тип связи: relates_to, contradicts, depends_on, supersedes, derived_from", min_length=1)
+    source_type: str = Field("knowledge", description="Тип узла-источника: knowledge, skill, document, fact")
+    target_type: str = Field("knowledge", description="Тип узла-цели")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Дополнительные метаданные")
+    workspace_id: Optional[str] = Field(None, description="Рабочее пространство")
+
+
+class RelationshipItem(BaseModel):
+    """Представление связи в ответах API."""
+    id: str = Field(..., description="Уникальный ID связи")
+    source_id: str
+    target_id: str
+    relationship_type: str
+    source_type: str = "knowledge"
+    target_type: str = "knowledge"
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    workspace_id: str = ""
+    created_at: str = ""
+
+
+class RelationshipCreateResponse(BaseModel):
+    """Ответ на создание связи."""
+    id: str
+    status: str = "ok"
+    message: str = "Связь создана"
+
+
+class RelationshipListResponse(BaseModel):
+    """Ответ со списком связей."""
+    relationships: List[RelationshipItem] = Field(default_factory=list)
+    count: int
+
+
+class GraphNeighborsRequest(BaseModel):
+    """Запрос на получение соседей узла."""
+    relationship_type: Optional[str] = Field(None, description="Фильтр по типу связи")
+    max_results: int = Field(20, description="Максимум соседей", ge=1, le=100)
+
+
+class GraphTraversalRequest(BaseModel):
+    """Запрос на обход графа знаний."""
+    start_node_id: str = Field(..., description="ID стартового узла", min_length=1)
+    max_depth: int = Field(3, description="Максимальная глубина обхода", ge=1, le=10)
+    relationship_types: Optional[List[str]] = Field(None, description="Фильтр по типам связей")
+    max_nodes: int = Field(50, description="Максимум узлов в результате", ge=1, le=200)
+
+
+class GraphTraversalNode(BaseModel):
+    """Узел в результате обхода графа."""
+    node_id: str
+    depth: int
+    relationships: List[RelationshipItem] = Field(default_factory=list)
+
+
+class GraphTraversalResponse(BaseModel):
+    """Ответ на обход графа знаний."""
+    start_node_id: str
+    nodes: List[GraphTraversalNode] = Field(default_factory=list)
+    total_relationships: int = 0
+    max_depth_reached: int = 0
+
+
 # === Модели для расширенного управления файлами RAG ===
 # Поддержка перемещения, мягкого удаления, закрепления и поиска по содержимому.
 
@@ -287,7 +441,7 @@ class FileContentSearchRequest(BaseModel):
     """Запрос на семантический поиск внутри файлов RAG-базы."""
     query: str = Field(..., description="Поисковый запрос по содержимому файлов", min_length=1, max_length=MAX_QUERY_LENGTH)
     top_k: int = Field(10, description="Максимум результатов", ge=1, le=50)
-    folder: Optional[str] = Field(None, description="Фильтр по папке")
+    folder: Optional[str] = Field(None, description="Фильтр по содержимому")
 
 
 class FileContentSearchResult(BaseModel):

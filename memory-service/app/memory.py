@@ -64,6 +64,16 @@ class MemoryStore:
         # Это позволяет каждой модели накапливать свою уникальную базу знаний.
         self.learnings_collection = self._get_or_create_collection("agent_learnings")
         self.audit_collection = self._get_or_create_collection("agent_memory_audit")
+
+        # === Skill Engine & Graph Engine (Eternal RAG: разделы 5.3, 5.4) ===
+        # Коллекции для навыков и связей графа знаний.
+        # Инициализируются лениво через свойства skill_engine / graph_engine,
+        # чтобы не замедлять старт сервиса, если движки не используются.
+        self._skills_collection = self._get_or_create_collection(settings.SKILL_COLLECTION_NAME)
+        self._graph_collection = self._get_or_create_collection(settings.GRAPH_COLLECTION_NAME)
+        self._skill_engine = None
+        self._graph_engine = None
+
         self._metrics_lock = Lock()
         self._retrieval_metrics: Dict[str, float] = {
             "search_requests_total": 0,
@@ -76,6 +86,28 @@ class MemoryStore:
     def _get_or_create_collection(self, name: str):
         """Вспомогательный метод для получения/создания коллекции Qdrant."""
         return QdrantCollectionCompat(client=self.client, name=name, vector_size=self._vector_size)
+
+    @property
+    def skill_engine(self):
+        """Ленивая инициализация Skill Engine (Eternal RAG: раздел 5.3)."""
+        if self._skill_engine is None:
+            from .skill_engine import SkillEngine
+            self._skill_engine = SkillEngine(
+                collection=self._skills_collection,
+                encoder=self.encoder,
+            )
+        return self._skill_engine
+
+    @property
+    def graph_engine(self):
+        """Ленивая инициализация Graph Engine (Eternal RAG: раздел 5.4)."""
+        if self._graph_engine is None:
+            from .graph_engine import GraphEngine
+            self._graph_engine = GraphEngine(
+                collection=self._graph_collection,
+                encoder=self.encoder,
+            )
+        return self._graph_engine
 
     @staticmethod
     def _utc_now_iso() -> str:

@@ -79,5 +79,32 @@ class Settings:
     # Максимум кандидатов для проверки на противоречие
     CONTRADICTION_TOP_K = int(os.getenv("CONTRADICTION_TOP_K", "3"))
 
+    # === Skill Engine (Eternal RAG: раздел 5.3) ===
+    # Confidence по умолчанию при создании нового навыка (0.0-1.0).
+    SKILL_CONFIDENCE_DEFAULT = float(os.getenv("SKILL_CONFIDENCE_DEFAULT", "0.5"))
+    # Минимальный порог confidence для автоматического применения навыка.
+    SKILL_CONFIDENCE_MIN = float(os.getenv("SKILL_CONFIDENCE_MIN", "0.3"))
+    # Максимум результатов при поиске навыков.
+    SKILL_SEARCH_TOP_K = int(os.getenv("SKILL_SEARCH_TOP_K", "5"))
+    # Имя Qdrant-коллекции для навыков.
+    SKILL_COLLECTION_NAME = os.getenv("SKILL_COLLECTION_NAME", "agent_skills")
+
+    # === Graph Engine (Eternal RAG: раздел 5.4) ===
+    # Максимальная глубина обхода графа связей.
+    GRAPH_MAX_DEPTH = int(os.getenv("GRAPH_MAX_DEPTH", "3"))
+    # Максимум соседей, возвращаемых за один запрос.
+    GRAPH_MAX_NEIGHBORS = int(os.getenv("GRAPH_MAX_NEIGHBORS", "20"))
+    # Имя Qdrant-коллекции для связей графа знаний.
+    GRAPH_COLLECTION_NAME = os.getenv("GRAPH_COLLECTION_NAME", "agent_relationships")
+    # Допустимые типы связей между узлами графа знаний.
+    GRAPH_RELATIONSHIP_TYPES = os.getenv(
+        "GRAPH_RELATIONSHIP_TYPES",
+        "relates_to,contradicts,depends_on,supersedes,derived_from"
+    ).split(",")
+
+    # === Neo4j (будущая интеграция, Eternal RAG: раздел 5.4) ===
+    NEO4J_URL = os.getenv("NEO4J_URL", "bolt://localhost:7687")
+    NEO4J_AUTH = os.getenv("NEO4J_AUTH", "neo4j/agentcore2024")
+
 
 settings = Settings()

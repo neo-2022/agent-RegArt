@@ -168,7 +168,7 @@ class TTLManager:
 
             docs = all_data["documents"]
             ids = all_data["ids"]
-            metas = all_data.get("metadatas", [{}] * len(docs))
+            _metas = all_data.get("metadatas", [{}] * len(docs))  # noqa: F841 — сохраняем для будущей переиндексации с метаданными
 
             # Обрабатываем случай, когда encoder.encode() возвращает
             # как numpy-массив (production), так и обычный список (тесты: mock)

@@ -95,6 +95,18 @@ class MemoryStore:
         """Проверяет, является ли запись активной (не superseded и не deleted)."""
         return meta.get("status", LEARNING_STATUS_ACTIVE) == LEARNING_STATUS_ACTIVE
 
+    def _encode_to_list(self, text: str) -> list:
+        """
+        Кодирует текст в вектор и возвращает как список (list).
+
+        Обрабатывает случай, когда encoder.encode() возвращает как numpy-массив
+        (production: SentenceTransformer), так и обычный список (тесты: mock).
+        """
+        result = self.encoder.encode(text)
+        if isinstance(result, list):
+            return result
+        return result.tolist()
+
     def _build_learning_key(self, model_name: str, category: str, text: str) -> str:
         """
         Формирует стабильный ключ знания.
@@ -160,7 +172,7 @@ class MemoryStore:
             "details_json": json.dumps(details or {}, ensure_ascii=False),
         }
         payload = f"event={event_type};model={model_name or ''};workspace={workspace_id or ''};learning={learning_id or ''}"
-        embedding = self.encoder.encode(payload).tolist()
+        embedding = self._encode_to_list(payload)
         self.audit_collection.add(
             embeddings=[embedding],
             documents=[payload],
@@ -208,7 +220,7 @@ class MemoryStore:
             return ""
         
         fact_id = str(uuid.uuid4())
-        embedding = self.encoder.encode(fact_text).tolist()
+        embedding = self._encode_to_list(fact_text)
         
         fact_metadata = dict(metadata or {})
         # Явно фиксируем workspace в метаданных, даже если он не задан.
@@ -252,7 +264,7 @@ class MemoryStore:
             self._record_search_metrics(start_ts=start_ts, results_count=0, is_error=False)
             return []
         
-        query_embedding = self.encoder.encode(query).tolist()
+        query_embedding = self._encode_to_list(query)
         results: List[Dict[str, Any]] = []
         
         if self.facts_collection.count() > 0:
@@ -342,7 +354,7 @@ class MemoryStore:
             return ""
         
         chunk_id = str(uuid.uuid4())
-        embedding = self.encoder.encode(chunk_text).tolist()
+        embedding = self._encode_to_list(chunk_text)
         
         file_metadata = dict(metadata)
         file_metadata.setdefault("workspace_id", "default")
@@ -470,7 +482,7 @@ class MemoryStore:
             return ""
         
         learning_id = str(uuid.uuid4())
-        embedding = self.encoder.encode(text).tolist()
+        embedding = self._encode_to_list(text)
 
         normalized_workspace = workspace_id or (metadata or {}).get("workspace_id") or "default"
         learning_key = self._build_learning_key(
@@ -552,7 +564,7 @@ class MemoryStore:
             self._record_search_metrics(start_ts=start_ts, results_count=0, is_error=False)
             return []
         
-        query_embedding = self.encoder.encode(query).tolist()
+        query_embedding = self._encode_to_list(query)
         
         base_filter: Dict[str, Any] = {"model_name": model_name}
         if workspace_id:

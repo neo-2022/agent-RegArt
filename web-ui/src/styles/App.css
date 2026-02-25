@@ -138,6 +138,60 @@ body {
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--input-border);
+    /* Плавная анимация collapse/expand сайдбара (UI_UX_Design_Spec) */
+    transition: width var(--sidebar-transition, 280ms) ease,
+                min-width var(--sidebar-transition, 280ms) ease,
+                opacity var(--sidebar-transition, 280ms) ease;
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* === Свёрнутый сайдбар — содержимое скрыто, панель убрана === */
+.chats-sidebar.sidebar-collapsed {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    border-right-width: 0;
+}
+
+/* === Кнопка collapse/expand сайдбара === */
+.sidebar-collapse-btn {
+    position: absolute;
+    top: 50%;
+    right: -14px;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--input-border);
+    background: var(--sidebar-bg);
+    color: var(--icon-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: background 180ms ease, transform 180ms ease, opacity 180ms ease;
+    opacity: 0.6;
+    box-shadow: var(--shadow-depth-1, 0 1px 3px rgba(0,0,0,0.08));
+}
+
+.sidebar-collapse-btn:hover {
+    opacity: 1;
+    background: var(--hover-bg);
+    transform: translateY(-50%) scale(1.1);
+}
+
+/* Когда сайдбар свёрнут — кнопка перемещается и становится видимой */
+.sidebar-collapsed .sidebar-collapse-btn {
+    position: fixed;
+    left: 4px;
+    top: 50%;
+    right: auto;
+    opacity: 0.8;
+    z-index: 20;
 }
 
 .chats-header {
@@ -1291,6 +1345,47 @@ body {
     display: flex;
     flex-direction: column;
     min-height: 0;
+}
+
+/* ==========================================================================
+   Inline-панель просмотра файла (заменяет overlay modal).
+   Использует тот же pattern slide-анимации, что Логи/Настройки.
+   Спецификация UI_UX_Design_Spec: запрет overlay-модалок.
+   ========================================================================== */
+.system-panel-file-viewer {
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.file-viewer-content {
+    flex: 1;
+    overflow: auto;
+    padding: 0.75rem;
+    min-height: 0;
+}
+
+.file-viewer-pre {
+    margin: 0;
+    padding: 0.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--input-border);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 0.85rem;
+    font-family: 'Courier New', monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    line-height: 1.5;
+}
+
+.file-viewer-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--icon-color);
+    font-size: 0.85rem;
+    font-style: italic;
 }
 
 .settings-panel-content {
@@ -2762,4 +2857,159 @@ body {
 @keyframes statePulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ==========================================================================
+   Micro-анимации (UI_UX_Design_Spec: hover scale, active glow, smooth transitions).
+   Все интерактивные элементы получают единообразный отклик.
+   ========================================================================== */
+
+/* --- Hover scale для кнопок и карточек --- */
+.agents-toggle,
+.provider-chip,
+.model-mode-btn,
+.new-chat-btn,
+.logs-refresh-btn,
+.rag-folder-delete,
+.rag-file-delete {
+    transition: transform 150ms ease, background 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.agents-toggle:hover,
+.provider-chip:hover,
+.model-mode-btn:hover,
+.new-chat-btn:hover {
+    transform: scale(1.03);
+}
+
+.agents-toggle:active,
+.provider-chip:active,
+.model-mode-btn:active,
+.new-chat-btn:active {
+    transform: scale(0.97);
+}
+
+/* --- Active glow для активных элементов --- */
+.agents-toggle.open,
+.provider-chip.active,
+.model-mode-btn.active {
+    box-shadow: var(--glow-accent, 0 0 8px rgba(100, 108, 255, 0.3));
+}
+
+/* --- Плавный hover для элементов чат-списка --- */
+.chat-item {
+    transition: background 180ms ease, transform 150ms ease;
+}
+
+.chat-item:hover {
+    transform: translateX(2px);
+}
+
+/* --- Плавный hover для карточек агентов --- */
+.agent-card {
+    transition: background 180ms ease, box-shadow 200ms ease, transform 150ms ease;
+}
+
+.agent-card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-depth-2, 0 4px 12px rgba(0,0,0,0.12));
+}
+
+/* --- Micro-transition для файловых бейджей в сообщениях --- */
+.message-file-badge {
+    transition: background 150ms ease, transform 150ms ease;
+}
+
+.message-file-badge:hover {
+    transform: scale(1.05);
+}
+
+/* --- Плавные переходы для RAG элементов --- */
+.rag-file-item {
+    transition: background 150ms ease, transform 120ms ease;
+}
+
+.rag-file-item:hover {
+    transform: translateX(2px);
+}
+
+.rag-folder-header {
+    transition: background 150ms ease;
+}
+
+/* ==========================================================================
+   Расширенные адаптивные breakpoints (UI_UX_Design_Spec).
+   Три уровня: desktop (>1024px), tablet (768-1024), mobile (<768px).
+   ========================================================================== */
+
+/* --- Планшеты: упрощённый layout, уменьшенные панели --- */
+@media (max-width: 1024px) {
+    .chats-sidebar {
+        width: clamp(12rem, 18vw, 16rem);
+    }
+    .system-panel.open {
+        width: clamp(16rem, 24vw, 22rem);
+    }
+    .agent-card {
+        font-size: 0.82rem;
+    }
+    .chat-main {
+        padding: 0.5rem;
+    }
+}
+
+/* --- Мобильные: сайдбар скрыт, полноэкранный чат --- */
+@media (max-width: 480px) {
+    .chats-sidebar {
+        width: 0;
+        min-width: 0;
+        opacity: 0;
+        border-right-width: 0;
+        position: absolute;
+        z-index: 30;
+        height: 100%;
+    }
+    /* Показываем сайдбар по кнопке (не collapsed) на мобильных */
+    .chats-sidebar:not(.sidebar-collapsed) {
+        width: 80vw;
+        opacity: 1;
+        border-right-width: 1px;
+    }
+    .system-panel.open {
+        width: 100vw;
+        position: absolute;
+        right: 0;
+        z-index: 25;
+        height: 100%;
+    }
+    .chat-messages {
+        padding: 0.5rem;
+    }
+    .message-content {
+        max-width: 95%;
+    }
+    .input-section {
+        padding: 0.5rem;
+    }
+}
+
+/* ==========================================================================
+   Поддержка prefers-reduced-motion (accessibility).
+   Отключает анимации для пользователей с соответствующей настройкой ОС.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+    .chats-sidebar,
+    .system-panel,
+    .sidebar-collapse-btn,
+    .agents-toggle,
+    .provider-chip,
+    .model-mode-btn,
+    .chat-item,
+    .agent-card,
+    .message-file-badge,
+    .rag-file-item,
+    .rag-folder-header {
+        transition: none !important;
+        animation: none !important;
+    }
 }

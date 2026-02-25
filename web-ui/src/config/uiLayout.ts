@@ -9,6 +9,10 @@ export const UI_LAYOUT = {
   sidebar: {
     width: 'clamp(16rem, 20vw, 19rem)',
     compactWidth: '12.5rem',
+    /** Ширина свёрнутого сайдбара — только иконки */
+    collapsedWidth: '0px',
+    /** Длительность анимации collapse/expand сайдбара */
+    transitionMs: 280,
   },
   systemPanel: {
     width: 'clamp(20rem, 28vw, 28rem)',
@@ -26,6 +30,8 @@ export const SYSTEM_PANEL_MODES = {
   rag: 'rag',
   logs: 'logs',
   settings: 'settings',
+  /** Просмотр файла — inline-панель вместо overlay-модалки (UI_UX_Design_Spec) */
+  fileViewer: 'fileViewer',
 } as const;
 
 export type SystemPanelMode = (typeof SYSTEM_PANEL_MODES)[keyof typeof SYSTEM_PANEL_MODES];

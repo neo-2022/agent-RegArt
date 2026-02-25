@@ -354,12 +354,38 @@ function App() {
   const showRagPanel = systemPanelMode === SYSTEM_PANEL_MODES.rag;
   const showLogsPanel = systemPanelMode === SYSTEM_PANEL_MODES.logs;
   const showSettingsPanel = systemPanelMode === SYSTEM_PANEL_MODES.settings;
+  const showFileViewerPanel = systemPanelMode === SYSTEM_PANEL_MODES.fileViewer;
+
+  // === Состояние сайдбара (collapse/expand) ===
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     localStorage.setItem(UI_PREFERENCES_STORAGE_KEY, JSON.stringify(uiPreferences));
   }, [uiPreferences]);
 
   const resolvedSystemPanelTransitionMs = uiPreferences.reducedMotion ? 0 : UI_LAYOUT.systemPanel.transitionMs;
+  const resolvedSidebarTransitionMs = uiPreferences.reducedMotion ? 0 : UI_LAYOUT.sidebar.transitionMs;
+
+  // Глобальный обработчик Escape — закрывает открытые панели/попапы
+  useEffect(() => {
+    const handleEscapeKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Приоритет закрытия: file viewer → system panel → agents panel → menu
+        if (viewingFile) {
+          setViewingFile(null);
+          setSystemPanelMode((prev) => prev === SYSTEM_PANEL_MODES.fileViewer ? null : prev);
+        } else if (systemPanelMode !== null) {
+          setSystemPanelMode(null);
+        } else if (agentsPanelOpen) {
+          setAgentsPanelOpen(false);
+        } else if (menuChatId !== null) {
+          setMenuChatId(null);
+        }
+      }
+    };
+    document.addEventListener('keydown', handleEscapeKey);
+    return () => document.removeEventListener('keydown', handleEscapeKey);
+  }, [viewingFile, systemPanelMode, agentsPanelOpen, menuChatId]);
 
   const handleSystemPanelToggle = (mode: SystemPanelMode) => {
     const nextMode = toggleSystemPanelMode(systemPanelMode, mode);
@@ -1208,7 +1234,21 @@ function App() {
         '--system-panel-transition': `${resolvedSystemPanelTransitionMs}ms`,
       } as React.CSSProperties}
     >
-      <aside className="chats-sidebar">
+      <aside
+        className={`chats-sidebar ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}
+        style={{
+          '--sidebar-transition': `${resolvedSidebarTransitionMs}ms`,
+        } as React.CSSProperties}
+      >
+        {/* Кнопка collapse/expand сайдбара — спецификация требует smooth slide */}
+        <button
+          className="sidebar-collapse-btn"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? 'Развернуть панель' : 'Свернуть панель'}
+          aria-label={sidebarCollapsed ? 'Развернуть панель' : 'Свернуть панель'}
+        >
+          {sidebarCollapsed ? '▸' : '◂'}
+        </button>
         <div className="workspaces-section">
           <div className="workspaces-header">
             <h3>Пространства</h3>
@@ -1934,8 +1974,12 @@ function App() {
                         key={i}
                         className="message-file-badge"
                         style={{cursor: 'pointer'}}
-                        onClick={() => setViewingFile(f)}
-                        title="Нажмите, чтобы просмотреть содержимое"
+                                        onClick={() => {
+                                          // Открываем файл в inline-панели вместо overlay (UI_UX_Design_Spec: no overlay modals)
+                                          setViewingFile(f);
+                                          setSystemPanelMode(SYSTEM_PANEL_MODES.fileViewer);
+                                        }}
+                                        title="Нажмите, чтобы просмотреть содержимое"
                       >📎 {f.name}</span>
                     ))}
                   </div>
@@ -2054,22 +2098,26 @@ function App() {
         </div>
       </main>
 
-      {viewingFile && (
-        <div className="modal-overlay" onClick={() => setViewingFile(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{minWidth: '500px', maxWidth: '800px', maxHeight: '80vh', display: 'flex', flexDirection: 'column'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
-              <h3 style={{margin: 0}}>{viewingFile.name}</h3>
-              <button
-                onClick={() => setViewingFile(null)}
-                style={{background: 'transparent', border: 'none', color: 'var(--icon-color)', fontSize: '1.4rem', cursor: 'pointer', padding: '4px 8px'}}
-              >✕</button>
-            </div>
-            <pre style={{flex: 1, overflow: 'auto', padding: '12px', borderRadius: '8px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.85rem', fontFamily: "'Courier New', monospace", whiteSpace: 'pre-wrap', wordWrap: 'break-word', margin: 0, maxHeight: '60vh'}}>
+      {/* Inline-панель просмотра файла — заменяет overlay modal (UI_UX_Design_Spec: no overlays) */}
+      <section className={`system-panel system-panel-file-viewer ${showFileViewerPanel ? 'open' : ''}`}>
+        <div className="logs-slide-header">
+          <h4 style={{ margin: 0 }}>{viewingFile?.name || 'Просмотр файла'}</h4>
+          <button
+            className="logs-close-btn"
+            onClick={() => { setViewingFile(null); setSystemPanelMode(null); }}
+            title="Закрыть"
+          >&times;</button>
+        </div>
+        <div className="file-viewer-content">
+          {viewingFile ? (
+            <pre className="file-viewer-pre">
               {viewingFile.content}
             </pre>
-          </div>
+          ) : (
+            <div className="file-viewer-empty">Выберите файл для просмотра</div>
+          )}
         </div>
-      )}
+      </section>
 
       {/* Промпт-панель теперь встроена inline в карточку агента (PromptPanel) —
            overlay modal удалён согласно UI_UX_Design_Spec */}

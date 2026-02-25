@@ -14,6 +14,7 @@ from sentence_transformers import SentenceTransformer
 
 from .config import settings
 from .ranking import build_rank_score
+from .vector_backend import VECTOR_BACKEND_CHROMA, VECTOR_BACKEND_QDRANT
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +28,8 @@ LEARNING_STATUS_DELETED = "deleted"
 class MemoryStore:
     """
     Класс для работы с долговременной памятью (RAG).
-    Использует ChromaDB для векторного хранения и sentence-transformers для эмбеддингов.
+    На текущем этапе поддерживается backend `chroma`; `qdrant` зарезервирован как целевой
+    backend миграции Eternal RAG и валидируется на уровне конфигурации.
     """
     
     def __init__(self):
@@ -35,7 +37,20 @@ class MemoryStore:
         # Создаём директорию для данных, если её нет
         os.makedirs(settings.CHROMA_DIR, exist_ok=True)
         os.makedirs(settings.TEMP_DIR, exist_ok=True)
-        
+
+        # Явно фиксируем поддерживаемые backend-режимы хранения векторов.
+        # Это нужно для безопасной поэтапной миграции на целевой стек Eternal RAG:
+        # - chroma продолжает обслуживать текущий runtime без регрессии;
+        # - qdrant валиден в конфиге, но пока блокируется ранней ошибкой,
+        #   чтобы не создавать иллюзию "рабочей" миграции без реализации адаптера.
+        if settings.VECTOR_BACKEND == VECTOR_BACKEND_QDRANT:
+            raise RuntimeError(
+                "VECTOR_BACKEND=qdrant пока не поддержан в runtime memory-service. "
+                "Требуется реализация адаптера Qdrant storage layer."
+            )
+        if settings.VECTOR_BACKEND != VECTOR_BACKEND_CHROMA:
+            raise RuntimeError(f"Неподдерживаемый VECTOR_BACKEND: {settings.VECTOR_BACKEND}")
+
         # Инициализация ChromaDB клиента
         self.client = chromadb.PersistentClient(
             path=settings.CHROMA_DIR,

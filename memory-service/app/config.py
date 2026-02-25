@@ -1,6 +1,8 @@
 import os
 from pathlib import Path
 
+from .vector_backend import resolve_vector_backend
+
 class Settings:
     """Настройки сервиса памяти."""
     
@@ -16,6 +18,10 @@ class Settings:
     # Модель для эмбеддингов
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     EMBEDDING_MODEL_VERSION = os.getenv("EMBEDDING_MODEL_VERSION", "1")
+
+    # Backend векторного хранилища (этап миграции Eternal RAG):
+    # chroma — текущая реализация; qdrant — целевой backend следующих этапов.
+    VECTOR_BACKEND = resolve_vector_backend(os.getenv("VECTOR_BACKEND", "chroma"))
     
     # Размер чанков при разбиении текста
     CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "500"))

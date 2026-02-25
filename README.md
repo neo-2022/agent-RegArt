@@ -576,6 +576,11 @@ MIT License
 
 Документ фиксирует карту соответствия требований текущим подсистемам, приоритетный backlog, quality gates и критерии готовности программы работ.
 
+## Конфигурация векторного backend (этап миграции Eternal RAG)
+
+- `VECTOR_BACKEND=chroma|qdrant` — выбор backend векторного слоя memory-service.
+- На текущем этапе runtime поддерживает `chroma`; значение `qdrant` валидируется в конфиге и останавливает сервис с явной ошибкой до внедрения адаптера.
+
 ## Memory-service: versioning, soft delete и conflict detection
 
 В блоке обучения (`/learnings`) реализован baseline долговременной устойчивости памяти:

@@ -1,6 +1,9 @@
 import pytest
 
-from app.vector_backend import VECTOR_BACKEND_QDRANT, resolve_vector_backend
+from app.vector_backend import (
+    VECTOR_BACKEND_QDRANT,
+    resolve_vector_backend,
+)
 
 
 def test_resolve_vector_backend_uses_default_qdrant_for_empty_value():
@@ -15,7 +18,7 @@ def test_resolve_vector_backend_accepts_qdrant_case_insensitive():
     assert resolve_vector_backend("QDRANT") == VECTOR_BACKEND_QDRANT
 
 
-def test_resolve_vector_backend_rejects_unknown_values():
-    """Некорректный backend должен давать раннюю и явную ошибку конфигурации."""
+def test_resolve_vector_backend_rejects_legacy_or_unknown_values():
+    """Некорректный/legacy backend должен давать раннюю ошибку конфигурации."""
     with pytest.raises(ValueError, match="VECTOR_BACKEND"):
         resolve_vector_backend("chroma")

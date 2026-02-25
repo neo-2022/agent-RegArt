@@ -578,8 +578,8 @@ MIT License
 
 ## Конфигурация векторного backend (этап миграции Eternal RAG)
 
-- `VECTOR_BACKEND=qdrant` — backend векторного слоя memory-service.
-- Runtime memory-service использует Qdrant как основной backend хранения векторов.
+- `VECTOR_BACKEND=qdrant` — обязательный backend векторного слоя memory-service.
+- Legacy-значения отклоняются валидацией конфигурации на старте.
 
 ## Memory-service: versioning, soft delete и conflict detection
 

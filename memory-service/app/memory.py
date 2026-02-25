@@ -11,7 +11,7 @@ from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
 
 from .config import settings
-from .qdrant_store import ensure_collection
+from .qdrant_store import QdrantCollectionCompat
 from .ranking import build_rank_score
 from .vector_backend import VECTOR_BACKEND_QDRANT
 
@@ -27,36 +27,43 @@ LEARNING_STATUS_DELETED = "deleted"
 class MemoryStore:
     """
     Класс для работы с долговременной памятью (RAG).
-    Использует Qdrant как backend векторного хранилища для Eternal RAG.
+    Использует Qdrant как единственный backend векторного хранилища (этап миграции Eternal RAG).
     """
     
     def __init__(self):
-        """Инициализация клиента ChromaDB и модели эмбеддингов."""
-        # Создаём директорию для данных, если её нет
+        """Инициализация клиента Qdrant и модели эмбеддингов."""
+        # Создаём директории данных, если их нет
         os.makedirs(settings.QDRANT_PATH, exist_ok=True)
         os.makedirs(settings.TEMP_DIR, exist_ok=True)
 
-        # Поддерживаем только Qdrant backend (целевая архитектура Eternal RAG).
+        # На этом этапе memory-service работает только через Qdrant backend.
+        # Ранняя проверка защищает от случайного старта в legacy-режиме.
         if settings.VECTOR_BACKEND != VECTOR_BACKEND_QDRANT:
             raise RuntimeError(
-                f"Неподдерживаемый VECTOR_BACKEND: {settings.VECTOR_BACKEND}. "
-                "Для текущей версии memory-service доступен только qdrant."
+                f"memory-service поддерживает только VECTOR_BACKEND=qdrant, получено: {settings.VECTOR_BACKEND}"
             )
 
-        # Инициализация Qdrant в локальном persistent-режиме.
-        self.client = QdrantClient(path=settings.QDRANT_PATH)
+        # Инициализация клиента Qdrant: локальный persistent-режим или внешний URL.
+        if settings.QDRANT_URL:
+            self.client = QdrantClient(url=settings.QDRANT_URL)
+        else:
+            self.client = QdrantClient(path=settings.QDRANT_PATH)
 
-        # Загружаем модель эмбеддингов и определяем размер вектора для коллекций.
+        # Загружаем модель эмбеддингов до инициализации коллекций,
+        # чтобы создавать коллекции с корректной размерностью вектора.
         logger.info(f"Загрузка модели эмбеддингов: {settings.EMBEDDING_MODEL}")
         self.encoder = SentenceTransformer(settings.EMBEDDING_MODEL)
-        vector_size = int(self.encoder.get_sentence_embedding_dimension())
+        logger.info("Модель эмбеддингов загружена")
+        self._vector_size = int(self.encoder.get_sentence_embedding_dimension())
 
-        # Создаём или получаем коллекции.
-        self.facts_collection = ensure_collection(self.client, "agent_memory_facts", vector_size)
-        self.files_collection = ensure_collection(self.client, "agent_memory_files", vector_size)
-        self.learnings_collection = ensure_collection(self.client, "agent_learnings", vector_size)
-        self.audit_collection = ensure_collection(self.client, "agent_memory_audit", vector_size)
-
+        # Создаём или получаем коллекции
+        self.facts_collection = self._get_or_create_collection("agent_memory_facts")
+        self.files_collection = self._get_or_create_collection("agent_memory_files")
+        # Коллекция для обучения агентов — хранит знания, извлечённые из диалогов.
+        # Каждое знание привязано к конкретной модели LLM через метаданные (model_name).
+        # Это позволяет каждой модели накапливать свою уникальную базу знаний.
+        self.learnings_collection = self._get_or_create_collection("agent_learnings")
+        self.audit_collection = self._get_or_create_collection("agent_memory_audit")
         self._metrics_lock = Lock()
         self._retrieval_metrics: Dict[str, float] = {
             "search_requests_total": 0,
@@ -64,9 +71,12 @@ class MemoryStore:
             "search_latency_ms_total": 0.0,
             "search_results_total": 0,
         }
-        
-        logger.info("Модель эмбеддингов загружена")
+
     
+    def _get_or_create_collection(self, name: str):
+        """Вспомогательный метод для получения/создания коллекции Qdrant."""
+        return QdrantCollectionCompat(client=self.client, name=name, vector_size=self._vector_size)
+
     @staticmethod
     def _utc_now_iso() -> str:
         """Возвращает текущее UTC-время в ISO-формате для версионирования метаданных."""

@@ -2004,3 +2004,742 @@ body {
     opacity: 0.7;
     font-style: italic;
 }
+
+/* ==========================================================================
+   Soft Depth — 4 уровня глубины согласно UI_UX_Design_Spec.
+   Мягкие тени, градиенты, subtle glow — никакого плоского дизайна.
+   Уровни: surface (L0), raised (L1), elevated (L2), floating (L3).
+   ========================================================================== */
+:root {
+    /* Soft Depth тени — от лёгкого до парящего */
+    --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.12);
+    --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.22), 0 2px 6px rgba(0, 0, 0, 0.12);
+    --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.15);
+    /* Мягкое свечение для акцентных элементов */
+    --glow-accent: 0 0 12px rgba(59, 130, 246, 0.15);
+    --glow-success: 0 0 12px rgba(76, 175, 80, 0.15);
+    --glow-error: 0 0 12px rgba(239, 83, 80, 0.15);
+    /* Градиентные фоны для глубины */
+    --gradient-surface: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+    --gradient-raised: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, transparent 100%);
+    --gradient-card: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 50%);
+    /* Переходы — плавность без рывков */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --shadow-surface: 0 1px 3px rgba(0, 0, 0, 0.06);
+        --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+        --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+        --shadow-floating: 0 8px 32px rgba(0, 0, 0, 0.14), 0 4px 12px rgba(0, 0, 0, 0.08);
+        --glow-accent: 0 0 12px rgba(37, 99, 235, 0.12);
+        --glow-success: 0 0 12px rgba(76, 175, 80, 0.12);
+        --glow-error: 0 0 12px rgba(239, 83, 80, 0.12);
+        --gradient-surface: linear-gradient(180deg, rgba(255,255,255,0.5) 0%, transparent 100%);
+        --gradient-raised: linear-gradient(180deg, rgba(255,255,255,0.8) 0%, transparent 100%);
+        --gradient-card: linear-gradient(135deg, rgba(255,255,255,0.6) 0%, transparent 50%);
+    }
+}
+
+/* Применение Soft Depth к существующим элементам */
+.chats-sidebar {
+    box-shadow: var(--shadow-raised);
+}
+
+.chat-header {
+    box-shadow: var(--shadow-surface);
+}
+
+.chat-item {
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.chat-item:hover {
+    box-shadow: var(--shadow-surface);
+    transform: translateX(2px);
+}
+
+.agent-card {
+    box-shadow: var(--shadow-surface);
+    background-image: var(--gradient-card);
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.agent-card:hover {
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-1px);
+}
+
+.agent-card.active {
+    box-shadow: var(--shadow-raised), var(--glow-accent);
+}
+
+.input-wrapper {
+    box-shadow: var(--shadow-raised);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.input-wrapper:focus-within {
+    box-shadow: var(--shadow-elevated), var(--glow-accent);
+}
+
+.code-block {
+    box-shadow: var(--shadow-surface);
+}
+
+.chat-menu {
+    box-shadow: var(--shadow-floating);
+}
+
+.system-panel.open {
+    box-shadow: var(--shadow-elevated);
+}
+
+.log-entry {
+    box-shadow: var(--shadow-surface);
+    transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.log-entry:hover {
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-1px);
+}
+
+.rag-folder-group {
+    box-shadow: var(--shadow-surface);
+    transition: box-shadow var(--transition-fast);
+}
+
+.rag-folder-group:hover {
+    box-shadow: var(--shadow-raised);
+}
+
+.rag-file-item {
+    transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.rag-file-item:hover {
+    box-shadow: var(--shadow-surface);
+    transform: translateX(2px);
+}
+
+.workspace-item {
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.workspace-item:hover {
+    transform: translateX(2px);
+}
+
+.message.user .message-content {
+    box-shadow: var(--shadow-surface);
+}
+
+.settings-item {
+    box-shadow: var(--shadow-surface);
+    transition: box-shadow var(--transition-fast);
+}
+
+.settings-item:hover {
+    box-shadow: var(--shadow-raised);
+}
+
+/* ==========================================================================
+   ModelPopover — premium popover для выбора модели.
+   Заменяет стандартный <select> на кастомный UI с поиском и карточками.
+   ========================================================================== */
+.model-popover-container {
+    position: relative;
+    grid-column: 3;
+    min-width: 0;
+    width: 100%;
+}
+
+.model-popover-trigger {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: 100%;
+    padding: 3px 8px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 12px;
+    color: var(--text-color);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    text-align: left;
+    min-width: 0;
+}
+
+.model-popover-trigger:hover {
+    border-color: var(--accent-color);
+    box-shadow: var(--shadow-surface);
+}
+
+.model-popover-trigger.open {
+    border-color: var(--accent-color);
+    box-shadow: var(--shadow-raised), var(--glow-accent);
+}
+
+.model-popover-trigger-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.model-popover-chevron {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--icon-color);
+    transition: transform var(--transition-fast);
+}
+
+.model-popover-chevron.open {
+    transform: rotate(180deg);
+}
+
+.model-popover-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    min-width: 280px;
+    max-width: 400px;
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-floating);
+    z-index: 1500;
+    overflow: hidden;
+    animation: popoverFadeIn var(--transition-normal) forwards;
+}
+
+@keyframes popoverFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.model-popover-search-wrapper {
+    padding: 8px;
+    border-bottom: 1px solid var(--input-border);
+}
+
+.model-popover-search {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--chat-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.model-popover-search:focus {
+    border-color: var(--accent-color);
+}
+
+.model-popover-search::placeholder {
+    color: var(--icon-color);
+}
+
+.model-popover-list {
+    max-height: 240px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.model-popover-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 10px;
+    margin: 2px 0;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    color: var(--text-color);
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.8rem;
+    transition: background var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.model-popover-item:hover {
+    background: var(--sidebar-hover);
+    border-color: var(--input-border);
+    box-shadow: var(--shadow-surface);
+    transform: translateX(2px);
+}
+
+.model-popover-item.selected {
+    background: color-mix(in srgb, var(--accent-color) 12%, var(--input-bg));
+    border-color: var(--accent-color);
+    box-shadow: var(--shadow-surface), var(--glow-accent);
+}
+
+.model-popover-item.unsuitable {
+    opacity: 0.7;
+}
+
+.model-popover-item-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.model-popover-item-icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    font-size: 0.75rem;
+}
+
+.model-popover-item-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.model-popover-item-meta {
+    display: flex;
+    gap: 6px;
+    padding-left: 22px;
+    flex-wrap: wrap;
+}
+
+.model-popover-item-family,
+.model-popover-item-size,
+.model-popover-item-price {
+    font-size: 0.7rem;
+    color: var(--icon-color);
+    padding: 1px 6px;
+    background: var(--button-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 6px;
+}
+
+.model-popover-item-tools {
+    font-size: 0.7rem;
+}
+
+.model-popover-item-note {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 22px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.model-popover-item-note.suitable {
+    color: #4caf50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.model-popover-item-note.unsuitable {
+    color: #ff9800;
+    background: rgba(255, 152, 0, 0.1);
+}
+
+.model-popover-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--icon-color);
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+/* ==========================================================================
+   PromptPanel — inline-панель промптов (замена overlay модалки).
+   Раскрывается под карточкой агента, не перекрывая контент.
+   ========================================================================== */
+.prompt-panel {
+    grid-column: 1 / -1;
+    margin-top: 6px;
+    padding: 10px;
+    border: 1px solid var(--input-border);
+    border-radius: 10px;
+    background: var(--input-bg);
+    background-image: var(--gradient-card);
+    box-shadow: var(--shadow-raised);
+    animation: promptSlideDown var(--transition-normal) forwards;
+}
+
+@keyframes promptSlideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        transform: translateY(0);
+    }
+}
+
+.prompt-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.prompt-panel-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.prompt-panel-close {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.prompt-panel-close:hover {
+    color: var(--text-color);
+    background: var(--button-hover-bg);
+}
+
+.prompt-panel-files {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.prompt-panel-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-color);
+    transition: background var(--transition-fast);
+}
+
+.prompt-panel-file-item:hover {
+    background: var(--sidebar-hover);
+}
+
+.prompt-panel-file-item.active {
+    background: color-mix(in srgb, var(--accent-color) 10%, var(--input-bg));
+}
+
+.prompt-panel-file-item input[type="radio"] {
+    accent-color: var(--accent-color);
+}
+
+.prompt-panel-file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.prompt-panel-empty {
+    padding: 12px;
+    text-align: center;
+    color: var(--icon-color);
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+.prompt-panel-editor {
+    border-top: 1px solid var(--input-border);
+    padding-top: 8px;
+}
+
+.prompt-panel-textarea {
+    width: 100%;
+    padding: 8px;
+    background: var(--chat-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    color: var(--text-color);
+    font-size: 0.8rem;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    min-height: 80px;
+    transition: border-color var(--transition-fast);
+}
+
+.prompt-panel-textarea:focus {
+    border-color: var(--accent-color);
+}
+
+.prompt-panel-preview {
+    position: relative;
+}
+
+.prompt-panel-text {
+    padding: 8px;
+    background: var(--chat-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-family: inherit;
+    color: var(--text-color);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 120px;
+    overflow-y: auto;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.prompt-panel-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-end;
+}
+
+.prompt-panel-btn {
+    padding: 5px 14px;
+    border: 1px solid var(--input-border);
+    border-radius: 8px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.prompt-panel-btn-save {
+    background: var(--accent-color);
+    color: #fff;
+    border-color: var(--accent-color);
+}
+
+.prompt-panel-btn-save:hover {
+    opacity: 0.85;
+}
+
+.prompt-panel-btn-save:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.prompt-panel-btn-cancel {
+    background: var(--button-bg);
+    color: var(--text-color);
+}
+
+.prompt-panel-btn-cancel:hover {
+    background: var(--button-hover-bg);
+}
+
+.prompt-panel-btn-edit {
+    background: var(--button-bg);
+    color: var(--text-color);
+    margin-top: 8px;
+}
+
+.prompt-panel-btn-edit:hover {
+    background: var(--button-hover-bg);
+    color: var(--button-hover-color);
+}
+
+.prompt-panel-status {
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+}
+
+.prompt-panel-status.success {
+    color: #4caf50;
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.prompt-panel-status.error {
+    color: #ef5350;
+    background: rgba(239, 83, 80, 0.1);
+}
+
+/* ==========================================================================
+   RAG File Explorer — расширенный просмотр файлов с drag&drop, метаданными.
+   ========================================================================== */
+.rag-folder-header {
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    user-select: none;
+}
+
+.rag-folder-header:hover {
+    background: var(--sidebar-hover);
+}
+
+.rag-folder-toggle {
+    font-size: 0.7rem;
+    transition: transform var(--transition-fast);
+    display: inline-block;
+}
+
+.rag-folder-toggle.expanded {
+    transform: rotate(90deg);
+}
+
+.rag-folder-files {
+    animation: folderExpand var(--transition-normal) forwards;
+}
+
+@keyframes folderExpand {
+    from {
+        opacity: 0;
+        max-height: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 1000px;
+    }
+}
+
+/* Drag&Drop зона для загрузки файлов */
+.rag-dropzone {
+    border: 2px dashed var(--input-border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    color: var(--icon-color);
+    font-size: 0.8rem;
+    transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast);
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.rag-dropzone:hover,
+.rag-dropzone.drag-over {
+    border-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 5%, var(--input-bg));
+    box-shadow: var(--glow-accent);
+}
+
+.rag-dropzone-icon {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+}
+
+.rag-dropzone-text {
+    font-size: 0.78rem;
+    color: var(--icon-color);
+}
+
+/* Метаданные файла в RAG-панели */
+.rag-file-meta {
+    display: flex;
+    gap: 6px;
+    font-size: 0.65rem;
+    color: var(--icon-color);
+    padding-left: 22px;
+    margin-top: 2px;
+}
+
+.rag-file-meta-tag {
+    padding: 1px 4px;
+    background: var(--button-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 4px;
+}
+
+/* ==========================================================================
+   UI State Indicators — индикаторы состояний панелей.
+   ========================================================================== */
+.ui-state-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    border: 1px solid var(--input-border);
+}
+
+.ui-state-indicator.state-empty {
+    color: var(--icon-color);
+    border-color: var(--input-border);
+}
+
+.ui-state-indicator.state-loading {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+    background: color-mix(in srgb, var(--accent-color) 5%, transparent);
+}
+
+.ui-state-indicator.state-error {
+    color: #ef5350;
+    border-color: #ef5350;
+    background: rgba(239, 83, 80, 0.05);
+    box-shadow: var(--glow-error);
+}
+
+.ui-state-indicator.state-processing {
+    color: #6aa7ff;
+    border-color: #6aa7ff;
+    background: rgba(106, 167, 255, 0.05);
+}
+
+.ui-state-indicator.state-outdated {
+    color: #ffb74d;
+    border-color: #ffb74d;
+    background: rgba(255, 183, 77, 0.05);
+}
+
+.ui-state-indicator.state-conflict {
+    color: #ab47bc;
+    border-color: #ab47bc;
+    background: rgba(171, 71, 188, 0.05);
+}
+
+.ui-state-indicator.state-ready {
+    color: #4caf50;
+    border-color: #4caf50;
+    background: rgba(76, 175, 80, 0.05);
+    box-shadow: var(--glow-success);
+}
+
+.ui-state-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+}
+
+.ui-state-indicator.state-loading .ui-state-dot,
+.ui-state-indicator.state-processing .ui-state-dot {
+    animation: statePulse 1.2s infinite;
+}
+
+@keyframes statePulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+}

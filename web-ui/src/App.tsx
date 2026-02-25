@@ -24,6 +24,8 @@ import { normalizeModelList, type ModelInfo } from './config/modelsApi';
 import { normalizeProviderList, type ModelDetailInfo, type ProviderInfo } from './config/providersApi';
 import { normalizeAgentList, type AgentInfo } from './config/agentsApi';
 import { LOG_LEVEL_OPTIONS, LOG_SERVICE_OPTIONS } from './config/logFilters';
+import { ModelPopover, type ModelPopoverItem } from './components/ModelPopover';
+import { PromptPanel, type PromptFileItem } from './components/PromptPanel';
 
 // AttachedFile — интерфейс прикреплённого файла.
 // Содержит имя файла и его текстовое содержимое (прочитанное через FileReader).
@@ -274,7 +276,7 @@ function App() {
   const [availablePrompts, setAvailablePrompts] = useState<string[]>([]); // Доступные файлы промптов
   const [selectedPrompt, setSelectedPrompt] = useState<string>('');   // Выбранный промпт
   const [promptText, setPromptText] = useState<string>('');           // Текст промпта для редактирования
-  const [promptTab, setPromptTab] = useState<'edit' | 'files'>('edit'); // Вкладка в модальном окне промптов
+  // promptTab больше не нужен — inline PromptPanel управляет вкладками внутри себя
   const [_ragFactText, _setRagFactText] = useState<string>('');         // Текст для добавления факта в RAG (зарезервировано)
   const [ragStats, setRagStats] = useState<{facts_count: number; files_count: number} | null>(null); // Статистика RAG
   const [agentsPanelOpen, setAgentsPanelOpen] = useState(true);       // Панель моделей открыта/закрыта
@@ -310,6 +312,8 @@ function App() {
   const [ragFiles, setRagFiles] = useState<RagFolderEntry[]>([]);
   const [ragSearch, setRagSearch] = useState('');
   const [ragSortBy, setRagSortBy] = useState<'name' | 'chunks'>('name');
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set()); // Свёрнутые папки в RAG-панели
+  const [ragDragOver, setRagDragOver] = useState(false); // Индикатор drag&drop зоны
   const [viewingFile, setViewingFile] = useState<AttachedFile | null>(null);
   const [promptSaveStatus, setPromptSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [promptSaveError, setPromptSaveError] = useState('');
@@ -597,22 +601,21 @@ function App() {
   };
 
   const handleEditPrompt = async (agentName: string) => {
+    // Переключаем inline-панель: повторный клик по тому же агенту — закрывает
+    if (showPromptModal && modalAgent === agentName) {
+      setShowPromptModal(false);
+      return;
+    }
     const files = await fetchPrompts(agentName);
     setAvailablePrompts(Array.isArray(files) ? files : []);
     setModalAgent(agentName);
     setSelectedPrompt('');
-    setPromptTab('edit');
     const agent = agents.find(a => a.name === agentName);
     setPromptText(agent?.prompt || '');
     setShowPromptModal(true);
   };
 
-  const handleSelectPrompt = () => {
-    if (selectedPrompt) {
-      loadPrompt(modalAgent, selectedPrompt);
-      setShowPromptModal(false);
-    }
-  };
+  // handleSelectPrompt перенесён в inline-callback PromptPanel (onSelectPrompt)
 
   const savePromptText = async () => {
     setPromptSaveStatus('saving');
@@ -1389,31 +1392,35 @@ function App() {
                     ) : (agent.name || '?').charAt(0).toUpperCase()}
                   </span>
                   <span className="agent-name">{agent.name}</span>
-                  <select
-                    className="agent-model-select"
-                    value={agent.model || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val) updateAgentModel(agent.name, val, selectedProvider);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <option value="">{providerModels.length === 0 ? (selectedProvider === 'lmstudio' ? 'Нет моделей — нажмите ↻' : 'Нет моделей') : 'Выберите модель'}</option>
-                    {selectedProvider === 'ollama' ? (
-                      models.map(m => {
-                        const suitable = m.suitableRoles?.includes(agent.name);
-                        const prefix = suitable ? '\u2713 ' : '\u2717 ';
-                        return <option key={m.name} value={m.name}>{prefix}{m.name}{m.family ? ` (${m.family}${m.parameterSize ? ' ' + m.parameterSize : ''})` : ''}</option>;
-                      })
-                    ) : (
-                      providerModels.map(m => {
+                  <ModelPopover
+                    items={(() => {
+                      // Формируем список моделей для popover из данных провайдера
+                      if (selectedProvider === 'ollama') {
+                        return models.map((m): ModelPopoverItem => ({
+                          id: m.name,
+                          name: m.name,
+                          family: m.family || undefined,
+                          parameterSize: m.parameterSize || undefined,
+                          supportsTools: m.supportsTools,
+                          isSuitable: m.suitableRoles?.includes(agent.name),
+                          roleNote: m.roleNotes?.[agent.name] || undefined,
+                        }));
+                      }
+                      return providerModels.map((m): ModelPopoverItem => {
                         const detail = cloudModelsDetail[selectedProvider]?.find(d => d.id === m);
-                        const prefix = detail ? (detail.is_available ? '\u2605 ' : '\u25CB ') : '';
-                        const price = detail ? ` [${detail.pricing_info}]` : '';
-                        return <option key={m} value={m}>{prefix}{m}{price}</option>;
-                      })
-                    )}
-                  </select>
+                        return {
+                          id: m,
+                          name: m,
+                          isAvailable: detail?.is_available,
+                          pricingInfo: detail?.pricing_info || undefined,
+                        };
+                      });
+                    })()}
+                    selectedId={agent.model || ''}
+                    onSelect={(modelId) => updateAgentModel(agent.name, modelId, selectedProvider)}
+                    placeholder={providerModels.length === 0 ? (selectedProvider === 'lmstudio' ? 'Нет моделей — нажмите ↻' : 'Нет моделей') : 'Выберите модель'}
+                    provider={selectedProvider}
+                  />
                   <span 
                     className="tool-warning" 
                     style={{ visibility: showWarning ? 'visible' : 'hidden' }}
@@ -1443,6 +1450,30 @@ function App() {
                       ✎
                     </button>
                   </div>
+                  {/* Inline-панель промптов — раскрывается под карточкой агента */}
+                  {showPromptModal && modalAgent === agent.name && (
+                    <PromptPanel
+                      isOpen={true}
+                      onClose={() => { setShowPromptModal(false); setPromptSaveStatus('idle'); }}
+                      agentName={agent.name}
+                      promptFiles={availablePrompts.map((f): PromptFileItem => ({
+                        fileName: f,
+                        isActive: selectedPrompt === f,
+                      }))}
+                      promptText={promptText}
+                      onSelectPrompt={(fileName) => {
+                        setSelectedPrompt(fileName);
+                        loadPrompt(agent.name, fileName);
+                        setShowPromptModal(false);
+                      }}
+                      onSavePrompt={(text) => {
+                        setPromptText(text);
+                        savePromptText();
+                      }}
+                      saveStatus={promptSaveStatus}
+                      saveError={promptSaveError}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -1607,7 +1638,37 @@ function App() {
         )}
 
         {showRagPanel && (
-          <div className="rag-panel">
+          <div
+            className={`rag-panel ${ragDragOver ? 'rag-drag-active' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setRagDragOver(true); }}
+            onDragLeave={() => setRagDragOver(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setRagDragOver(false);
+              const files = e.dataTransfer.files;
+              if (!files || files.length === 0) return;
+              setRagUploadStatus('uploading');
+              setRagUploadMessage(`Загрузка ${files.length}...`);
+              let successCount = 0;
+              let skippedCount = 0;
+              for (const file of Array.from(files)) {
+                const ext = '.' + (file.name.split('.').pop()?.toLowerCase() || '');
+                if (!RAG_SUPPORTED_EXTENSIONS.includes(ext)) { skippedCount++; continue; }
+                try {
+                  const content = await file.text();
+                  await addRagFileChunks(file.name, content);
+                  successCount++;
+                } catch (err) { console.error('Drag&drop error:', file.name, err); }
+              }
+              await fetchRagFiles();
+              await fetchRagStats();
+              setRagUploadStatus('success');
+              let msg = `Загружено: ${successCount}`;
+              if (skippedCount > 0) msg += ` (пропущено: ${skippedCount})`;
+              setRagUploadMessage(msg);
+              setTimeout(() => { setRagUploadStatus('idle'); setRagUploadMessage(''); }, 3000);
+            }}
+          >
             <div className="rag-panel-header">
               <h4>RAG — база знаний</h4>
               <label className="rag-toggle-label">
@@ -1710,12 +1771,27 @@ function App() {
                     .filter((folder) => !ragSearch || folder.folder.toLowerCase().includes(ragSearch.toLowerCase()) || folder.files.some((f) => f.file_name.toLowerCase().includes(ragSearch.toLowerCase())))
                     .sort((a, b) => ragSortBy === 'chunks' ? b.total_files - a.total_files : a.folder.localeCompare(b.folder))
                     .map((folder, idx: number) => (
-                    <div key={idx} className="rag-folder-group">
-                      <div className="rag-folder-header">
+                    <div key={idx} className={`rag-folder-group ${collapsedFolders.has(folder.folder) ? 'collapsed' : ''}`}>
+                      <div
+                        className="rag-folder-header"
+                        onClick={() => {
+                          // Переключаем свёрнутость папки
+                          setCollapsedFolders((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(folder.folder)) { next.delete(folder.folder); } else { next.add(folder.folder); }
+                            return next;
+                          });
+                        }}
+                        role="button"
+                        aria-expanded={!collapsedFolders.has(folder.folder)}
+                        tabIndex={0}
+                      >
+                        <span className={`rag-folder-chevron ${collapsedFolders.has(folder.folder) ? '' : 'open'}`}>▸</span>
                         <span className="rag-folder-icon">📁</span>
                         <span className="rag-folder-name">{folder.folder}</span>
                         <span className="rag-folder-count">({folder.total_files} файлов)</span>
-                        <button className="rag-folder-delete" onClick={() => {
+                        <button className="rag-folder-delete" onClick={(e) => {
+                          e.stopPropagation();
                           // Удаляем все файлы из папки
                           if (folder.files.length > 0) {
                             folder.files.forEach((f) => deleteRagFile(folder.folder + '/' + f.file_name));
@@ -1724,7 +1800,7 @@ function App() {
                           }
                         }} title="Удалить папку">✕</button>
                       </div>
-                      <div className="rag-folder-files">
+                      <div className={`rag-folder-files ${collapsedFolders.has(folder.folder) ? 'collapsed' : ''}`}>
                         {folder.files.slice(0, 10).map((rf, fileIdx: number) => (
                           <div key={fileIdx} className="rag-file-item">
                             <span className="rag-file-icon">📄</span>
@@ -1995,117 +2071,8 @@ function App() {
         </div>
       )}
 
-      {showPromptModal && (
-        <div className="modal-overlay">
-          <div className="modal" ref={modalRef} style={{minWidth: '500px', maxWidth: '700px'}}>
-            <h3>Промпт агента: {modalAgent}</h3>
-            <div style={{display: 'flex', gap: '4px', marginBottom: '12px'}}>
-              <button
-                className={`model-mode-btn ${promptTab === 'edit' ? 'active' : ''}`}
-                onClick={() => setPromptTab('edit')}
-                style={{padding: '6px 16px', borderRadius: '6px', border: '1px solid var(--input-border)', background: promptTab === 'edit' ? 'var(--input-focus-border)' : 'var(--button-bg)', color: promptTab === 'edit' ? '#fff' : 'var(--text-color)', cursor: 'pointer'}}
-              >
-                Редактировать
-              </button>
-              <button
-                className={`model-mode-btn ${promptTab === 'files' ? 'active' : ''}`}
-                onClick={() => setPromptTab('files')}
-                style={{padding: '6px 16px', borderRadius: '6px', border: '1px solid var(--input-border)', background: promptTab === 'files' ? 'var(--input-focus-border)' : 'var(--button-bg)', color: promptTab === 'files' ? '#fff' : 'var(--text-color)', cursor: 'pointer'}}
-              >
-                Из файла
-              </button>
-            </div>
-            <div className="modal-content" style={{maxHeight: '400px'}}>
-              {promptTab === 'edit' ? (
-                <div>
-                  <p style={{fontSize: '0.85rem', color: 'var(--icon-color)', margin: '0 0 8px 0'}}>Системный промпт определяет поведение агента. Напишите инструкции для {modalAgent}:</p>
-                  <textarea
-                    value={promptText}
-                    onChange={(e) => setPromptText(e.target.value)}
-                    style={{width: '100%', minHeight: '200px', padding: '10px', borderRadius: '8px', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-color)', fontSize: '0.9rem', fontFamily: 'inherit', resize: 'vertical', outline: 'none', boxSizing: 'border-box'}}
-                    placeholder="Введите системный промпт для агента..."
-                  />
-                </div>
-              ) : (
-                <div>
-                  <p style={{fontSize: '0.85rem', color: 'var(--icon-color)', margin: '0 0 8px 0'}}>Выберите готовый файл промпта из папки prompts/{modalAgent}/:</p>
-                  {availablePrompts.length === 0 ? (
-                    <p style={{color: 'var(--icon-color)'}}>Нет файлов в папке prompts/{modalAgent}/</p>
-                  ) : (
-                    <ul>
-                      {availablePrompts.map(file => (
-                        <li key={file}>
-                          <label>
-                            <input
-                              type="radio"
-                              name="promptFile"
-                              value={file}
-                              checked={selectedPrompt === file}
-                              onChange={(e) => setSelectedPrompt(e.target.value)}
-                            />
-                            {file}
-                          </label>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <div style={{marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--input-border)'}}>
-                    <p style={{fontSize: '0.85rem', color: 'var(--icon-color)', margin: '0 0 8px 0'}}>Или загрузите файл промпта с компьютера (.txt, .md):</p>
-                    <button
-                      style={{padding: '8px 16px', borderRadius: '6px', border: '1px solid var(--input-border)', background: 'var(--button-bg)', color: 'var(--text-color)', cursor: 'pointer'}}
-                      onClick={() => {
-                        const input = document.createElement('input');
-                        input.type = 'file';
-                        input.accept = '.txt,.md,.text';
-                        input.onchange = async (e) => {
-                          const file = (e.target as HTMLInputElement).files?.[0];
-                          if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = async () => {
-                            const content = reader.result as string;
-                            setPromptText(content);
-                            setPromptSaveStatus('saving');
-                            try {
-                              await axios.post(UPDATE_PROMPT_API, { agent: modalAgent, prompt: content });
-                              setPromptSaveStatus('success');
-                              fetchAgents();
-                              setTimeout(() => { setShowPromptModal(false); setPromptSaveStatus('idle'); }, 800);
-                            } catch (err) {
-                              const error = err as { response?: { data?: { error?: string } } };
-                              setPromptSaveStatus('error');
-                              setPromptSaveError(error.response?.data?.error || 'Не удалось сохранить промпт');
-                            }
-                          };
-                          reader.readAsText(file);
-                        };
-                        input.click();
-                      }}
-                    >
-                      Загрузить с компьютера
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            {promptSaveStatus === 'error' && (
-              <div style={{color: '#ff6b6b', fontSize: '0.85rem', marginBottom: '8px'}}>{promptSaveError}</div>
-            )}
-            {promptSaveStatus === 'success' && (
-              <div style={{color: '#4caf50', fontSize: '0.85rem', marginBottom: '8px'}}>Промпт сохранён!</div>
-            )}
-            <div className="modal-actions">
-              <button onClick={() => { setShowPromptModal(false); setPromptSaveStatus('idle'); }}>Отмена</button>
-              {promptTab === 'edit' ? (
-                <button onClick={savePromptText} disabled={!promptText.trim() || promptSaveStatus === 'saving'}>
-                  {promptSaveStatus === 'saving' ? 'Сохранение...' : 'Сохранить'}
-                </button>
-              ) : (
-                <button onClick={handleSelectPrompt} disabled={!selectedPrompt}>Загрузить из файла</button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Промпт-панель теперь встроена inline в карточку агента (PromptPanel) —
+           overlay modal удалён согласно UI_UX_Design_Spec */}
     </div>
   );
 }

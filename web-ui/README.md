@@ -24,8 +24,42 @@
 - пользовательские UI-настройки: `src/config/uiPreferences.ts`.
 - централизованные фильтры логов: `src/config/logFilters.ts`. (значения фильтра + русские подписи в UI).
 
-## Тестовое покрытие UI-конфигов
+## Premium UI-компоненты
 
+### ModelPopover (`src/components/ModelPopover.tsx`)
+
+Заменяет стандартный `<select>` на premium popover с поиском, карточками моделей и метаданными.
+Поддерживает локальные (Ollama) и облачные модели с отображением семейства, размера, цен.
+
+### PromptPanel (`src/components/PromptPanel.tsx`)
+
+Inline-панель управления промптами агента. Встраивается в карточку агента вместо overlay-модала.
+Поддерживает выбор файлов промптов, inline-редактирование и сохранение.
+
+### Soft Depth CSS System
+
+4-уровневая система глубины в `src/styles/App.css`:
+
+- `--shadow-surface` / `--shadow-raised` / `--shadow-elevated` / `--shadow-floating`
+- `--glow-accent` / `--glow-success` / `--glow-error`
+- `--gradient-surface` / `--gradient-raised` / `--gradient-card`
+- `--transition-fast` / `--transition-normal` / `--transition-slow`
+
+### RAG File Explorer
+
+Панель RAG с функциями файлового менеджера:
+- Expand/collapse папок (chevron + анимация)
+- Drag & drop загрузка файлов
+- Поиск и сортировка
+- UI-состояния (Empty/Loading/Error/Processing/Outdated/Conflict)
+
+## Тестовое покрытие
+
+### UI-компоненты
+- `src/components/ModelPopover.test.ts` — интерфейсы, логика поиска, экспорт
+- `src/components/PromptPanel.test.ts` — интерфейсы, синхронизация, статусы, экспорт
+
+### UI-конфиги
 - `src/config/uiLayout.test.ts`
 - `src/config/ragPanelState.test.ts`
 - `src/config/uiPreferences.test.ts`

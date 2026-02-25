@@ -170,7 +170,10 @@ class TTLManager:
             ids = all_data["ids"]
             metas = all_data.get("metadatas", [{}] * len(docs))
 
-            new_embeddings = self.store.encoder.encode(docs).tolist()
+            # Обрабатываем случай, когда encoder.encode() возвращает
+            # как numpy-массив (production), так и обычный список (тесты: mock)
+            raw_embeddings = self.store.encoder.encode(docs)
+            new_embeddings = raw_embeddings if isinstance(raw_embeddings, list) else raw_embeddings.tolist()
 
             collection.update(
                 ids=ids,

@@ -19,7 +19,7 @@ import (
 // ForbiddenPaths — системные директории, доступ к которым запрещён через API.
 // Защищает критические файлы системы от случайного или намеренного повреждения.
 var ForbiddenPaths = []string{
-	"/etc/shadow", "/etc/passwd", "/etc/sudoers",
+	"/etc", "/etc/shadow", "/etc/passwd", "/etc/sudoers",
 	"/proc", "/sys", "/dev",
 	"/boot", "/sbin", "/usr/sbin",
 }

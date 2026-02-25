@@ -50,16 +50,20 @@ class MockQdrantCollection:
         result_ids = []
         result_metas = []
         result_docs = []
+        include = include or []
 
         for doc_id, item in self.data.items():
-            # Простая фильтрация по метаданным
-            if where:
-                if isinstance(where, dict):
-                    for key, value in where.items():
-                        if key.startswith("$"):
-                            continue  # Пропускаем условные операторы для простоты
-                        if item["metadata"].get(key) != value:
-                            continue
+            # Простая фильтрация по метаданным (плоский dict — неявный AND)
+            if where and isinstance(where, dict):
+                match = True
+                for key, value in where.items():
+                    if key.startswith("$"):
+                        continue  # Пропускаем условные операторы для простоты
+                    if item["metadata"].get(key) != value:
+                        match = False
+                        break
+                if not match:
+                    continue
             result_ids.append(doc_id)
             if "metadatas" in include:
                 result_metas.append(item["metadata"])

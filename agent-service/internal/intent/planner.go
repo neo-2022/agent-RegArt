@@ -29,7 +29,7 @@ var intentToolMap = map[string]ToolMapping{
 		},
 	},
 	"hardware_info": {
-		ToolName: "full_system_report", 
+		ToolName: "full_system_report",
 		ArgsFrom: func(_ Params) map[string]interface{} {
 			return map[string]interface{}{}
 		},
@@ -75,7 +75,7 @@ func PlanIntent(intentType string, params Params) *IntentPlan {
 func KnownIntents() []string {
 	return []string{
 		IntentRememberFact,
-		IntentAddSynonym, 
+		IntentAddSynonym,
 		IntentAddToAutostart,
 		IntentOpenApp,
 		IntentOpenFolder,

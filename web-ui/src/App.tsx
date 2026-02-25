@@ -237,6 +237,9 @@ const PROMPTS_API = `${GATEWAY_URL}/prompts`;       // Файлы промпто
 const LOAD_PROMPT_API = `${GATEWAY_URL}/prompts/load`; // Загрузка промпта из файла
 const MEMORY_API = `${GATEWAY_URL}/memory`;         // RAG-поиск по базе знаний (memory-service)
 const RAG_API = `${GATEWAY_URL}/rag`;              // RAG-эндпоинты agent-service
+const SKILLS_API = `${GATEWAY_URL}/skills`;         // Skill Engine (проксируется через agent-service)
+const GRAPH_API = `${GATEWAY_URL}/graph`;           // Graph Engine (проксируется через agent-service)
+const EMBEDDINGS_API = `${GATEWAY_URL}/embeddings`; // Статус эмбеддингов (проксируется через agent-service)
 const PROVIDERS_API = `${GATEWAY_URL}/providers`;   // Облачные LLM-провайдеры
 
 const WORKSPACES_API = `${GATEWAY_URL}/workspaces`; // Рабочие пространства
@@ -840,7 +843,7 @@ function App() {
   // Загрузка статуса эмбеддингов (для индикатора в RAG-панели)
   const fetchEmbeddingStatus = async () => {
     try {
-      const res = await axios.get(`${MEMORY_API}/embeddings/status`);
+      const res = await axios.get(`${EMBEDDINGS_API}/status`);
       setEmbeddingStatus(res.data);
     } catch (err) {
       console.error('Failed to fetch embedding status', err);
@@ -875,7 +878,7 @@ function App() {
     try {
       const params = new URLSearchParams();
       if (currentWorkspaceId !== null) params.set('workspace_id', String(currentWorkspaceId));
-      const res = await axios.get(`${MEMORY_API}/skills?${params.toString()}`);
+      const res = await axios.get(`${SKILLS_API}?${params.toString()}`);
       const data = res.data;
       setSkillsList(Array.isArray(data?.skills) ? data.skills : []);
     } catch (err) {
@@ -890,7 +893,7 @@ function App() {
   const createSkill = async (goal: string, steps: string[], tags: string[]) => {
     setSkillFormSaving(true);
     try {
-      await axios.post(`${MEMORY_API}/skills`, {
+      await axios.post(`${SKILLS_API}`, {
         goal,
         steps,
         tags,
@@ -911,7 +914,7 @@ function App() {
   // Удаление навыка (soft delete)
   const deleteSkill = async (skillId: string) => {
     try {
-      await axios.delete(`${MEMORY_API}/skills/${skillId}`);
+      await axios.delete(`${SKILLS_API}/${skillId}`);
       await fetchSkills();
     } catch (err) {
       console.error('Failed to delete skill', err);
@@ -926,7 +929,7 @@ function App() {
     }
     setSkillSearching(true);
     try {
-      const res = await axios.post(`${MEMORY_API}/skills/search`, {
+      const res = await axios.post(`${SKILLS_API}/search`, {
         query,
         top_k: 10,
         workspace_id: currentWorkspaceId !== null ? String(currentWorkspaceId) : undefined,
@@ -943,7 +946,7 @@ function App() {
   // Отметка использования навыка (повышает confidence)
   const recordSkillUsage = async (skillId: string) => {
     try {
-      await axios.post(`${MEMORY_API}/skills/${skillId}/usage`);
+      await axios.post(`${SKILLS_API}/${skillId}/usage`);
       await fetchSkills();
     } catch (err) {
       console.error('Failed to record skill usage', err);
@@ -958,7 +961,7 @@ function App() {
     try {
       const params = new URLSearchParams();
       if (currentWorkspaceId !== null) params.set('workspace_id', String(currentWorkspaceId));
-      const res = await axios.get(`${MEMORY_API}/graph/relationships?${params.toString()}`);
+      const res = await axios.get(`${GRAPH_API}/relationships?${params.toString()}`);
       const data = res.data;
       setGraphRelationships(Array.isArray(data?.relationships) ? data.relationships : []);
     } catch (err) {
@@ -972,7 +975,7 @@ function App() {
   // Удаление связи из графа
   const deleteGraphRelationship = async (relId: string) => {
     try {
-      await axios.delete(`${MEMORY_API}/graph/relationships/${relId}`);
+      await axios.delete(`${GRAPH_API}/relationships/${relId}`);
       await fetchGraphRelationships();
     } catch (err) {
       console.error('Failed to delete relationship', err);

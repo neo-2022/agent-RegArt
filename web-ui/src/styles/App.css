@@ -1317,6 +1317,67 @@ body {
     background: rgba(255, 107, 107, 0.1);
 }
 
+/* === RAG: чекбокс multi-select === */
+.rag-file-checkbox {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    accent-color: var(--accent, #7c5cfc);
+}
+
+/* === RAG: выделенный файл === */
+.rag-file-selected {
+    background: rgba(124, 92, 252, 0.12) !important;
+    border-left: 2px solid var(--accent, #7c5cfc);
+}
+
+/* === RAG: кнопка переименования === */
+.rag-file-rename {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    cursor: pointer;
+    font-size: 0.78rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    opacity: 0.4;
+    flex-shrink: 0;
+    transition: opacity 0.15s ease;
+}
+
+.rag-file-rename:hover {
+    opacity: 1;
+    color: var(--accent, #7c5cfc);
+    background: rgba(124, 92, 252, 0.1);
+}
+
+/* === RAG: inline rename input === */
+.rag-rename-input {
+    flex: 1;
+    padding: 1px 4px;
+    border-radius: 4px;
+    border: 1px solid var(--accent, #7c5cfc);
+    background: var(--input-bg);
+    color: var(--text-color);
+    font-size: 0.78rem;
+    outline: none;
+}
+
+.rag-rename-input:focus {
+    box-shadow: 0 0 0 2px rgba(124, 92, 252, 0.25);
+}
+
+/* === RAG: индикатор статуса эмбеддингов === */
+.rag-embedding-status {
+    font-size: 0.75rem;
+    color: var(--icon-color);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+}
+
 .system-panel {
     width: 0;
     min-width: 0;

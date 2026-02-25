@@ -100,6 +100,14 @@ class LearningAddRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Дополнительные метаданные")
 
 
+class ContradictionItem(BaseModel):
+    """Элемент обнаруженного противоречия (Eternal RAG: раздел 8)."""
+    id: str = Field(..., description="ID существующего знания, с которым обнаружено противоречие")
+    text: str = Field(..., description="Текст существующего знания")
+    similarity: float = Field(..., description="Косинусная близость [0..1]")
+    learning_key: str = Field("", description="Ключ знания")
+
+
 class LearningAddResponse(BaseModel):
     """Ответ на добавление знания."""
     id: str
@@ -107,6 +115,7 @@ class LearningAddResponse(BaseModel):
     learning_key: str
     conflict_detected: bool = False
     previous_version_id: Optional[str] = None
+    contradictions: List[ContradictionItem] = Field(default_factory=list, description="Обнаруженные противоречия с существующими знаниями")
     status: str = "ok"
     message: str = "Learning added"
 
@@ -195,3 +204,26 @@ class BackupChecksResponse(BaseModel):
     neo4j_backup_enabled: bool
     minio_versioning_enabled: bool
     restore_test_enabled: bool
+
+
+class FileRenameRequest(BaseModel):
+    """Запрос на переименование файла в RAG-базе знаний."""
+    old_name: str = Field(..., description="Текущее имя файла", min_length=1)
+    new_name: str = Field(..., description="Новое имя файла", min_length=1)
+
+
+class FileRenameResponse(BaseModel):
+    """Ответ на переименование файла."""
+    old_name: str
+    new_name: str
+    chunks_updated: int
+    status: str = "ok"
+
+
+class EmbeddingStatusResponse(BaseModel):
+    """Статус модели эмбеддингов для мониторинга (Eternal RAG: раздел 5.8)."""
+    model_name: str = Field(..., description="Имя модели эмбеддингов")
+    model_version: str = Field(..., description="Версия модели")
+    vector_size: int = Field(..., description="Размерность вектора")
+    status: str = Field("loaded", description="Статус: loaded / error")
+    collections: Dict[str, int] = Field(default_factory=dict, description="Количество документов по коллекциям")

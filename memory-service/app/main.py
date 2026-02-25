@@ -151,6 +151,30 @@ async def list_files():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.patch("/files/rename", response_model=models.FileRenameResponse, tags=["Files"])
+async def rename_file(request: models.FileRenameRequest):
+    """
+    Переименовать файл в RAG-базе знаний.
+
+    Обновляет метаданные file_name у всех чанков файла.
+    Содержимое и embeddings не затрагиваются.
+    """
+    try:
+        chunks_updated = memory_store.rename_file(request.old_name, request.new_name)
+        if chunks_updated == 0:
+            raise HTTPException(status_code=404, detail=f"Файл '{request.old_name}' не найден")
+        return models.FileRenameResponse(
+            old_name=request.old_name,
+            new_name=request.new_name,
+            chunks_updated=chunks_updated,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Ошибка при переименовании файла")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/files", tags=["Files"])
 async def delete_file_by_name(name: str):
     """
@@ -210,12 +234,22 @@ async def add_learning(request: models.LearningAddRequest):
             workspace_id=request.workspace_id,
         )
         learning_meta = memory_store.get_learning_metadata(learning_id)
+        # Извлекаем список противоречий из JSON-строки в метаданных
+        contradictions_raw = []
+        contradictions_json = learning_meta.get("contradictions_json", "")
+        if contradictions_json:
+            import json as _json
+            try:
+                contradictions_raw = _json.loads(contradictions_json)
+            except (ValueError, TypeError):
+                contradictions_raw = []
         return models.LearningAddResponse(
             id=learning_id,
             version=int(learning_meta.get("version", 1)),
             learning_key=str(learning_meta.get("learning_key", "")),
             conflict_detected=bool(learning_meta.get("conflict_detected", False)),
             previous_version_id=learning_meta.get("previous_version_id"),
+            contradictions=contradictions_raw,
         )
     except Exception as e:
         logger.exception("Ошибка при добавлении знания")
@@ -384,6 +418,21 @@ async def cleanup_expired(collection: str = "all"):
 async def reindex_status():
     """Проверить, нужна ли переиндексация."""
     return ttl_manager.check_reindex_needed()
+
+
+@app.get("/embeddings/status", response_model=models.EmbeddingStatusResponse, tags=["Maintenance"])
+async def get_embedding_status():
+    """
+    Статус модели эмбеддингов: имя, версия, размерность вектора, количество документов.
+
+    Используется UI-индикатором состояния эмбеддингов (Eternal RAG: раздел 5.8).
+    """
+    try:
+        status = memory_store.get_embedding_status()
+        return models.EmbeddingStatusResponse(**status)
+    except Exception as e:
+        logger.exception("Ошибка получения статуса эмбеддингов")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.exception_handler(Exception)

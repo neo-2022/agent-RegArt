@@ -25,16 +25,14 @@ services:
           memory: 512M
           cpus: '1.0'
 
-  # --- ChromaDB (векторное хранилище для RAG) ---
-  chroma:
-    image: chromadb/chroma:latest
-    container_name: agent-chroma
+  # --- Qdrant (векторное хранилище для RAG) ---
+  qdrant:
+    image: qdrant/qdrant:v1.11.5
+    container_name: agent-qdrant
     ports:
-      - "8000:8000"
+      - "6333:6333"
     volumes:
-      - ./data/chroma:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
+      - ./data/qdrant:/qdrant/storage
     restart: unless-stopped
     deploy:
       resources:
@@ -126,7 +124,7 @@ services:
           memory: 512M
           cpus: '1.0'
 
-  # --- Memory Service (Python/FastAPI + ChromaDB + эмбеддинги) ---
+  # --- Memory Service (Python/FastAPI + Qdrant + эмбеддинги) ---
   memory-service:
     build: ./memory-service
     container_name: agent-memory
@@ -135,7 +133,8 @@ services:
     volumes:
       - memory-data:/app/data
     environment:
-      - CHROMA_DIR=/app/data/chroma
+      - QDRANT_PATH=/app/data/qdrant
+      - VECTOR_BACKEND=qdrant
       - TEMP_DIR=/app/data/temp
       - EMBEDDING_MODEL=all-MiniLM-L6-v2
       - DEBUG=False

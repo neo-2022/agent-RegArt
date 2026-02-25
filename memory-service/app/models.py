@@ -263,6 +263,7 @@ class SkillItem(BaseModel):
     usage_count: int = Field(0, description="Количество применений")
     created_at: str = Field("", description="Дата создания")
     updated_at: str = Field("", description="Дата обновления")
+    relevance: Optional[float] = Field(None, description="Релевантность из семантического поиска (0.0-1.0)")
 
 
 class SkillCreateResponse(BaseModel):
@@ -380,3 +381,97 @@ class GraphTraversalResponse(BaseModel):
     nodes: List[GraphTraversalNode] = Field(default_factory=list)
     total_relationships: int = 0
     max_depth_reached: int = 0
+
+
+# === Модели для расширенного управления файлами RAG ===
+# Поддержка перемещения, мягкого удаления, закрепления и поиска по содержимому.
+
+class FileMoveRequest(BaseModel):
+    """Запрос на перемещение файла между папками в RAG-базе знаний."""
+    file_name: str = Field(..., description="Имя файла для перемещения", min_length=1)
+    target_folder: str = Field(..., description="Целевая папка", min_length=1)
+
+
+class FileMoveResponse(BaseModel):
+    """Ответ на перемещение файла."""
+    old_path: str
+    new_path: str
+    chunks_updated: int
+    status: str = "ok"
+
+
+class FileSoftDeleteRequest(BaseModel):
+    """Запрос на мягкое удаление файла (пометка deleted_at вместо физического удаления)."""
+    file_name: str = Field(..., description="Имя файла для мягкого удаления", min_length=1)
+
+
+class FileSoftDeleteResponse(BaseModel):
+    """Ответ на мягкое удаление файла."""
+    file_name: str
+    chunks_marked: int
+    status: str = "ok"
+
+
+class FileRestoreRequest(BaseModel):
+    """Запрос на восстановление мягко удалённого файла."""
+    file_name: str = Field(..., description="Имя файла для восстановления", min_length=1)
+
+
+class FileRestoreResponse(BaseModel):
+    """Ответ на восстановление файла."""
+    file_name: str
+    chunks_restored: int
+    status: str = "ok"
+
+
+class FilePinRequest(BaseModel):
+    """Запрос на закрепление файла (pinned — показывается первым, не удаляется по TTL)."""
+    file_name: str = Field(..., description="Имя файла для закрепления", min_length=1)
+
+
+class FilePinResponse(BaseModel):
+    """Ответ на закрепление/открепление файла."""
+    file_name: str
+    pinned: bool
+    chunks_updated: int
+    status: str = "ok"
+
+
+class FileContentSearchRequest(BaseModel):
+    """Запрос на семантический поиск внутри файлов RAG-базы."""
+    query: str = Field(..., description="Поисковый запрос по содержимому файлов", min_length=1, max_length=MAX_QUERY_LENGTH)
+    top_k: int = Field(10, description="Максимум результатов", ge=1, le=50)
+    folder: Optional[str] = Field(None, description="Фильтр по содержимому")
+
+
+class FileContentSearchResult(BaseModel):
+    """Результат поиска по содержимому файла."""
+    file_name: str
+    chunk_text: str
+    score: float
+    chunk_index: int = 0
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FileContentSearchResponse(BaseModel):
+    """Ответ на поиск по содержимому файлов."""
+    results: List[FileContentSearchResult] = Field(default_factory=list)
+    count: int
+    query: str
+
+
+class ContradictionListItem(BaseModel):
+    """Элемент списка обнаруженных противоречий между знаниями."""
+    new_learning_id: str = Field(..., description="ID нового знания")
+    existing_learning_id: str = Field(..., description="ID существующего знания")
+    new_text: str = Field(..., description="Текст нового знания")
+    existing_text: str = Field(..., description="Текст существующего знания")
+    similarity: float = Field(..., description="Косинусная близость")
+    model_name: str = Field("", description="Модель, к которой относятся знания")
+    detected_at: str = Field("", description="Время обнаружения")
+
+
+class ContradictionsResponse(BaseModel):
+    """Ответ со списком обнаруженных противоречий."""
+    contradictions: List[ContradictionListItem] = Field(default_factory=list)
+    count: int

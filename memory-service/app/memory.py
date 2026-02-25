@@ -624,6 +624,373 @@ class MemoryStore:
             logger.error(f"Ошибка при удалении чанков файла {file_id}: {e}")
             return 0
     
+    def move_file(self, file_name: str, target_folder: str) -> tuple:
+        """
+        Перемещение файла между папками в RAG-базе знаний.
+
+        Обновляет метаданные file_name у всех чанков файла, добавляя/заменяя
+        префикс папки. Содержимое и embeddings не затрагиваются.
+
+        Args:
+            file_name: Текущее имя файла (может содержать путь папки)
+            target_folder: Целевая папка
+
+        Returns:
+            Кортеж (old_path, new_path, chunks_updated)
+        """
+        if not file_name or not target_folder:
+            return (file_name, file_name, 0)
+
+        try:
+            # Ищем файл по текущему имени
+            results = self.files_collection.get(
+                where={"file_name": file_name},
+                include=["metadatas"],
+            )
+            if not results or "ids" not in results or not results["ids"]:
+                results = self.files_collection.get(
+                    where={"filename": file_name},
+                    include=["metadatas"],
+                )
+            if not results or "ids" not in results or not results["ids"]:
+                return (file_name, file_name, 0)
+
+            # Извлекаем базовое имя файла (без текущей папки)
+            parts = file_name.rsplit("/", 1)
+            base_name = parts[-1] if len(parts) > 1 else file_name
+
+            # Формируем новый путь
+            target_folder = target_folder.strip().rstrip("/")
+            new_path = f"{target_folder}/{base_name}"
+
+            ids = results["ids"]
+            metas = results.get("metadatas", [])
+            updated_metas = []
+            for idx in range(len(ids)):
+                meta = dict(metas[idx]) if idx < len(metas) and isinstance(metas[idx], dict) else {}
+                meta["file_name"] = new_path
+                meta["folder"] = target_folder
+                if "filename" in meta:
+                    meta["filename"] = new_path
+                updated_metas.append(meta)
+
+            self.files_collection.update(ids=ids, metadatas=updated_metas)
+
+            self._add_audit_log(
+                event_type="file_moved",
+                details={"old_path": file_name, "new_path": new_path, "chunks_updated": len(ids)},
+            )
+
+            logger.info(f"Перемещён файл «{file_name}» → «{new_path}» ({len(ids)} чанков)")
+            return (file_name, new_path, len(ids))
+        except Exception as e:
+            logger.error(f"Ошибка перемещения файла {file_name}: {e}")
+            return (file_name, file_name, 0)
+
+    def soft_delete_file(self, file_name: str) -> int:
+        """
+        Мягкое удаление файла — пометка deleted_at вместо физического удаления.
+
+        Файл остаётся в коллекции, но исключается из поиска и списков.
+        Можно восстановить через restore_file().
+
+        Args:
+            file_name: Имя файла для мягкого удаления
+
+        Returns:
+            Количество помеченных чанков
+        """
+        try:
+            results = self.files_collection.get(
+                where={"file_name": file_name},
+                include=["metadatas"],
+            )
+            if not results or "ids" not in results or not results["ids"]:
+                results = self.files_collection.get(
+                    where={"filename": file_name},
+                    include=["metadatas"],
+                )
+            if not results or "ids" not in results or not results["ids"]:
+                return 0
+
+            ids = results["ids"]
+            metas = results.get("metadatas", [])
+            deleted_at = self._utc_now_iso()
+            updated_metas = []
+            for idx in range(len(ids)):
+                meta = dict(metas[idx]) if idx < len(metas) and isinstance(metas[idx], dict) else {}
+                meta["deleted_at"] = deleted_at
+                meta["status"] = "deleted"
+                updated_metas.append(meta)
+
+            self.files_collection.update(ids=ids, metadatas=updated_metas)
+
+            self._add_audit_log(
+                event_type="file_soft_deleted",
+                details={"file_name": file_name, "chunks_marked": len(ids)},
+            )
+
+            logger.info(f"Мягкое удаление файла «{file_name}» ({len(ids)} чанков)")
+            return len(ids)
+        except Exception as e:
+            logger.error(f"Ошибка мягкого удаления файла {file_name}: {e}")
+            return 0
+
+    def restore_file(self, file_name: str) -> int:
+        """
+        Восстановление мягко удалённого файла.
+
+        Снимает пометку deleted_at и возвращает файл в активное состояние.
+
+        Args:
+            file_name: Имя файла для восстановления
+
+        Returns:
+            Количество восстановленных чанков
+        """
+        try:
+            results = self.files_collection.get(
+                where={"file_name": file_name},
+                include=["metadatas"],
+            )
+            if not results or "ids" not in results or not results["ids"]:
+                return 0
+
+            ids = results["ids"]
+            metas = results.get("metadatas", [])
+            restored = 0
+            updated_ids = []
+            updated_metas = []
+            for idx in range(len(ids)):
+                meta = dict(metas[idx]) if idx < len(metas) and isinstance(metas[idx], dict) else {}
+                if meta.get("deleted_at") or meta.get("status") == "deleted":
+                    meta.pop("deleted_at", None)
+                    meta["status"] = "active"
+                    updated_ids.append(ids[idx])
+                    updated_metas.append(meta)
+                    restored += 1
+
+            if updated_ids:
+                self.files_collection.update(ids=updated_ids, metadatas=updated_metas)
+
+            self._add_audit_log(
+                event_type="file_restored",
+                details={"file_name": file_name, "chunks_restored": restored},
+            )
+
+            logger.info(f"Восстановлен файл «{file_name}» ({restored} чанков)")
+            return restored
+        except Exception as e:
+            logger.error(f"Ошибка восстановления файла {file_name}: {e}")
+            return 0
+
+    def pin_file(self, file_name: str, pinned: bool = True) -> int:
+        """
+        Закрепление/открепление файла.
+
+        Закреплённые файлы показываются первыми в списке и не удаляются по TTL.
+
+        Args:
+            file_name: Имя файла
+            pinned: True — закрепить, False — открепить
+
+        Returns:
+            Количество обновлённых чанков
+        """
+        try:
+            results = self.files_collection.get(
+                where={"file_name": file_name},
+                include=["metadatas"],
+            )
+            if not results or "ids" not in results or not results["ids"]:
+                results = self.files_collection.get(
+                    where={"filename": file_name},
+                    include=["metadatas"],
+                )
+            if not results or "ids" not in results or not results["ids"]:
+                return 0
+
+            ids = results["ids"]
+            metas = results.get("metadatas", [])
+            updated_metas = []
+            for idx in range(len(ids)):
+                meta = dict(metas[idx]) if idx < len(metas) and isinstance(metas[idx], dict) else {}
+                meta["pinned"] = "true" if pinned else "false"
+                # Закреплённые файлы получают приоритет "pinned" для ранжирования
+                if pinned:
+                    meta["priority"] = "pinned"
+                else:
+                    meta.setdefault("priority", "normal")
+                    if meta["priority"] == "pinned":
+                        meta["priority"] = "normal"
+                updated_metas.append(meta)
+
+            self.files_collection.update(ids=ids, metadatas=updated_metas)
+
+            action = "закреплён" if pinned else "откреплён"
+            self._add_audit_log(
+                event_type="file_pinned" if pinned else "file_unpinned",
+                details={"file_name": file_name, "chunks_updated": len(ids)},
+            )
+
+            logger.info(f"Файл «{file_name}» {action} ({len(ids)} чанков)")
+            return len(ids)
+        except Exception as e:
+            logger.error(f"Ошибка закрепления файла {file_name}: {e}")
+            return 0
+
+    def search_file_contents(self, query: str, top_k: int = 10, folder: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Семантический поиск по содержимому файлов RAG-базы.
+
+        Находит наиболее релевантные фрагменты файлов по запросу.
+        Исключает мягко удалённые файлы из результатов.
+
+        Args:
+            query: Поисковый запрос
+            top_k: Максимум результатов
+            folder: Фильтр по папке (опционально)
+
+        Returns:
+            Список результатов с file_name, chunk_text, score, metadata
+        """
+        if self.files_collection.count() == 0:
+            return []
+
+        try:
+            query_embedding = self._encode_to_list(query)
+            results = self.files_collection.query(
+                query_embeddings=[query_embedding],
+                n_results=min(top_k * 2, self.files_collection.count()),
+                include=["documents", "metadatas", "distances"],
+            )
+
+            if not results or "ids" not in results or not results["ids"] or not results["ids"][0]:
+                return []
+
+            items = []
+            for idx in range(len(results["ids"][0])):
+                meta = results["metadatas"][0][idx] if results.get("metadatas") and results["metadatas"][0] else {}
+
+                # Исключаем мягко удалённые файлы
+                if meta.get("deleted_at") or meta.get("status") == "deleted":
+                    continue
+
+                file_name = meta.get("file_name", meta.get("filename", "unknown"))
+
+                # Фильтр по папке
+                if folder:
+                    file_folder = file_name.rsplit("/", 1)[0] if "/" in file_name else ""
+                    if file_folder != folder:
+                        continue
+
+                distance = results["distances"][0][idx] if results.get("distances") and results["distances"][0] else 1.0
+                score = max(0.0, 1.0 - distance)
+                doc_text = results["documents"][0][idx] if results.get("documents") and results["documents"][0] else ""
+
+                items.append({
+                    "file_name": file_name,
+                    "chunk_text": doc_text,
+                    "score": round(score, 4),
+                    "chunk_index": int(meta.get("chunk_index", 0)),
+                    "metadata": {k: v for k, v in meta.items() if k not in ("deleted_at",)},
+                })
+
+                if len(items) >= top_k:
+                    break
+
+            return items
+        except Exception as e:
+            logger.error(f"Ошибка поиска по содержимому файлов: {e}")
+            return []
+
+    def list_contradictions(self, top_k: int = 50) -> List[Dict[str, Any]]:
+        """
+        Получение списка обнаруженных противоречий между знаниями.
+
+        Сканирует коллекцию обучения и находит записи с пометкой conflict_detected.
+        Возвращает пары конфликтующих знаний.
+
+        Args:
+            top_k: Максимум записей
+
+        Returns:
+            Список словарей с информацией о противоречиях
+        """
+        try:
+            data = self.learnings_collection.get(include=["metadatas", "documents"])
+            if not data or "ids" not in data or not data["ids"]:
+                return []
+
+            contradictions = []
+            for idx, doc_id in enumerate(data["ids"]):
+                meta = data["metadatas"][idx] if idx < len(data.get("metadatas", [])) else {}
+                if not isinstance(meta, dict):
+                    continue
+
+                # Только записи с обнаруженными противоречиями
+                if not meta.get("conflict_detected"):
+                    continue
+
+                contradictions_json = meta.get("contradictions_json", "")
+                if not contradictions_json:
+                    continue
+
+                try:
+                    conflict_list = json.loads(contradictions_json)
+                except (ValueError, TypeError):
+                    continue
+
+                doc_text = data["documents"][idx] if idx < len(data.get("documents", [])) else ""
+                for conflict in conflict_list:
+                    contradictions.append({
+                        "new_learning_id": doc_id,
+                        "existing_learning_id": conflict.get("id", ""),
+                        "new_text": doc_text,
+                        "existing_text": conflict.get("text", ""),
+                        "similarity": conflict.get("similarity", 0.0),
+                        "model_name": meta.get("model_name", ""),
+                        "detected_at": meta.get("created_at", ""),
+                    })
+
+                if len(contradictions) >= top_k:
+                    break
+
+            return contradictions
+        except Exception as e:
+            logger.error(f"Ошибка получения списка противоречий: {e}")
+            return []
+
+    def list_deleted_files(self) -> List[str]:
+        """
+        Получение списка мягко удалённых файлов для отображения в корзине.
+
+        Сканирует коллекцию файлов и возвращает уникальные имена файлов
+        с пометкой status=deleted или наличием deleted_at.
+
+        Returns:
+            Список уникальных имён удалённых файлов
+        """
+        try:
+            data = self.files_collection.get(include=["metadatas"])
+            if not data or "ids" not in data or not data["ids"]:
+                return []
+
+            deleted_names: set = set()
+            for idx in range(len(data["ids"])):
+                meta = data["metadatas"][idx] if idx < len(data.get("metadatas", [])) else {}
+                if not isinstance(meta, dict):
+                    continue
+                if meta.get("deleted_at") or meta.get("status") == "deleted":
+                    file_name = meta.get("file_name", meta.get("filename", ""))
+                    if file_name:
+                        deleted_names.add(file_name)
+
+            return sorted(deleted_names)
+        except Exception as e:
+            logger.error(f"Ошибка получения списка удалённых файлов: {e}")
+            return []
+
     def add_learning(self, text: str, model_name: str, agent_name: str,
                      category: str = "general", metadata: Optional[Dict[str, Any]] = None,
                      workspace_id: Optional[str] = None) -> str:

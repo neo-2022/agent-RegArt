@@ -771,3 +771,403 @@ class TestEmbeddingStatus:
             assert status["collections"]["facts"] == 1
             assert status["collections"]["files"] == 2
             assert status["collections"]["learnings"] == 0
+
+
+class TestMoveFile:
+    """Тесты для перемещения файлов между папками (Eternal RAG: file move)."""
+
+    def test_move_updates_path_and_folder(self, mock_memory_store):
+        """Перемещение обновляет file_name и folder у всех чанков."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 2,
+            documents=["chunk1", "chunk2"],
+            metadatas=[
+                {"file_name": "docs/report.txt", "folder": "docs", "chunk_index": 0},
+                {"file_name": "docs/report.txt", "folder": "docs", "chunk_index": 1},
+            ],
+            ids=["c1", "c2"],
+        )
+
+        old_path, new_path, chunks = mock_memory_store.move_file("docs/report.txt", "archive")
+        assert old_path == "docs/report.txt"
+        assert new_path == "archive/report.txt"
+        assert chunks == 2
+
+        # Проверяем обновлённые метаданные
+        data = mock_memory_store.files_collection.get(ids=["c1", "c2"], include=["metadatas"])
+        for meta in data["metadatas"]:
+            assert meta["file_name"] == "archive/report.txt"
+            assert meta["folder"] == "archive"
+
+    def test_move_nonexistent_returns_zero(self, mock_memory_store):
+        """Перемещение несуществующего файла возвращает 0 чанков."""
+        old_path, new_path, chunks = mock_memory_store.move_file("no_file.txt", "archive")
+        assert chunks == 0
+
+    def test_move_empty_args_returns_zero(self, mock_memory_store):
+        """Пустые аргументы возвращают 0."""
+        _, _, chunks = mock_memory_store.move_file("", "archive")
+        assert chunks == 0
+        _, _, chunks2 = mock_memory_store.move_file("file.txt", "")
+        assert chunks2 == 0
+
+    def test_move_strips_trailing_slash(self, mock_memory_store):
+        """Целевая папка очищается от лишних слэшей."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "test.txt", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        _, new_path, chunks = mock_memory_store.move_file("test.txt", "  target/  ")
+        assert chunks == 1
+        assert new_path == "target/test.txt"
+
+    def test_move_creates_audit_log(self, mock_memory_store):
+        """Перемещение создаёт запись в аудит-логе."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "src/file.py", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        mock_memory_store.move_file("src/file.py", "lib")
+        assert mock_memory_store.audit_collection.count() == 1
+
+
+class TestSoftDeleteFile:
+    """Тесты для мягкого удаления файлов (soft delete)."""
+
+    def test_soft_delete_marks_chunks(self, mock_memory_store):
+        """Мягкое удаление помечает все чанки deleted_at и status=deleted."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 3,
+            documents=["c1", "c2", "c3"],
+            metadatas=[
+                {"file_name": "data.csv", "chunk_index": 0},
+                {"file_name": "data.csv", "chunk_index": 1},
+                {"file_name": "data.csv", "chunk_index": 2},
+            ],
+            ids=["c1", "c2", "c3"],
+        )
+
+        result = mock_memory_store.soft_delete_file("data.csv")
+        assert result == 3
+
+        data = mock_memory_store.files_collection.get(ids=["c1", "c2", "c3"], include=["metadatas"])
+        for meta in data["metadatas"]:
+            assert meta["status"] == "deleted"
+            assert "deleted_at" in meta
+
+    def test_soft_delete_nonexistent_returns_zero(self, mock_memory_store):
+        """Мягкое удаление несуществующего файла возвращает 0."""
+        result = mock_memory_store.soft_delete_file("ghost.txt")
+        assert result == 0
+
+    def test_soft_delete_creates_audit_log(self, mock_memory_store):
+        """Мягкое удаление создаёт запись аудита."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "temp.log", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        mock_memory_store.soft_delete_file("temp.log")
+        assert mock_memory_store.audit_collection.count() == 1
+
+
+class TestRestoreFile:
+    """Тесты для восстановления мягко удалённых файлов."""
+
+    def test_restore_removes_deleted_at(self, mock_memory_store):
+        """Восстановление снимает пометку deleted_at и ставит status=active."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 2,
+            documents=["c1", "c2"],
+            metadatas=[
+                {"file_name": "old.txt", "status": "deleted", "deleted_at": "2025-01-01T00:00:00Z", "chunk_index": 0},
+                {"file_name": "old.txt", "status": "deleted", "deleted_at": "2025-01-01T00:00:00Z", "chunk_index": 1},
+            ],
+            ids=["c1", "c2"],
+        )
+
+        result = mock_memory_store.restore_file("old.txt")
+        assert result == 2
+
+        data = mock_memory_store.files_collection.get(ids=["c1", "c2"], include=["metadatas"])
+        for meta in data["metadatas"]:
+            assert meta["status"] == "active"
+            assert "deleted_at" not in meta
+
+    def test_restore_nonexistent_returns_zero(self, mock_memory_store):
+        """Восстановление несуществующего файла возвращает 0."""
+        result = mock_memory_store.restore_file("no_file.txt")
+        assert result == 0
+
+    def test_restore_not_deleted_returns_zero(self, mock_memory_store):
+        """Файл без пометки удаления не восстанавливается (уже активен)."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "active.txt", "status": "active", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        result = mock_memory_store.restore_file("active.txt")
+        assert result == 0
+
+    def test_restore_creates_audit_log(self, mock_memory_store):
+        """Восстановление создаёт запись аудита."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "del.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        mock_memory_store.restore_file("del.txt")
+        assert mock_memory_store.audit_collection.count() == 1
+
+
+class TestPinFile:
+    """Тесты для закрепления/открепления файлов."""
+
+    def test_pin_sets_metadata(self, mock_memory_store):
+        """Закрепление ставит pinned=true и priority=pinned."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "important.md", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        result = mock_memory_store.pin_file("important.md", pinned=True)
+        assert result == 1
+
+        data = mock_memory_store.files_collection.get(ids=["c1"], include=["metadatas"])
+        assert data["metadatas"][0]["pinned"] == "true"
+        assert data["metadatas"][0]["priority"] == "pinned"
+
+    def test_unpin_resets_metadata(self, mock_memory_store):
+        """Открепление сбрасывает pinned=false и priority=normal."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "doc.md", "pinned": "true", "priority": "pinned", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        result = mock_memory_store.pin_file("doc.md", pinned=False)
+        assert result == 1
+
+        data = mock_memory_store.files_collection.get(ids=["c1"], include=["metadatas"])
+        assert data["metadatas"][0]["pinned"] == "false"
+        assert data["metadatas"][0]["priority"] == "normal"
+
+    def test_pin_nonexistent_returns_zero(self, mock_memory_store):
+        """Закрепление несуществующего файла возвращает 0."""
+        result = mock_memory_store.pin_file("ghost.txt", pinned=True)
+        assert result == 0
+
+    def test_pin_creates_audit_log(self, mock_memory_store):
+        """Закрепление создаёт запись аудита."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "pin.txt", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        mock_memory_store.pin_file("pin.txt", pinned=True)
+        assert mock_memory_store.audit_collection.count() == 1
+
+
+class TestSearchFileContents:
+    """Тесты для семантического поиска по содержимому файлов."""
+
+    def test_empty_collection_returns_empty(self, mock_memory_store):
+        """Пустая коллекция файлов возвращает пустой список."""
+        result = mock_memory_store.search_file_contents("query text")
+        assert result == []
+
+    def test_search_returns_results(self, mock_memory_store):
+        """Поиск возвращает результаты с file_name, chunk_text, score."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Python — язык программирования"],
+            metadatas=[{"file_name": "docs/python.txt", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        # Мокируем query для возврата результатов
+        mock_memory_store.files_collection.query = Mock(return_value={
+            "ids": [["c1"]],
+            "documents": [["Python — язык программирования"]],
+            "distances": [[0.1]],
+            "metadatas": [[{"file_name": "docs/python.txt", "chunk_index": 0}]],
+        })
+
+        with patch.object(mock_memory_store, "_encode_to_list", return_value=[0.1] * 384):
+            results = mock_memory_store.search_file_contents("Python")
+
+        assert len(results) == 1
+        assert results[0]["file_name"] == "docs/python.txt"
+        assert results[0]["chunk_text"] == "Python — язык программирования"
+        assert results[0]["score"] > 0
+
+    def test_search_excludes_deleted_files(self, mock_memory_store):
+        """Мягко удалённые файлы исключаются из результатов поиска."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["deleted content"],
+            metadatas=[{"file_name": "old.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        mock_memory_store.files_collection.query = Mock(return_value={
+            "ids": [["c1"]],
+            "documents": [["deleted content"]],
+            "distances": [[0.1]],
+            "metadatas": [[{"file_name": "old.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0}]],
+        })
+
+        with patch.object(mock_memory_store, "_encode_to_list", return_value=[0.1] * 384):
+            results = mock_memory_store.search_file_contents("content")
+
+        assert len(results) == 0
+
+    def test_search_filters_by_folder(self, mock_memory_store):
+        """Поиск фильтрует результаты по папке."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 2,
+            documents=["doc1", "doc2"],
+            metadatas=[
+                {"file_name": "docs/a.txt", "chunk_index": 0},
+                {"file_name": "src/b.txt", "chunk_index": 0},
+            ],
+            ids=["c1", "c2"],
+        )
+
+        mock_memory_store.files_collection.query = Mock(return_value={
+            "ids": [["c1", "c2"]],
+            "documents": [["doc1", "doc2"]],
+            "distances": [[0.1, 0.2]],
+            "metadatas": [[
+                {"file_name": "docs/a.txt", "chunk_index": 0},
+                {"file_name": "src/b.txt", "chunk_index": 0},
+            ]],
+        })
+
+        with patch.object(mock_memory_store, "_encode_to_list", return_value=[0.1] * 384):
+            results = mock_memory_store.search_file_contents("query", folder="docs")
+
+        assert len(results) == 1
+        assert results[0]["file_name"] == "docs/a.txt"
+
+
+class TestListContradictions:
+    """Тесты для получения списка противоречий между знаниями."""
+
+    def test_empty_collection_returns_empty(self, mock_memory_store):
+        """Пустая коллекция обучения → нет противоречий."""
+        result = mock_memory_store.list_contradictions()
+        assert result == []
+
+    def test_returns_contradictions_from_metadata(self, mock_memory_store):
+        """Возвращает противоречия из метаданных с conflict_detected."""
+        import json
+        contradictions_data = [
+            {"id": "old-1", "text": "Earth is flat", "similarity": 0.92}
+        ]
+
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Earth is round"],
+            metadatas=[{
+                "model_name": "gpt-4",
+                "conflict_detected": "true",
+                "contradictions_json": json.dumps(contradictions_data),
+                "created_at": "2025-06-01T00:00:00Z",
+                "status": LEARNING_STATUS_ACTIVE,
+            }],
+            ids=["new-1"],
+        )
+
+        result = mock_memory_store.list_contradictions()
+        assert len(result) == 1
+        assert result[0]["new_learning_id"] == "new-1"
+        assert result[0]["existing_learning_id"] == "old-1"
+        assert result[0]["similarity"] == 0.92
+        assert result[0]["model_name"] == "gpt-4"
+
+    def test_no_conflict_flag_skipped(self, mock_memory_store):
+        """Записи без conflict_detected не попадают в результат."""
+        mock_memory_store.learnings_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["Normal knowledge"],
+            metadatas=[{
+                "model_name": "gpt-4",
+                "status": LEARNING_STATUS_ACTIVE,
+            }],
+            ids=["norm-1"],
+        )
+
+        result = mock_memory_store.list_contradictions()
+        assert len(result) == 0
+
+
+class TestListDeletedFiles:
+    """Тесты для получения списка мягко удалённых файлов (корзина)."""
+
+    def test_empty_collection_returns_empty(self, mock_memory_store):
+        """Пустая коллекция → пустой список."""
+        result = mock_memory_store.list_deleted_files()
+        assert result == []
+
+    def test_returns_deleted_files(self, mock_memory_store):
+        """Возвращает уникальные имена файлов с пометкой deleted."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 3,
+            documents=["c1", "c2", "c3"],
+            metadatas=[
+                {"file_name": "deleted1.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0},
+                {"file_name": "deleted1.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 1},
+                {"file_name": "active.txt", "status": "active", "chunk_index": 0},
+            ],
+            ids=["c1", "c2", "c3"],
+        )
+
+        result = mock_memory_store.list_deleted_files()
+        assert result == ["deleted1.txt"]
+
+    def test_excludes_active_files(self, mock_memory_store):
+        """Активные файлы не попадают в список удалённых."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384],
+            documents=["chunk"],
+            metadatas=[{"file_name": "active.txt", "status": "active", "chunk_index": 0}],
+            ids=["c1"],
+        )
+
+        result = mock_memory_store.list_deleted_files()
+        assert result == []
+
+    def test_returns_sorted_unique_names(self, mock_memory_store):
+        """Список отсортирован и содержит уникальные имена."""
+        mock_memory_store.files_collection.add(
+            embeddings=[[0.1] * 384] * 4,
+            documents=["c1", "c2", "c3", "c4"],
+            metadatas=[
+                {"file_name": "z_file.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0},
+                {"file_name": "a_file.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 0},
+                {"file_name": "z_file.txt", "status": "deleted", "deleted_at": "2025-01-01", "chunk_index": 1},
+                {"file_name": "m_file.txt", "deleted_at": "2025-01-01", "chunk_index": 0},
+            ],
+            ids=["c1", "c2", "c3", "c4"],
+        )
+
+        result = mock_memory_store.list_deleted_files()
+        assert result == ["a_file.txt", "m_file.txt", "z_file.txt"]
